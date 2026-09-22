@@ -1,0 +1,587 @@
+/* ============================================================================
+   常用提示詞 · 網頁版
+
+   設計方向刻意和 Chrome 外掛「相反」：
+     外掛   = Liquid Glass，半透明、模糊、圓潤的筆記本索引標籤
+     網頁版 = 實心、高對比、平面色塊，方正一點的卡片 + 左側色條
+
+   理由有兩個：
+     1. 使用者（我爸）要能一眼分辨「我現在在用哪一個」。
+     2. 公家機關的電腦可能很舊、顯示卡弱，backdrop-filter 會很慢甚至畫不出來。
+        整份 CSS 不使用任何 backdrop-filter / 半透明底，在哪台都長一樣。
+   ========================================================================== */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+/* ---------- Design tokens：淺色 ---------- */
+:root {
+  --bg:          #eef0f4;
+  --surface:     #ffffff;
+  --surface-2:   #f5f6f9;
+  --line:        #d7dae1;
+  --line-soft:   #e6e8ee;
+  --text:        #171a1f;
+  --text-mute:   #5b6472;
+  --accent:      #2563eb;
+  --on-accent:   #ffffff;
+  --danger:      #c02626;
+  --danger-soft: #fdeaea;
+  --ok:          #15803d;
+  --hover:       rgba(0, 0, 0, .055);
+  --shadow:      0 1px 2px rgba(16, 24, 40, .06), 0 6px 16px rgba(16, 24, 40, .08);
+  --shadow-lg:   0 10px 40px rgba(16, 24, 40, .22);
+
+  /* 書籤顏色：比外掛更飽和、更平塗 */
+  --amber:  #c77416;  --amber-soft:  #fdf1df;
+  --green:  #1f7a4d;  --green-soft:  #e2f4ea;
+  --blue:   #2160d6;  --blue-soft:   #e4ecfd;
+  --rose:   #c2255c;  --rose-soft:   #fde9f0;
+  --purple: #6d3ce0;  --purple-soft: #eee8fd;
+  --teal:   #0c7f7a;  --teal-soft:   #dff4f3;
+
+  --r:  12px;      /* 方正一點，和外掛的 24–28px 膠囊明顯不同 */
+  --r-lg: 16px;
+  --rail: 248px;
+}
+
+/* ---------- Design tokens：深色 ----------
+   只寫這一份。'auto' 由 <head> 的小腳本先解析成實際的 light / dark。 */
+:root[data-theme="dark"] {
+  --bg:          #121417;
+  --surface:     #1c1f24;
+  --surface-2:   #24282e;
+  --line:        #363b43;
+  --line-soft:   #2b3037;
+  --text:        #e8eaed;
+  --text-mute:   #a2abb8;
+  --accent:      #6d9bff;
+  --on-accent:   #0c1b3d;
+  --danger:      #ff8a80;
+  --danger-soft: #3a1c1a;
+  --ok:          #6ee7a0;
+  --hover:       rgba(255, 255, 255, .07);
+  --shadow:      0 1px 2px rgba(0, 0, 0, .4), 0 6px 16px rgba(0, 0, 0, .35);
+  --shadow-lg:   0 10px 40px rgba(0, 0, 0, .6);
+
+  --amber:  #e0a355;  --amber-soft:  #33291a;
+  --green:  #5cc48c;  --green-soft:  #16301f;
+  --blue:   #7aa7ff;  --blue-soft:   #182440;
+  --rose:   #f087ac;  --rose-soft:   #3a1c28;
+  --purple: #b193f5;  --purple-soft: #261d3d;
+  --teal:   #4ec8c1;  --teal-soft:   #123030;
+}
+
+/* 每個 data-color 就把 --c / --c-soft 指到對應的顏色，其餘規則共用 */
+[data-color="amber"]  { --c: var(--amber);  --c-soft: var(--amber-soft); }
+[data-color="green"]  { --c: var(--green);  --c-soft: var(--green-soft); }
+[data-color="blue"]   { --c: var(--blue);   --c-soft: var(--blue-soft); }
+[data-color="rose"]   { --c: var(--rose);   --c-soft: var(--rose-soft); }
+[data-color="purple"] { --c: var(--purple); --c-soft: var(--purple-soft); }
+[data-color="teal"]   { --c: var(--teal);   --c-soft: var(--teal-soft); }
+
+/* ---------- 基礎 ---------- */
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei",
+               system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 17px;            /* 網頁版整體比外掛大一級，長輩看得清楚 */
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;           /* 捲動交給內部的 .scroller，版面才不會亂跳 */
+}
+button, input, textarea { font: inherit; color: inherit; }
+button { border: 0; background: none; cursor: pointer; }
+h1, h2 { margin: 0; font-weight: 700; letter-spacing: -.01em; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+/* ---------- 版面骨架 ---------- */
+.app { display: flex; height: 100dvh; }
+.main {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column;
+  background: var(--bg);
+}
+
+/* 窄 / 寬 只顯示其中一組控制項 */
+.only-wide { display: none; }
+@media (min-width: 900px) {
+  .only-narrow { display: none !important; }
+  .only-wide { display: inline-flex; }
+}
+
+/* ============================================================================
+   左側書籤欄（≥900px 才出現）
+   ========================================================================== */
+.rail { display: none; }
+
+@media (min-width: 900px) {
+  .rail {
+    flex: none;
+    width: var(--rail);
+    display: flex; flex-direction: column;
+    padding: 20px 14px;
+    background: var(--surface);
+    border-right: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 18px; }
+  .brand-mark { font-size: 24px; }
+  .brand-name { font-size: 18px; font-weight: 700; }
+
+  .railtabs { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+
+  .railtab {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: var(--r);
+    font-size: 17px; font-weight: 600;
+    color: var(--text-mute);
+    text-align: left;
+    transition: background-color .14s ease, color .14s ease;
+  }
+  .railtab .dot {
+    flex: none; width: 12px; height: 12px; border-radius: 3px;
+    background: var(--c, var(--accent));
+  }
+  .railtab .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .railtab .count { flex: none; font-size: 14px; font-weight: 600; opacity: .7; }
+  .railtab:hover { background: var(--hover); color: var(--text); }
+  .railtab.is-on {
+    background: var(--c-soft, var(--surface-2));
+    color: var(--c, var(--text));
+  }
+  .railtab.is-on .dot { box-shadow: 0 0 0 3px var(--surface); }
+
+  .rail-add {
+    margin-top: 10px;
+    padding: 11px 14px;
+    border: 1px dashed var(--line);
+    border-radius: var(--r);
+    font-size: 15.5px; font-weight: 600;
+    color: var(--text-mute);
+    transition: border-color .14s ease, color .14s ease, background-color .14s ease;
+  }
+  .rail-add:hover { border-style: solid; border-color: var(--accent); color: var(--accent); background: var(--hover); }
+
+  .rail-foot { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 2px; }
+  .rail-link {
+    padding: 9px 14px; border-radius: var(--r);
+    font-size: 15px; font-weight: 600; color: var(--text-mute); text-align: left;
+    transition: background-color .14s ease, color .14s ease;
+  }
+  .rail-link:hover { background: var(--hover); color: var(--text); }
+}
+
+/* ============================================================================
+   上方工具列
+   ========================================================================== */
+.topbar {
+  flex: none;
+  padding: 14px 16px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.topbar-row { display: flex; align-items: center; gap: 8px; }
+.topbar-title {
+  flex: 1; min-width: 0;
+  font-size: 20px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.icon-btn {
+  flex: none;
+  width: 42px; height: 42px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--r);
+  font-size: 19px;
+  color: var(--text-mute);
+  transition: background-color .14s ease, color .14s ease;
+}
+.icon-btn:hover { background: var(--hover); color: var(--text); }
+
+.searchwrap { position: relative; margin-top: 10px; }
+.search-icon {
+  position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
+  font-size: 15px; opacity: .55; pointer-events: none;
+}
+.search {
+  width: 100%;
+  height: 46px;
+  padding: 0 42px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface-2);
+  transition: border-color .14s ease, box-shadow .14s ease;
+}
+.search::-webkit-search-cancel-button { display: none; }
+.search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--c-soft, var(--hover)); }
+.search-clear {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  width: 30px; height: 30px; border-radius: 50%;
+  color: var(--text-mute);
+}
+.search-clear:hover { background: var(--hover); }
+
+@media (min-width: 900px) {
+  .topbar { padding: 18px 26px 14px; display: flex; align-items: center; gap: 20px; }
+  .topbar-row { flex: none; }
+  .topbar-title { font-size: 24px; }
+  .searchwrap { flex: 1; max-width: 460px; margin-top: 0; margin-left: auto; }
+}
+
+/* ============================================================================
+   窄螢幕的橫向書籤（膠囊）
+   ========================================================================== */
+.pillsrow {
+  flex: none;
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 10px 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.pills {
+  flex: 1; min-width: 0;
+  display: flex; gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.pills::-webkit-scrollbar { display: none; }
+.pill {
+  flex: none;
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  font-size: 16px; font-weight: 700;
+  color: var(--text-mute);
+  white-space: nowrap;
+  transition: background-color .14s ease, color .14s ease, border-color .14s ease;
+}
+.pill:hover { background: var(--hover); }
+/* 選中的書籤直接填滿該顏色——比外掛的索引標籤更直接、更好認 */
+.pill.is-on {
+  background: var(--c);
+  border-color: var(--c);
+  color: #fff;
+}
+:root[data-theme="dark"] .pill.is-on { color: #10131a; }
+.pill-add { flex: none; height: 40px; padding: 0 14px; border-radius: 10px; border: 1.5px dashed var(--line); color: var(--text-mute); font-weight: 700; }
+.pill-add:hover { border-style: solid; border-color: var(--accent); color: var(--accent); }
+.pill-gear { width: 40px; height: 40px; }
+
+/* ============================================================================
+   卡片
+   ========================================================================== */
+.scroller { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+.scroller::-webkit-scrollbar { width: 12px; }
+.scroller::-webkit-scrollbar-track { background: transparent; }
+.scroller::-webkit-scrollbar-thumb {
+  background: var(--line); border-radius: 99px;
+  border: 3px solid transparent; background-clip: content-box;
+}
+
+/* 欄數讓瀏覽器自己算：每欄至少 340px，放得下幾欄就排幾欄。
+   比寫死斷點好，因為左側書籤欄佔掉 248px，實際可用寬度和視窗寬度不一樣。
+   min(340px, 100%) 是必要的——不然視窗比 340px 還窄時會橫向溢出。 */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
+  gap: 12px;
+  padding: 16px;
+  align-content: start;
+}
+@media (min-width: 900px) { .grid { gap: 14px; padding: 22px 26px; } }
+
+.card {
+  position: relative;
+  display: flex; align-items: stretch;
+  min-height: 84px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 6px solid var(--c, var(--accent));   /* 左側色條＝這張卡屬於哪個書籤 */
+  border-radius: var(--r);
+  overflow: hidden;
+  transition: box-shadow .14s ease, transform .14s ease, border-color .14s ease;
+}
+.card:hover { box-shadow: var(--shadow); }
+.card.is-drag { opacity: .55; }
+.card.is-over { transform: translateY(2px); border-color: var(--accent); }
+
+.card-grip {
+  flex: none;
+  width: 34px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-mute);
+  opacity: .45;
+  cursor: grab;
+  touch-action: none;
+  letter-spacing: -2px;
+  font-size: 18px;
+}
+.card-grip:hover { opacity: .9; background: var(--hover); }
+.card-grip:active { cursor: grabbing; }
+
+.card-main {
+  flex: 1; min-width: 0;
+  padding: 14px 12px 14px 2px;
+  text-align: left;
+}
+.card-title {
+  font-size: 19px;            /* 長輩友善：標題大一點 */
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.card-sub {
+  margin-top: 4px;
+  font-size: 14.5px;
+  color: var(--text-mute);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.card-main:hover .card-title { color: var(--c, var(--accent)); }
+
+.card-edit {
+  flex: none;
+  width: 48px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-mute);
+  font-size: 17px;
+  border-left: 1px solid var(--line-soft);
+  transition: background-color .14s ease, color .14s ease;
+}
+.card-edit:hover { background: var(--hover); color: var(--text); }
+
+/* 複製成功：整張卡蓋一層該書籤的顏色，字往上浮 */
+.card-copied {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  gap: 8px;
+  background: var(--c, var(--accent));
+  color: #fff;
+  font-size: 18px; font-weight: 700;
+  letter-spacing: .02em;
+  animation: rise .18s ease-out;
+}
+:root[data-theme="dark"] .card-copied { color: #10131a; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* 空狀態 */
+.empty {
+  grid-column: 1 / -1;
+  margin: 40px auto;
+  max-width: 420px;
+  text-align: center;
+  color: var(--text-mute);
+}
+.empty-emoji { font-size: 46px; }
+.empty-title { margin-top: 10px; font-size: 19px; font-weight: 700; color: var(--text); }
+.empty-desc { margin-top: 6px; font-size: 15.5px; }
+
+/* ============================================================================
+   底部動作列
+   ========================================================================== */
+.actionbar {
+  flex: none;
+  display: flex; gap: 10px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+@media (min-width: 900px) {
+  .actionbar { padding: 14px 26px; }
+  /* 大螢幕不要讓主按鈕橫跨整個畫面——1600px 寬的按鈕看起來很荒謬 */
+  .actionbar .primary { flex: 0 1 360px; }
+  .actionbar .ghost { margin-left: auto; }
+}
+
+.primary {
+  flex: 1;
+  min-height: 52px;
+  padding: 0 22px;
+  border-radius: var(--r);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 17px; font-weight: 700;
+  transition: filter .14s ease, box-shadow .14s ease;
+}
+.primary:hover { filter: brightness(1.08); box-shadow: var(--shadow); }
+.primary:disabled { opacity: .45; pointer-events: none; }
+
+.ghost {
+  min-height: 52px;
+  padding: 0 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+  font-size: 16px; font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  transition: background-color .14s ease, border-color .14s ease, color .14s ease;
+}
+.ghost:hover { background: var(--hover); border-color: var(--accent); color: var(--accent); }
+.ghost.big { flex: 1 1 0; min-width: 150px; min-height: 48px; font-size: 15.5px; }
+.ghost.is-done { border-color: var(--ok); color: var(--ok); }
+
+.danger {
+  margin-right: auto;
+  min-height: 52px; padding: 0 16px;
+  border-radius: var(--r);
+  color: var(--danger);
+  font-size: 16px; font-weight: 600;
+}
+.danger:hover { background: var(--danger-soft); }
+.danger.is-confirm { background: var(--danger); color: var(--surface); animation: shake .3s ease; }
+:root[data-theme="dark"] .danger.is-confirm { color: #2a0f0e; }
+.primary.is-confirm { background: var(--danger); color: #fff; font-size: 15.5px; animation: shake .3s ease; }
+@keyframes shake { 0%,100% { transform: translateX(0) } 25% { transform: translateX(-4px) } 75% { transform: translateX(4px) } }
+
+/* ============================================================================
+   對話框（用原生 <dialog>：Esc 關閉、焦點管理都免自己寫）
+   ========================================================================== */
+.dlg {
+  width: min(620px, calc(100vw - 24px));
+  max-height: min(88dvh, 860px);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.dlg--sm { width: min(460px, calc(100vw - 24px)); }
+.dlg::backdrop { background: rgba(9, 12, 18, .55); }
+.dlg[open] { animation: pop .18s cubic-bezier(.2, 0, 0, 1); }
+@keyframes pop { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
+
+.dlg-inner { display: flex; flex-direction: column; max-height: inherit; }
+.dlg h2 { flex: none; padding: 22px 24px 14px; font-size: 21px; }
+.dlg-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 24px; scrollbar-width: thin; }
+.dlg-foot {
+  flex: none;
+  display: flex; align-items: center; gap: 10px;
+  padding: 16px 24px 20px;
+  border-top: 1px solid var(--line-soft);
+}
+.dlg-foot .primary { flex: 1; }
+
+.lede { margin: 0 0 18px; font-size: 15.5px; line-height: 1.65; color: var(--text-mute); }
+.lede strong { color: var(--text); }
+
+.field { display: block; margin-bottom: 18px; }
+.flabel { display: block; margin-bottom: 7px; font-size: 15.5px; font-weight: 700; }
+.flabel em { font-style: normal; font-weight: 400; font-size: 14px; color: var(--text-mute); }
+
+.input {
+  display: block;
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  transition: border-color .14s ease, box-shadow .14s ease;
+}
+.input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--hover); }
+.input.is-bad { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+.input::placeholder { color: var(--text-mute); opacity: .75; }
+.area { min-height: 190px; resize: vertical; line-height: 1.65; }
+.code {
+  min-height: 96px; resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13.5px; line-height: 1.5; word-break: break-all;
+}
+
+.swatches { display: flex; flex-wrap: wrap; gap: 12px; }
+.swatch {
+  width: 48px; height: 48px;
+  border-radius: 10px;
+  background: var(--c);
+  outline: 3px solid transparent; outline-offset: 3px;
+  transition: transform .14s ease, outline-color .14s ease;
+}
+.swatch:hover { transform: scale(1.08); }
+.swatch.is-on { outline-color: var(--text); transform: scale(1.05); }
+
+/* 位置文字自己佔一行（order:-1 讓它排在最前面），兩顆按鈕才有足夠寬度。
+   擠在同一行時，窄視窗下「◀ 往前」會被 nowrap 撐出對話框外。 */
+.orderrow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.orderrow .ghost { flex: 1; min-width: 0; min-height: 46px; padding: 0 10px; font-size: 15px; }
+.orderpos {
+  flex: 1 0 100%; order: -1;
+  font-size: 15px; font-weight: 700; color: var(--text-mute);
+}
+
+.brow { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.sep { height: 1px; margin: 22px 0; border: 0; background: var(--line-soft); }
+
+.note { margin-top: 9px; font-size: 14.5px; line-height: 1.6; color: var(--text-mute); }
+.note.status { font-size: 15.5px; font-weight: 700; color: var(--text); }
+.note.status:empty { display: none; }
+.note.status.is-bad { color: var(--danger); }
+.note.status.is-ok { color: var(--ok); }
+
+.segrow { display: flex; gap: 8px; margin-top: 16px; }
+.seg {
+  flex: 1;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 50px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r);
+  font-size: 16px; font-weight: 700;
+  color: var(--text-mute);
+  transition: background-color .14s ease, border-color .14s ease, color .14s ease;
+}
+.seg span {
+  padding: 2px 8px; border-radius: 99px;
+  background: var(--hover); color: var(--text-mute);
+  font-size: 12.5px; font-weight: 700;
+}
+.seg:hover { background: var(--hover); }
+.seg.is-on { border-color: var(--accent); color: var(--accent); background: var(--surface-2); }
+.seg.is-on span { background: var(--accent); color: var(--on-accent); }
+
+/* ============================================================================
+   Toast
+   ========================================================================== */
+.toast {
+  position: fixed;
+  left: 50%; bottom: 96px;
+  z-index: 50;
+  max-width: calc(100vw - 32px);
+  padding: 13px 20px;
+  border-radius: var(--r);
+  background: var(--text);
+  color: var(--surface);
+  font-size: 16px; font-weight: 600;
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  transform: translate(-50%, 12px);
+  pointer-events: none;
+  transition: opacity .18s ease, transform .18s ease;
+}
+.toast.is-on { opacity: 1; transform: translate(-50%, 0); }
+.toast.is-bad { background: var(--danger); color: #fff; }
+
+/* 無痕模式 / 停用 localStorage 的警告 */
+.warn {
+  flex: none;
+  margin: 12px 16px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--danger);
+  border-radius: var(--r);
+  background: var(--danger-soft);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.6;
+}
+@media (min-width: 900px) { .warn { margin: 14px 26px 0; } }
+
+/* ---------- 尊重系統偏好 ---------- */
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}

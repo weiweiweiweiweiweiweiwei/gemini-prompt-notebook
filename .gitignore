@@ -3,9 +3,10 @@
 Thumbs.db
 desktop.ini
 
-# 編輯器
+# 編輯器 / 本機開發工具
 .vscode/
 .idea/
+.claude/
 *.swp
 
 # 打包產物
