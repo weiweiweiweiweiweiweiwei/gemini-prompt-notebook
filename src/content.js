@@ -248,6 +248,8 @@
   let tabEditing = null;     // 書籤編輯中 { id | null, color }
   let delArmed = false, delTimer = 0;
   let tabDelArmed = false, tabDelTimer = 0;
+  let backupMode = 'merge';  // 'merge' | 'replace'，預設挑不會弄丟東西的那個
+  let impArmed = false, impTimer = 0;
   const ui = {};
 
   const tabById = (id) => data.tabs.find((t) => t.id === id);
@@ -380,7 +382,12 @@
           el('button', {
             class: 'gpn-add', type: 'button',
             onclick: () => openEditor(data.activeId, null),
-          }, '＋ 新增提示詞')
+          }, '＋ 新增提示詞'),
+          el('button', {
+            class: 'gpn-backup-btn', type: 'button',
+            title: '把提示詞帶去另一台電腦，或從網頁版帶回來',
+            onclick: openBackup,
+          }, '備份／同步')
         )
       )
     );
@@ -394,7 +401,8 @@
 
     buildEditLayer();
     buildTabLayer();
-    root.append(ui.overlay, ui.editLayer, ui.tabLayer, ui.toast);
+    buildBackupLayer();
+    root.append(ui.overlay, ui.editLayer, ui.tabLayer, ui.backupLayer, ui.toast);
     applyTheme();
   }
 
@@ -794,7 +802,7 @@
 
   function closeEditor() {
     ui.editLayer.classList.remove('is-open');
-    if (!isTabEditing()) ui.overlay.classList.remove('is-editing');
+    if (!isTabEditing() && !isBackupOpen()) ui.overlay.classList.remove('is-editing');
     editing = null;
     disarmDelete();
   }
@@ -931,7 +939,7 @@
 
   function closeTabEditor() {
     ui.tabLayer.classList.remove('is-open');
-    if (!isEditing()) ui.overlay.classList.remove('is-editing');
+    if (!isEditing() && !isBackupOpen()) ui.overlay.classList.remove('is-editing');
     tabEditing = null;
     disarmTabDelete();
   }
@@ -998,6 +1006,219 @@
     ui.tDel.textContent = '刪除';
   }
 
+  /* ==========================================================================
+     五、第二層：備份與同步（匯出／匯入）
+
+     為什麼需要這個：公家機關的電腦不能裝擴充功能，所以另外做了網頁版。
+     兩邊是各自獨立的儲存空間，靠這裡的「代碼／備份檔」手動搬資料。
+     ========================================================================== */
+
+  function buildBackupLayer() {
+    /* ---- ① 帶出去 ---- */
+    ui.bStats = el('div', { class: 'gpn-note' });
+
+    const outRow = el('div', { class: 'gpn-brow' },
+      el('button', {
+        class: 'gpn-btn2', type: 'button',
+        onclick: () => { gpnDownloadExport(data); toast('備份檔已開始下載'); },
+      }, '⬇　下載備份檔'),
+      el('button', {
+        class: 'gpn-btn2', type: 'button',
+        onclick: async (e) => {
+          const ok = await gpnShareCopy(gpnExportCode(data));
+          toast(ok ? '代碼已複製，貼到另一台就好' : '複製失敗，請改用下載備份檔', !ok);
+          if (ok) {
+            e.currentTarget.classList.add('is-done');
+            setTimeout(() => e.currentTarget.classList.remove('is-done'), 1400);
+          }
+        },
+      }, '⧉　複製代碼')
+    );
+
+    /* ---- ② 帶回來 ---- */
+    ui.bCode = el('textarea', {
+      class: 'gpn-textarea gpn-textarea--code', spellcheck: 'false',
+      placeholder: '在這裡貼上另一台複製的代碼…',
+      oninput: () => { disarmImport(); refreshBackupPreview(); },
+    });
+
+    ui.bFile = el('input', {
+      type: 'file', accept: '.json,application/json', class: 'gpn-file',
+      onchange: async (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';                 // 選同一個檔案兩次也要觸發
+        if (!file) return;
+        try {
+          ui.bCode.value = await gpnReadFile(file);
+        } catch {
+          toast('這個檔案讀不起來', true);
+          return;
+        }
+        disarmImport();
+        refreshBackupPreview();
+      },
+    });
+
+    ui.bMerge = el('button', {
+      class: 'gpn-seg is-on', type: 'button',
+      onclick: () => setBackupMode('merge'),
+    }, '合併', el('span', { text: '推薦' }));
+
+    ui.bReplace = el('button', {
+      class: 'gpn-seg', type: 'button',
+      onclick: () => setBackupMode('replace'),
+    }, '完全取代');
+
+    ui.bModeNote = el('div', { class: 'gpn-note' });
+    ui.bNote = el('div', { class: 'gpn-note gpn-note--status' });
+
+    ui.bImport = el('button', {
+      class: 'gpn-btn gpn-btn--save', type: 'button', onclick: onImport,
+    }, '匯入');
+
+    ui.backupLayer = el('div', { class: 'gpn-edit-layer gpn-backup-layer' },
+      el('div', { class: 'gpn-dialog', onmousedown: (e) => e.stopPropagation() },
+        el('h2', {}, '備份與同步'),
+        el('div', { class: 'gpn-dialog-body' },
+          el('div', { class: 'gpn-field' },
+            el('label', { class: 'gpn-label' },
+              '① 把資料帶出去　', el('span', { text: '（給另一台電腦或網頁版用）' })),
+            outRow, ui.bStats),
+
+          el('div', { class: 'gpn-sep' }),
+
+          el('div', { class: 'gpn-field' },
+            el('label', { class: 'gpn-label' },
+              '② 把資料帶回來　', el('span', { text: '（貼上代碼，或選一個備份檔）' })),
+            ui.bCode,
+            el('div', { class: 'gpn-brow' },
+              el('button', {
+                class: 'gpn-btn2', type: 'button',
+                onclick: () => ui.bFile.click(),
+              }, '📁　改用備份檔…'),
+              el('button', {
+                class: 'gpn-btn2', type: 'button',
+                onclick: () => { ui.bCode.value = ''; disarmImport(); refreshBackupPreview(); },
+              }, '清空')
+            ),
+            ui.bFile,
+            el('div', { class: 'gpn-seg-row' }, ui.bMerge, ui.bReplace),
+            ui.bModeNote,
+            ui.bNote)
+        ),
+        el('div', { class: 'gpn-actions' },
+          el('button', { class: 'gpn-btn gpn-btn--cancel', type: 'button', onclick: closeBackup }, '關閉'),
+          ui.bImport
+        )
+      )
+    );
+  }
+
+  function setBackupMode(mode) {
+    backupMode = mode;
+    ui.bMerge.classList.toggle('is-on', mode === 'merge');
+    ui.bReplace.classList.toggle('is-on', mode === 'replace');
+    disarmImport();
+    refreshBackupPreview();
+  }
+
+  /** 解析目前輸入框的內容，把結果寫進 ui.bNote，同時回傳解析結果 */
+  function refreshBackupPreview() {
+    const raw = ui.bCode.value.trim();
+    ui.bNote.classList.remove('is-bad', 'is-ok');
+
+    ui.bModeNote.textContent = backupMode === 'merge'
+      ? '保留你現在的提示詞，只把還沒有的加進來。'
+      : '現在這台的提示詞會被整個蓋掉，換成備份裡的內容。';
+
+    if (!raw) {
+      ui.bNote.textContent = '';
+      ui.bImport.disabled = true;
+      return null;
+    }
+
+    const parsed = gpnParseImport(raw);
+    if (!parsed.ok) {
+      ui.bNote.textContent = parsed.error;
+      ui.bNote.classList.add('is-bad');
+      ui.bImport.disabled = true;
+      return null;
+    }
+
+    ui.bImport.disabled = false;
+    ui.bNote.classList.add('is-ok');
+    if (backupMode === 'merge') {
+      const p = gpnPreviewMerge(data, parsed.data);
+      ui.bNote.textContent = p.added
+        ? `讀到 ${parsed.itemCount} 則提示詞，其中 ${p.added} 則是新的，會加進來` +
+          (p.skipped ? `（${p.skipped} 則重複的會跳過）` : '')
+        : `讀到 ${parsed.itemCount} 則提示詞，但你這台都已經有了，不會有變化`;
+    } else {
+      ui.bNote.textContent =
+        `讀到 ${parsed.tabCount} 個書籤、${parsed.itemCount} 則提示詞，會取代現在的全部內容`;
+    }
+    return parsed;
+  }
+
+  /** 匯入會動到既有資料，所以一律二段式確認（和刪除同一套做法） */
+  async function onImport() {
+    const parsed = refreshBackupPreview();
+    if (!parsed) { ui.bCode.focus(); return; }
+
+    if (!impArmed) {
+      impArmed = true;
+      ui.bImport.classList.add('is-confirm');
+      const have = countItems(data);
+      ui.bImport.textContent = backupMode === 'merge'
+        ? '確定合併？再按一次'
+        : have ? `確定取代？現有 ${have} 則會不見，再按一次` : '確定取代？再按一次';
+      clearTimeout(impTimer);
+      impTimer = setTimeout(disarmImport, 6000);
+      return;
+    }
+
+    if (backupMode === 'merge') {
+      const r = gpnMergeData(data, parsed.data);
+      data = r.data;
+      await persist();
+      render();
+      closeBackup();
+      toast(r.added ? `已加入 ${r.added} 則提示詞` : '沒有新的提示詞，資料維持原樣');
+    } else {
+      data = gpnNormalize(parsed.data);
+      await persist();
+      render();
+      closeBackup();
+      toast(`已匯入 ${countItems(data)} 則提示詞`);
+    }
+  }
+
+  const countItems = (d) => d.tabs.reduce((n, t) => n + t.items.length, 0);
+
+  function disarmImport() {
+    clearTimeout(impTimer);
+    impArmed = false;
+    ui.bImport.classList.remove('is-confirm');
+    ui.bImport.textContent = '匯入';
+  }
+
+  function openBackup() {
+    ui.bCode.value = '';
+    setBackupMode('merge');          // 每次都從最安全的選項開始
+    ui.bStats.textContent =
+      `這台目前有 ${data.tabs.length} 個書籤、${countItems(data)} 則提示詞`;
+    ui.backupLayer.classList.add('is-open');
+    ui.overlay.classList.add('is-editing');
+  }
+
+  function closeBackup() {
+    ui.backupLayer.classList.remove('is-open');
+    if (!isEditing() && !isTabEditing()) ui.overlay.classList.remove('is-editing');
+    disarmImport();
+  }
+
+  const isBackupOpen = () => ui.backupLayer.classList.contains('is-open');
+
   /**
    * 確保面板／圓鈕的 host 還掛在頁面上。
    *
@@ -1030,6 +1251,7 @@
   function closeModal() {
     closeEditor();
     closeTabEditor();
+    closeBackup();
     ui.overlay.classList.remove('is-open');
     triggerBtn?.classList.remove('gpn-is-open');
     fabHost?.classList.remove('is-hidden');
@@ -1038,7 +1260,9 @@
   function onKeydown(e) {
     if (e.key !== 'Escape' || !isOpen()) return;
 
-    if (isTabEditing()) {
+    if (isBackupOpen()) {
+      closeBackup();
+    } else if (isTabEditing()) {
       closeTabEditor();
     } else if (isEditing()) {
       const tab = editing?.tabId ? tabById(editing.tabId) : null;
@@ -1100,7 +1324,7 @@
 
     GpnStore.onExternalChange((fresh) => {
       data = fresh;
-      if (isOpen() && !isEditing() && !isTabEditing()) render();
+      if (isOpen() && !isEditing() && !isTabEditing() && !isBackupOpen()) render();
     });
   }
 

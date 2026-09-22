@@ -18,7 +18,7 @@
         "https://chat.openai.com/*",
         "https://claude.ai/*"
       ],
-      "js": ["src/store.js", "src/content.js"],
+      "js": ["src/store.js", "src/share.js", "src/content.js"],
       "css": ["src/styles.css"],
       "run_at": "document_idle",
       "all_frames": false

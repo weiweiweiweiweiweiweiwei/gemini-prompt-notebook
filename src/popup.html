@@ -9,15 +9,22 @@
 </head>
 <body>
   <div class="gpn-root gpn-popup" id="root">
-    <div class="gpn-popup-head">
-      <span class="gpn-popup-title">常用提示詞</span>
-      <span class="gpn-popup-sub">點一下就複製，再到任何輸入框貼上</span>
+    <!-- 主畫面：書籤 + 卡片 -->
+    <div class="gpn-popup-view" id="mainView">
+      <div class="gpn-popup-head">
+        <span class="gpn-popup-title">常用提示詞</span>
+        <span class="gpn-popup-sub">點一下就複製，再到任何輸入框貼上</span>
+      </div>
+      <div class="gpn-popup-tabs" id="tabs" role="tablist"></div>
+      <div class="gpn-popup-list" id="list" role="list"></div>
+      <div class="gpn-popup-foot" id="foot"></div>
     </div>
-    <div class="gpn-popup-tabs" id="tabs" role="tablist"></div>
-    <div class="gpn-popup-list" id="list" role="list"></div>
-    <div class="gpn-popup-foot" id="foot"></div>
+
+    <!-- 第二畫面：備份與同步（和網頁版互換資料用） -->
+    <div class="gpn-popup-view" id="backupView" hidden></div>
   </div>
   <script src="store.js"></script>
+  <script src="share.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

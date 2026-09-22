@@ -112,14 +112,227 @@
   }
 
   function renderFoot() {
-    $('foot').replaceChildren(el('button', {
-      class: 'gpn-popup-link', type: 'button',
-      onclick: () => {
-        chrome.tabs.create({ url: 'https://gemini.google.com/app' });
-        window.close();
-      },
-    }, '在 Gemini 開啟完整面板（新增／編輯／排序）'));
+    $('foot').replaceChildren(
+      el('button', {
+        class: 'gpn-popup-link', type: 'button',
+        title: '新增／編輯／排序都在那裡做',
+        onclick: () => {
+          chrome.tabs.create({ url: 'https://gemini.google.com/app' });
+          window.close();
+        },
+      }, '開啟完整面板'),
+      el('button', {
+        class: 'gpn-popup-link', type: 'button',
+        title: '把提示詞帶去另一台電腦，或從網頁版帶回來',
+        onclick: openBackup,
+      }, '備份／同步')
+    );
   }
+
+  /* ==========================================================================
+     備份與同步
+
+     和 Gemini 面板裡的那一份是同樣的行為（share.js 提供），只是這裡畫面窄，
+     排版改成單欄。放在 Popup 的好處是：任何網站都按得到，不用先開 Gemini。
+     ========================================================================== */
+
+  let backupMode = 'merge';
+  let impArmed = false, impTimer = 0;
+  const bui = {};
+
+  const countItems = (d) => d.tabs.reduce((n, t) => n + t.items.length, 0);
+
+  function buildBackupView() {
+    bui.stats = el('div', { class: 'gpn-note' });
+
+    bui.code = el('textarea', {
+      class: 'gpn-textarea gpn-textarea--code', spellcheck: 'false',
+      placeholder: '在這裡貼上另一台複製的代碼…',
+      oninput: () => { disarmImport(); refreshPreview(); },
+    });
+
+    bui.file = el('input', {
+      type: 'file', accept: '.json,application/json', class: 'gpn-file',
+      onchange: async (e) => {
+        const f = e.target.files?.[0];
+        e.target.value = '';
+        if (!f) return;
+        try { bui.code.value = await gpnReadFile(f); }
+        catch { setStatus('這個檔案讀不起來', 'bad'); return; }
+        disarmImport();
+        refreshPreview();
+      },
+    });
+
+    bui.merge = el('button', {
+      class: 'gpn-seg is-on', type: 'button', onclick: () => setMode('merge'),
+    }, '合併', el('span', { text: '推薦' }));
+    bui.replace = el('button', {
+      class: 'gpn-seg', type: 'button', onclick: () => setMode('replace'),
+    }, '完全取代');
+
+    bui.modeNote = el('div', { class: 'gpn-note' });
+    bui.status = el('div', { class: 'gpn-note gpn-note--status' });
+
+    bui.import = el('button', {
+      class: 'gpn-btn gpn-btn--save', type: 'button', onclick: onImport,
+    }, '匯入');
+
+    $('backupView').replaceChildren(
+      el('div', { class: 'gpn-popup-head gpn-popup-head--back' },
+        el('button', {
+          class: 'gpn-back', type: 'button', 'aria-label': '返回',
+          onclick: closeBackup,
+        }, '←'),
+        el('span', { class: 'gpn-popup-title', text: '備份與同步' })
+      ),
+
+      el('div', { class: 'gpn-popup-body' },
+        el('div', { class: 'gpn-field' },
+          el('label', { class: 'gpn-label' },
+            '① 把資料帶出去　', el('span', { text: '（給網頁版或另一台用）' })),
+          el('div', { class: 'gpn-brow' },
+            el('button', {
+              class: 'gpn-btn2', type: 'button',
+              onclick: () => { gpnDownloadExport(data); setStatus('備份檔已開始下載', 'ok'); },
+            }, '⬇　下載備份檔'),
+            el('button', {
+              class: 'gpn-btn2', type: 'button',
+              onclick: async (e) => {
+                const ok = await gpnShareCopy(gpnExportCode(data));
+                setStatus(ok ? '代碼已複製，貼到另一台就好' : '複製失敗，請改用下載備份檔',
+                  ok ? 'ok' : 'bad');
+                if (ok) {
+                  e.currentTarget.classList.add('is-done');
+                  setTimeout(() => e.currentTarget.classList.remove('is-done'), 1400);
+                }
+              },
+            }, '⧉　複製代碼')
+          ),
+          bui.stats),
+
+        el('div', { class: 'gpn-sep' }),
+
+        el('div', { class: 'gpn-field' },
+          el('label', { class: 'gpn-label' },
+            '② 把資料帶回來　', el('span', { text: '（貼上代碼或選備份檔）' })),
+          bui.code,
+          el('div', { class: 'gpn-brow' },
+            el('button', {
+              class: 'gpn-btn2', type: 'button', onclick: () => bui.file.click(),
+            }, '📁　改用備份檔…'),
+            el('button', {
+              class: 'gpn-btn2', type: 'button',
+              onclick: () => { bui.code.value = ''; disarmImport(); refreshPreview(); },
+            }, '清空')
+          ),
+          bui.file,
+          el('div', { class: 'gpn-seg-row' }, bui.merge, bui.replace),
+          bui.modeNote,
+          bui.status)
+      ),
+
+      el('div', { class: 'gpn-popup-foot' }, bui.import)
+    );
+  }
+
+  function setStatus(msg, kind) {
+    bui.status.textContent = msg;
+    bui.status.classList.toggle('is-bad', kind === 'bad');
+    bui.status.classList.toggle('is-ok', kind === 'ok');
+  }
+
+  function setMode(mode) {
+    backupMode = mode;
+    bui.merge.classList.toggle('is-on', mode === 'merge');
+    bui.replace.classList.toggle('is-on', mode === 'replace');
+    disarmImport();
+    refreshPreview();
+  }
+
+  function refreshPreview() {
+    bui.modeNote.textContent = backupMode === 'merge'
+      ? '保留你現在的提示詞，只把還沒有的加進來。'
+      : '現在這台的提示詞會被整個蓋掉，換成備份裡的內容。';
+
+    const raw = bui.code.value.trim();
+    if (!raw) { setStatus('', ''); bui.import.disabled = true; return null; }
+
+    const parsed = gpnParseImport(raw);
+    if (!parsed.ok) { setStatus(parsed.error, 'bad'); bui.import.disabled = true; return null; }
+
+    bui.import.disabled = false;
+    if (backupMode === 'merge') {
+      const p = gpnPreviewMerge(data, parsed.data);
+      setStatus(p.added
+        ? `讀到 ${parsed.itemCount} 則，其中 ${p.added} 則是新的` +
+          (p.skipped ? `（${p.skipped} 則重複會跳過）` : '')
+        : `讀到 ${parsed.itemCount} 則，但你這台都已經有了`, 'ok');
+    } else {
+      setStatus(`讀到 ${parsed.tabCount} 個書籤、${parsed.itemCount} 則，會取代全部內容`, 'ok');
+    }
+    return parsed;
+  }
+
+  /** 匯入會動到既有資料，所以一律二段式確認 */
+  async function onImport() {
+    const parsed = refreshPreview();
+    if (!parsed) { bui.code.focus(); return; }
+
+    if (!impArmed) {
+      impArmed = true;
+      bui.import.classList.add('is-confirm');
+      const have = countItems(data);
+      bui.import.textContent = backupMode === 'merge'
+        ? '確定合併？再按一次'
+        : have ? `確定取代？現有 ${have} 則會不見` : '確定取代？再按一次';
+      clearTimeout(impTimer);
+      impTimer = setTimeout(disarmImport, 6000);
+      return;
+    }
+
+    if (backupMode === 'merge') {
+      const r = gpnMergeData(data, parsed.data);
+      data = r.data;
+      await GpnStore.save(data);
+      closeBackup();
+      render();
+      setStatus('', '');
+    } else {
+      data = gpnNormalize(parsed.data);
+      await GpnStore.save(data);
+      closeBackup();
+      render();
+      setStatus('', '');
+    }
+  }
+
+  function disarmImport() {
+    clearTimeout(impTimer);
+    impArmed = false;
+    bui.import.classList.remove('is-confirm');
+    bui.import.textContent = '匯入';
+  }
+
+  function openBackup() {
+    if (!bui.code) buildBackupView();
+    bui.code.value = '';
+    setMode('merge');                 // 每次都從最安全的選項開始
+    bui.stats.textContent =
+      `這台目前有 ${data.tabs.length} 個書籤、${countItems(data)} 則提示詞`;
+    $('mainView').hidden = true;
+    $('backupView').hidden = false;
+  }
+
+  function closeBackup() {
+    disarmImport();
+    $('backupView').hidden = true;
+    $('mainView').hidden = false;
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$('backupView').hidden) { closeBackup(); e.preventDefault(); }
+  });
 
   (async () => {
     data = await GpnStore.load();
