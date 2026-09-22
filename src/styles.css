@@ -427,7 +427,7 @@ button { cursor: pointer; }
   padding: 14px 10px 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 18px;
   /* Firefox */
   scrollbar-width: thin;
   scrollbar-color: var(--outline-strong) transparent;
