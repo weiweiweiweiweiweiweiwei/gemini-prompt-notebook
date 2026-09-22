@@ -1,0 +1,15 @@
+# 作業系統
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 編輯器
+.vscode/
+.idea/
+*.swp
+
+# 打包產物
+*.zip
+*.crx
+*.pem
+dist/

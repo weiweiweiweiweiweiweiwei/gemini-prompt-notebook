@@ -1,0 +1,819 @@
+/* ============================================================================
+   Gemini 常用提示詞筆記本 — 樣式表
+   用在兩個地方：
+     1. Light DOM（manifest 的 content_scripts.css）→ 注入工具列的觸發按鈕
+     2. Shadow DOM（content.js 用 fetch + adoptedStyleSheets）→ 面板本體
+   ========================================================================== */
+
+/* ============================================================================
+   一、觸發按鈕（注入 Gemini 輸入框工具列，和「+」同一排）
+   會複製 Gemini 原生 icon button 的 class，
+   尺寸／圓角／hover 全部由 Gemini 自己的 CSS 負責。
+   ========================================================================== */
+.gpn-trigger-wrap { display: inline-flex; align-items: center; flex: none; }
+/* 圖示大小由 content.js 依各站原生按鈕設定（Gemini 24px、ChatGPT/Claude 20px） */
+.gpn-trigger-btn > svg {
+  width: var(--gpn-icon, 24px); height: var(--gpn-icon, 24px);
+  display: block; margin: auto;
+  fill: currentColor;
+  transition: transform .18s cubic-bezier(.2, 0, 0, 1);
+}
+.gpn-trigger-btn:hover > svg { transform: scale(1.08); }
+.gpn-trigger-btn:active > svg { transform: scale(.94); }
+.gpn-trigger-btn.gpn-is-open > svg { fill: #a8c7fa; }
+
+/* 備援：只有在「完全抄不到原生 class」時（content.js 會加上 .gpn-bare）才套用。
+   絕不能用 :not(...) 之類的猜測條件，否則會蓋掉各站原生按鈕樣式。 */
+.gpn-trigger-btn.gpn-bare {
+  width: 32px; height: 32px; padding: 4px;
+  border: 0; border-radius: 9999px;
+  background: transparent; color: inherit; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background-color .18s ease;
+}
+.gpn-trigger-btn.gpn-bare:hover { background: rgba(128, 128, 128, .18); }
+
+/* ============================================================================
+   一之二、右下角浮動圓鈕（FAB）
+   長駐在網頁右下角。開啟「問問 Gemini」側邊欄時網頁會被壓窄，
+   因為是 position:fixed + right，圓鈕會自動跟著視窗右緣往左移。
+   ========================================================================== */
+:host(.gpn-fab-host) {
+  inset: auto 24px 28px auto;      /* 右 24px、下 28px */
+  z-index: 2147483500;             /* 低於面板，開面板時會被遮罩蓋住 */
+  pointer-events: none;
+}
+/* is-hidden＝面板開著；is-off＝已成功注入輸入框工具列，不需要圓鈕 */
+:host(.gpn-fab-host.is-hidden), :host(.gpn-fab-host.is-off) { display: none; }
+
+.gpn-fab {
+  pointer-events: auto;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  /* 毛玻璃底色，icon 維持原本的收藏旗幟 */
+  background: var(--glass);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  border: 1px solid var(--outline);
+  color: var(--text-mute);
+  box-shadow: var(--shadow-lg), inset 0 1px 0 var(--glass-hi);
+  transition: transform .18s cubic-bezier(.2, 0, 0, 1),
+              color .18s ease, border-color .18s ease;
+}
+.gpn-fab:hover { transform: scale(1.07); color: var(--primary); border-color: var(--primary); }
+.gpn-fab:active { transform: scale(.96); }
+.gpn-fab:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+.gpn-fab svg { width: 26px; height: 26px; display: block; fill: currentColor; }
+
+/* ============================================================================
+   二、面板（Shadow DOM）
+   ========================================================================== */
+:host {
+  all: initial;
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 2147483601;
+  pointer-events: none;
+  font-family: "Google Sans", "Google Sans Text", Roboto, "Noto Sans TC",
+               "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+*, *::before, *::after { box-sizing: border-box; }
+button, input, textarea { font: inherit; color: inherit; margin: 0; border: 0; background: none; }
+button { cursor: pointer; }
+
+/* Popup 頁面的根容器（不是 Shadow DOM，所以要另外給基準樣式） */
+.gpn-root {
+  font-family: "Google Sans", "Google Sans Text", Roboto, "Noto Sans TC",
+               "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--surface);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- Design tokens：淺色（Shadow DOM 和 Popup 共用） ---------- */
+:host, .gpn-root {
+  --surface:           #ffffff;
+  --surface-card:      #ffffff;
+  --surface-input:     #f8f9fa;
+  --outline:           #dadce0;
+  --outline-strong:    #c4c7c5;
+  --text:              #1f1f1f;
+  --text-mute:         #5f6368;
+  --primary:           #0b57d0;
+  --on-primary:        #ffffff;
+  --error:             #d93025;
+  --error-container:   #fce8e6;
+  --hover:             rgba(0, 0, 0, .06);
+  --scrim:             rgba(0, 0, 0, .5);
+  --shadow-lg: 0 8px 12px 6px rgba(0,0,0,.09), 0 4px 4px rgba(0,0,0,.12);
+  --shadow-md: 0 2px 6px 2px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.1);
+
+  /* 書籤高度（keyframes 也會用到，所以集中定義在這裡） */
+  --tab-h: 42px;
+  --tab-h-active: 54px;
+
+  /* ---- 毛玻璃（Liquid Glass 風格）----
+     Apple 在後期 beta 反而把透明度「調低」，因為半透明會讓對比度隨背景浮動、
+     文字變難讀。這個外掛是給長輩用的，清晰度優先，
+     所以走「高不透明度 + 明顯模糊」這一路，而不是強透明。
+     --glass-opq 越大 = 越不透明 = 文字越清楚。 */
+  --glass-blur: 20px;
+  --glass-sat: 180%;
+  --glass-opq: 88%;                              /* 面板底色保留幾成 */
+  --glass-opq-soft: 80%;                         /* 卡片等內層 */
+  --glass-hi: rgba(255, 255, 255, .85);          /* 上緣高光（模擬鏡面反光） */
+  --glass-rim: rgba(255, 255, 255, .5);          /* 邊緣細光 */
+  --scrim-blur: 7px;
+
+  /* ---- Liquid Glass 的玻璃本體：中性、不上色 ----
+     這是這套設計的核心：表面本身幾乎沒有顏色，顏色是「背後透出來的」。
+     所以不再有牛皮紙黃／薄荷綠那種整片上色的表面。 */
+  --glass:       rgba(252, 252, 253, .80);   /* 主要玻璃（紙張、對話框） */
+  --glass-soft:  rgba(252, 252, 253, .52);   /* 次要玻璃（未選取的書籤） */
+  --glass-card:  rgba(255, 255, 255, .72);   /* 卡片 */
+  --glass-line:  rgba(0, 0, 0, .10);         /* 玻璃邊界細線 */
+
+  /* 書籤識別色只當「重點色」用：一條細色帶 + 極淡的暈染，不是整片塗滿 */
+  --c-amber-accent:  #d99a2b;
+  --c-green-accent:  #3f9d55;
+  --c-blue-accent:   #3b82f6;
+  --c-rose-accent:   #e05c86;
+  --c-purple-accent: #8b5cf6;
+  --c-teal-accent:   #14a5a0;
+}
+
+/* ---------- Design tokens：深色（跟隨 Gemini 的 body.dark-theme） ---------- */
+:host([data-theme="dark"]) {
+  --surface:           #1e1f20;
+  --surface-card:      #2a2b2d;
+  --surface-input:     #131314;
+  --outline:           #444746;
+  --outline-strong:    #5f6368;
+  --text:              #e3e3e3;
+  --text-mute:         #a2a9b0;
+  --primary:           #a8c7fa;
+  --on-primary:        #062e6f;
+  --error:             #f2b8b5;
+  --error-container:   #5c1d1a;
+  --hover:             rgba(255, 255, 255, .09);
+  --scrim:             rgba(0, 0, 0, .65);
+  --shadow-lg: 0 8px 12px 6px rgba(0,0,0,.3), 0 4px 4px rgba(0,0,0,.4);
+  --shadow-md: 0 2px 6px 2px rgba(0,0,0,.28), 0 1px 2px rgba(0,0,0,.34);
+
+  /* 深色底下高光要收斂，否則會像鑲白邊 */
+  --glass-hi: rgba(255, 255, 255, .14);
+  --glass-rim: rgba(255, 255, 255, .08);
+  --glass-opq: 86%;
+  --glass-opq-soft: 78%;
+
+  --glass:       rgba(44, 46, 50, .76);
+  --glass-soft:  rgba(58, 61, 66, .46);
+  --glass-card:  rgba(58, 61, 66, .62);
+  --glass-line:  rgba(255, 255, 255, .12);
+
+  /* 深色底下重點色要亮一階才看得出來 */
+  --c-amber-accent:  #f0b757;
+  --c-green-accent:  #6dc47f;
+  --c-blue-accent:   #6ea8fe;
+  --c-rose-accent:   #f386a6;
+  --c-purple-accent: #b49bf7;
+  --c-teal-accent:   #4fc9c2;
+}
+
+/* ---------- 顏色對應 ----------
+   Liquid Glass 的做法：表面一律是中性玻璃，
+   書籤的識別色只透過 --accent 以「細色帶 + 極淡暈染」呈現。 */
+.gpn-book[data-color="amber"],  .gpn-tab[data-color="amber"]  { --accent: var(--c-amber-accent); }
+.gpn-book[data-color="green"],  .gpn-tab[data-color="green"]  { --accent: var(--c-green-accent); }
+.gpn-book[data-color="blue"],   .gpn-tab[data-color="blue"]   { --accent: var(--c-blue-accent); }
+.gpn-book[data-color="rose"],   .gpn-tab[data-color="rose"]   { --accent: var(--c-rose-accent); }
+.gpn-book[data-color="purple"], .gpn-tab[data-color="purple"] { --accent: var(--c-purple-accent); }
+.gpn-book[data-color="teal"],   .gpn-tab[data-color="teal"]   { --accent: var(--c-teal-accent); }
+
+/* ---------- 遮罩 ---------- */
+.gpn-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  /* 關鍵：建立獨立堆疊脈絡，讓書籤／紙張的 z-index 絕不外洩到編輯層之上 */
+  isolation: isolate;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--scrim);
+  /* 整個畫面的「帶點模糊」：底下的網頁會被霧化，面板才浮得起來 */
+  backdrop-filter: blur(var(--scrim-blur)) saturate(115%);
+  -webkit-backdrop-filter: blur(var(--scrim-blur)) saturate(115%);
+  pointer-events: auto;
+}
+.gpn-overlay.is-open { display: flex; animation: gpn-fade .18s ease; }
+@keyframes gpn-fade { from { opacity: 0 } to { opacity: 1 } }
+@keyframes gpn-rise {
+  from { opacity: 0; transform: translateY(12px) scale(.985) }
+  to   { opacity: 1; transform: none }
+}
+
+/* ---------- 筆記本主體：固定尺寸，切換書籤時不跳動 ---------- */
+.gpn-book {
+  width: 560px;
+  height: 600px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  animation: gpn-rise .22s cubic-bezier(.2, 0, 0, 1);
+  transition: transform .22s cubic-bezier(.2, 0, 0, 1), opacity .22s ease, filter .22s ease;
+}
+/* 編輯視窗打開時，筆記本退到後面 */
+.gpn-overlay.is-editing .gpn-book {
+  transform: scale(.96);
+  opacity: .4;
+  filter: blur(2px);
+  pointer-events: none;
+}
+
+/* ---------- 書籤列 ----------
+   這層不能設 position/z-index，否則會產生新堆疊脈絡，
+   書籤就無法和下方紙張互相疊壓，索引標籤的立體感會失效。
+   padding-left: 0 → 第一個書籤的左緣和下方紙張切齊。 */
+.gpn-tabs {
+  display: flex;
+  align-items: flex-end;      /* 書籤一律對齊底部，長高時只往上長 */
+  gap: 4px;
+  padding-left: 0;
+  flex: none;
+  /* 固定成「最高的書籤」的高度。
+     否則這一列的高度會跟著書籤長高／變矮，
+     下面的紙張就會被推著上下移動（彈跳時整個面板跟著晃）。 */
+  height: var(--tab-h-active);
+}
+
+.gpn-tab {
+  position: relative;
+  z-index: 1;                  /* 低於紙張 → 被紙張蓋住 */
+  /* 寬度由 content.js 依書籤數量算出百分比，所有書籤「等寬」且不隨選取改變；
+     選取狀態改用「高度」表現，按起來才不會一直左右位移。 */
+  flex: none;
+  min-width: 54px;
+  height: var(--tab-h);
+  display: flex;
+  align-items: center;
+  background: var(--glass-soft);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  border: 1px solid var(--glass-line);
+  border-bottom: none;
+  border-radius: 14px 14px 0 0;
+  box-shadow: inset 0 1px 0 var(--glass-hi);
+  overflow: hidden;
+  touch-action: manipulation;
+  /* 刻意「不」對 height 做 transition：被取消選取的書籤直接降回原高度。
+     只有被點選的書籤走下面的 keyframes，畫面焦點單純、節奏俐落。
+     （這是實際比較過幾種版本後選定的行為） */
+  transition: background-color .3s ease,
+              filter .15s ease;
+}
+.gpn-tab:hover { filter: brightness(1.18); }
+.gpn-tab.is-active {
+  height: var(--tab-h-active);   /* 明顯高過未選取的書籤 */
+  z-index: 3;                  /* 高於紙張 → 蓋住紙張上緣 */
+  margin-bottom: -1px;
+  /* 中性玻璃 + 極淡的識別色暈染（8%），不是整片上色 */
+  background:
+    linear-gradient(to bottom,
+      color-mix(in srgb, var(--accent) 16%, transparent),
+      transparent 60%),
+    var(--glass);
+  /* 底緣用和紙張一模一樣的玻璃色，才不會出現接縫 */
+  border-bottom: 1px solid var(--glass);
+  /* 頂部一條細色帶：書籤的識別色改由這裡表現 */
+  box-shadow: inset 0 2px 0 var(--accent), inset 0 3px 0 var(--glass-hi);
+}
+
+/* 長按 450ms 後進入「排序模式」：被抓起的書籤浮起來，其餘淡化 */
+.gpn-tab.is-drag {
+  z-index: 9;
+  transform: scale(1.06);
+  cursor: grabbing;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, .38), inset 0 1px 0 var(--glass-hi);
+  transition: transform .16s cubic-bezier(.2, 0, 0, 1);
+}
+.gpn-tabs.is-reordering .gpn-tab:not(.is-drag) { opacity: .55; }
+.gpn-tabs.is-reordering .gpn-tab-main { cursor: grabbing; }
+
+/* 點選時：從「未選取的高度」開始下沉，沉到紙張後面，再緩緩升起到作用中高度。
+   高度必須寫在 keyframes 裡——若交給 transition，瀏覽器會先把高度套成
+   作用中高度才開始播動畫，看起來就像「先瞬間跳到最高點再下沉」。
+   z-index 整段維持 1（低於紙張的 2），下沉時才會沉到紙張後面，
+   而不是蓋住 paper-head 的文字；動畫結束後才回到 .is-active 的 3。 */
+.gpn-tab.is-popping { animation: gpn-tab-pop .62s cubic-bezier(.33, 0, .18, 1); }
+@keyframes gpn-tab-pop {
+  0%   { height: var(--tab-h);        transform: translateY(0);   z-index: 1 }
+  34%  { height: var(--tab-h);        transform: translateY(6px); z-index: 1 }  /* 沉到紙張後面 */
+  100% { height: var(--tab-h-active); transform: translateY(0);   z-index: 1 }  /* 再升起長高 */
+}
+
+/* 書籤上只有文字，沒有別的元素，中文字才能真正置中 */
+.gpn-tab-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  /* 多留一點下方內距：書籤是靠底部對齊的，沒有這個留白，
+     下沉或未選取時文字會幾乎貼到底部框線，看起來很擠。 */
+  padding: 0 12px 6px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-mute);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color .3s ease;
+}
+.gpn-tab.is-active .gpn-tab-main { color: var(--text); }
+.gpn-tab-main:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
+
+/* 新增書籤 */
+.gpn-tab-add {
+  position: relative;
+  top: 5px;
+  z-index: 1;
+  flex: none;
+  width: 42px; height: 38px;
+  margin-left: 2px;
+  border: 1px dashed var(--outline-strong);
+  border-bottom: none;
+  border-radius: 12px 12px 0 0;
+  background: transparent;
+  color: var(--text-mute);
+  font-size: 17px;
+  line-height: 1;
+  transition: top .16s cubic-bezier(.2,0,0,1), color .16s ease,
+              border-color .16s ease, background-color .16s ease;
+}
+.gpn-tab-add:hover {
+  top: 2px;
+  color: var(--primary);
+  border-color: var(--primary);
+  background: var(--hover);
+}
+.gpn-tab-add:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+
+/* ---------- 紙張 ---------- */
+.gpn-paper {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* 中性玻璃紙張：所有書籤共用同一種材質，不再依書籤上色 */
+  background: var(--glass);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  border: 1px solid var(--glass-line);
+  border-radius: 0 20px 20px 20px;
+  /* 外陰影拉開層次，內側上緣高光模擬玻璃的鏡面反光 */
+  box-shadow: var(--shadow-lg), inset 0 1px 0 var(--glass-hi);
+  overflow: hidden;
+  /* 換書籤時紙張顏色跟著書籤一起淡入淡出（配合放慢後的書籤動畫） */
+  transition: background-color .5s ease, border-color .5s ease;
+}
+.gpn-paper-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px 9px 20px;
+  font-size: 13.5px;
+  color: var(--text-mute);
+  border-bottom: 1px solid var(--glass-line);
+}
+.gpn-hint-text { flex: 1; min-width: 0; opacity: .9; }
+
+/* 書籤的編輯鈕改放這裡：不佔書籤空間，書籤上的字才能置中 */
+.gpn-tab-edit {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  color: var(--text-mute);
+  opacity: .75;
+  transition: opacity .14s ease, background-color .14s ease;
+}
+.gpn-tab-edit:hover { opacity: 1; background: var(--hover); }
+.gpn-tab-edit:focus-visible { outline: 2px solid var(--primary); opacity: 1; }
+.gpn-tab-edit svg { width: 16px; height: 16px; display: block; fill: currentColor; }
+
+/* ---------- 卡片列表：只有這裡捲動 ---------- */
+.gpn-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 10px 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: var(--outline-strong) transparent;
+}
+/* 細長圓角、沒有軌道底色，滑過才變明顯——配合筆記本紙張的乾淨感 */
+.gpn-list::-webkit-scrollbar { width: 10px; }
+.gpn-list::-webkit-scrollbar-track { background: transparent; }
+.gpn-list::-webkit-scrollbar-thumb {
+  background: var(--outline-strong);
+  border-radius: 99px;
+  border: 3px solid transparent;      /* 內縮，讓捲軸看起來更細 */
+  background-clip: content-box;
+  transition: background-color .16s ease;
+}
+.gpn-list::-webkit-scrollbar-thumb:hover { background: var(--text-mute); background-clip: content-box; }
+.gpn-list::-webkit-scrollbar-corner { background: transparent; }
+
+/* 編輯視窗內容區也套同一套捲軸樣式 */
+.gpn-dialog-body { scrollbar-color: var(--outline-strong) transparent; }
+.gpn-dialog-body::-webkit-scrollbar { width: 10px; }
+.gpn-dialog-body::-webkit-scrollbar-track { background: transparent; }
+.gpn-dialog-body::-webkit-scrollbar-thumb {
+  background: var(--outline-strong);
+  border-radius: 99px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+/* ---------- 卡片 ---------- */
+.gpn-card {
+  position: relative;               /* 複製動畫要蓋在上面 */
+  display: grid;
+  grid-template-columns: 40px 1fr 52px;
+  align-items: stretch;
+  flex: none;
+  min-height: 68px;
+  background: var(--glass-card);
+  backdrop-filter: blur(14px) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(14px) saturate(var(--glass-sat));
+  border: 1px solid var(--outline);
+  border-radius: 16px;
+  box-shadow: var(--shadow-md), inset 0 1px 0 var(--glass-hi);
+  transition: box-shadow .16s ease, border-color .16s ease, transform .16s ease;
+}
+.gpn-card:hover { border-color: var(--outline-strong); }
+.gpn-card.is-dragging {
+  border-color: var(--primary);
+  box-shadow: 0 10px 22px rgba(0,0,0,.34);
+  transform: scale(1.012);
+}
+.gpn-list.is-dragging .gpn-card:not(.is-dragging) { opacity: .55; }
+
+/* 複製回饋：卡片維持原本的深色，只讓 "Copied" 字樣輕輕升起（極簡） */
+.gpn-card.is-copied .gpn-grip,
+.gpn-card.is-copied .gpn-title,
+.gpn-card.is-copied .gpn-edit {
+  opacity: 0;
+  transition: opacity .16s ease;
+}
+.gpn-copied {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: none;              /* 不蓋色塊，按鈕維持深色 */
+}
+.gpn-copied span {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: var(--text-mute);
+  animation: gpn-copied 1.2s cubic-bezier(.2, 0, 0, 1) forwards;
+}
+@keyframes gpn-copied {
+  0%   { opacity: 0; transform: translateY(9px) }
+  22%  { opacity: 1; transform: translateY(0) }
+  72%  { opacity: 1; transform: translateY(0) }
+  100% { opacity: 0; transform: translateY(-7px) }
+}
+
+.gpn-grip {
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-mute);
+  cursor: grab;
+  border-radius: 16px 0 0 16px;
+  touch-action: none;
+  user-select: none;
+  transition: background-color .16s ease;
+}
+.gpn-grip:hover { background: var(--hover); }
+.gpn-grip:active { cursor: grabbing; }
+.gpn-grip svg { width: 20px; height: 20px; display: block; fill: currentColor; }
+
+.gpn-title {
+  display: flex; flex-direction: column; justify-content: center; gap: 2px;
+  padding: 10px 8px 10px 2px;
+  text-align: left;
+  min-width: 0;
+  transition: background-color .16s ease;
+}
+.gpn-title:hover { background: var(--hover); }
+.gpn-title:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
+.gpn-title-text {
+  font-size: 19px; font-weight: 600; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.gpn-title-sub {
+  font-size: 13.5px; color: var(--text-mute);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.gpn-edit {
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-mute);
+  border-radius: 0 16px 16px 0;
+  border-left: 1px solid var(--outline);
+  transition: background-color .16s ease, color .16s ease;
+}
+.gpn-edit:hover { background: var(--hover); color: var(--primary); }
+.gpn-edit:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
+.gpn-edit svg { width: 21px; height: 21px; display: block; fill: currentColor; }
+
+/* ---------- 空狀態 ---------- */
+.gpn-empty { margin: auto; padding: 24px; text-align: center; color: var(--text-mute); }
+.gpn-empty-emoji { font-size: 40px; line-height: 1; opacity: .9; }
+.gpn-empty-title { margin-top: 12px; font-size: 18px; font-weight: 600; }
+.gpn-empty-desc  { margin-top: 6px; font-size: 15px; opacity: .78; }
+.gpn-empty-arrow { margin-top: 8px; font-size: 22px; animation: gpn-bounce 1.5s ease-in-out infinite; }
+@keyframes gpn-bounce { 0%,100% { transform: translateY(0) } 50% { transform: translateY(6px) } }
+
+/* ---------- 底部新增鈕 ---------- */
+.gpn-foot { flex: none; padding: 12px 16px 16px; border-top: 1px solid var(--glass-line); }
+.gpn-add {
+  width: 100%;
+  height: 50px;
+  border-radius: 25px;
+  border: 1px dashed var(--outline);
+  background: transparent;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease;
+}
+.gpn-add:hover { background: var(--hover); border-style: solid; border-color: var(--primary); color: var(--primary); }
+.gpn-add:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+
+/* ============================================================================
+   三、第二層：編輯視窗（永遠在筆記本之上）
+   ========================================================================== */
+.gpn-edit-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;                 /* 高於 .gpn-overlay 的 1 */
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--scrim);
+  pointer-events: auto;
+}
+.gpn-edit-layer.is-open { display: flex; animation: gpn-fade .16s ease; }
+.gpn-dialog {
+  width: 560px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  background: var(--glass);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  color: var(--text);
+  border: 1px solid var(--outline);
+  border-radius: 28px;
+  box-shadow: var(--shadow-lg), inset 0 1px 0 var(--glass-hi);
+  animation: gpn-rise .2s cubic-bezier(.2, 0, 0, 1);
+  overflow: hidden;
+}
+.gpn-dialog--sm { width: 440px; }
+.gpn-dialog h2 { flex: none; margin: 0; padding: 24px 26px 16px; font-size: 21px; font-weight: 600; }
+.gpn-dialog-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 26px; scrollbar-width: thin; }
+.gpn-field { margin-bottom: 18px; }
+.gpn-label { display: block; margin-bottom: 7px; font-size: 15px; font-weight: 600; color: var(--text); }
+.gpn-label span { font-weight: 400; font-size: 13.5px; color: var(--text-mute); }
+.gpn-input, .gpn-textarea {
+  display: block;
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 16px;
+  color: var(--text);
+  background: var(--surface-input);
+  border: 1px solid var(--outline);
+  border-radius: 12px;
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+.gpn-textarea { min-height: 180px; resize: vertical; line-height: 1.65; font-size: 15.5px; }
+.gpn-input::placeholder, .gpn-textarea::placeholder { color: var(--text-mute); opacity: .8; }
+.gpn-input:focus, .gpn-textarea:focus {
+  outline: none; border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary);
+}
+.gpn-input.is-bad, .gpn-textarea.is-bad { border-color: var(--error); box-shadow: 0 0 0 1px var(--error); }
+.gpn-hint { margin-top: 6px; font-size: 13.5px; color: var(--error); display: none; }
+.gpn-hint.is-on { display: block; }
+
+/* 書籤顏色色票 */
+.gpn-swatches { display: flex; flex-wrap: wrap; gap: 12px; }
+.gpn-swatch {
+  width: 46px; height: 46px;
+  border-radius: 50%;
+  border: 1px solid rgba(128,128,128,.4);
+  transition: transform .14s cubic-bezier(.2,0,0,1), outline-color .14s ease;
+  outline: 3px solid transparent;
+  outline-offset: 3px;
+}
+.gpn-swatch:hover { transform: scale(1.1); }
+.gpn-swatch.is-on { outline-color: var(--primary); transform: scale(1.06); }
+.gpn-swatch:focus-visible { outline-color: var(--primary); }
+.gpn-swatch[data-color="amber"]  { background: var(--c-amber-accent); }
+.gpn-swatch[data-color="green"]  { background: var(--c-green-accent); }
+.gpn-swatch[data-color="blue"]   { background: var(--c-blue-accent); }
+.gpn-swatch[data-color="rose"]   { background: var(--c-rose-accent); }
+.gpn-swatch[data-color="purple"] { background: var(--c-purple-tab); }
+.gpn-swatch[data-color="teal"]   { background: var(--c-teal-accent); }
+
+.gpn-actions {
+  flex: none;
+  display: flex; align-items: center; gap: 10px;
+  padding: 16px 26px 22px;
+}
+.gpn-btn {
+  height: 48px;
+  padding: 0 26px;
+  border-radius: 24px;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background-color .16s ease, box-shadow .16s ease, color .16s ease;
+}
+.gpn-btn:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.gpn-btn--save { background: var(--primary); color: var(--on-primary); flex: 1; }
+.gpn-btn--save:hover { box-shadow: var(--shadow-md); filter: brightness(1.06); }
+.gpn-btn--cancel { background: transparent; color: var(--text); border: 1px solid var(--outline); }
+.gpn-btn--cancel:hover { background: var(--hover); }
+.gpn-btn--del { margin-right: auto; padding: 0 18px; background: transparent; color: var(--error); }
+.gpn-btn--del:hover { background: var(--error-container); }
+.gpn-btn--del.is-confirm {
+  background: var(--error);
+  color: var(--surface);
+  padding: 0 16px;
+  font-size: 14.5px;
+  animation: gpn-shake .3s ease;
+}
+:host([data-theme="dark"]) .gpn-btn--del.is-confirm { color: #3c0f0d; }
+@keyframes gpn-shake {
+  0%,100% { transform: translateX(0) } 25% { transform: translateX(-4px) } 75% { transform: translateX(4px) }
+}
+
+/* ============================================================================
+   四、完成提示 Toast
+   ========================================================================== */
+.gpn-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 104px;
+  transform: translate(-50%, 14px);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  max-width: 88vw;
+  padding: 14px 24px;
+  border-radius: 26px;
+  background: var(--text);
+  color: var(--surface);
+  font-size: 15px;
+  font-weight: 500;
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease, transform .2s cubic-bezier(.2,0,0,1);
+}
+.gpn-toast.is-on { opacity: 1; transform: translate(-50%, 0); }
+.gpn-toast.is-bad { background: var(--error); color: #ffffff; }
+
+/* ============================================================================
+   五、工具列 Popup（點 Chrome 擴充功能圖示開啟）
+   ========================================================================== */
+.gpn-popup {
+  width: 380px;
+  height: 520px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+.gpn-popup-head { flex: none; padding: 16px 18px 10px; }
+.gpn-popup-title { display: block; font-size: 17px; font-weight: 600; color: var(--text); }
+.gpn-popup-sub { display: block; margin-top: 2px; font-size: 12.5px; color: var(--text-mute); }
+
+.gpn-popup-tabs {
+  flex: none;
+  display: flex;
+  gap: 6px;
+  padding: 4px 18px 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.gpn-popup-tabs::-webkit-scrollbar { display: none; }
+.gpn-popup-tab {
+  flex: none;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 16px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-mute);
+  background: var(--surface-input);
+  border: 1px solid var(--outline);
+  transition: background-color .14s ease, color .14s ease, border-color .14s ease;
+}
+.gpn-popup-tab:hover { background: var(--hover); }
+.gpn-popup-tab[data-color="amber"].is-active { background: color-mix(in srgb, var(--c-amber-accent) 18%, var(--glass)); color: var(--text); border-color: var(--c-amber-accent); }
+.gpn-popup-tab[data-color="green"].is-active { background: color-mix(in srgb, var(--c-green-accent) 18%, var(--glass)); color: var(--text); border-color: var(--c-green-accent); }
+.gpn-popup-tab[data-color="blue"].is-active { background: color-mix(in srgb, var(--c-blue-accent) 18%, var(--glass)); color: var(--text); border-color: var(--c-blue-accent); }
+.gpn-popup-tab[data-color="rose"].is-active { background: color-mix(in srgb, var(--c-rose-accent) 18%, var(--glass)); color: var(--text); border-color: var(--c-rose-accent); }
+.gpn-popup-tab[data-color="purple"].is-active { background: color-mix(in srgb, var(--c-purple-accent) 18%, var(--glass)); color: var(--text); border-color: var(--c-purple-accent); }
+.gpn-popup-tab[data-color="teal"].is-active { background: color-mix(in srgb, var(--c-teal-accent) 18%, var(--glass)); color: var(--text); border-color: var(--c-teal-accent); }
+
+.gpn-popup-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding: 2px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* Popup 的卡片沒有拖曳把手和鉛筆，只有標題 */
+.gpn-popup-card { grid-template-columns: 1fr; min-height: 58px; }
+.gpn-popup-card .gpn-title { padding: 10px 14px; border-radius: 16px; }
+.gpn-popup-card .gpn-title-text { font-size: 16px; }
+
+.gpn-popup-empty { margin: auto; text-align: center; color: var(--text-mute); padding: 20px; }
+
+.gpn-popup-foot { flex: none; padding: 10px 14px 14px; border-top: 1px solid var(--outline); }
+.gpn-popup-link {
+  width: 100%;
+  height: 42px;
+  border-radius: 21px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--primary);
+  background: transparent;
+  border: 1px solid var(--outline);
+  transition: background-color .14s ease, border-color .14s ease;
+}
+.gpn-popup-link:hover { background: var(--hover); border-color: var(--primary); }
+
+/* ============================================================================
+   六、毛玻璃的退場機制
+   半透明會讓對比度隨背景浮動，是這種材質最大的可讀性風險。
+   下面三種情況一律改回「完全不透明」，確保字永遠看得清楚。
+   ========================================================================== */
+
+/* 1. 瀏覽器不支援 backdrop-filter → 沒有模糊就別留透明度 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :host, .gpn-root { --glass: var(--surface); --glass-soft: var(--surface); --glass-card: var(--surface-card); }
+}
+
+/* 2. 使用者在系統設定要求降低透明度（macOS/Windows 的輔助使用選項） */
+@media (prefers-reduced-transparency: reduce) {
+  :host, .gpn-root { --glass: var(--surface); --glass-soft: var(--surface); --glass-card: var(--surface-card); }
+  .gpn-overlay, .gpn-paper, .gpn-tab, .gpn-card, .gpn-dialog, .gpn-fab {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+/* 3. 使用者要求高對比 */
+@media (prefers-contrast: more) {
+  :host, .gpn-root { --glass: var(--surface); --glass-soft: var(--surface); --glass-card: var(--surface-card); }
+}
+
+/* ---------- 小螢幕 / 側邊欄 ---------- */
+@media (max-height: 700px) { .gpn-book { height: calc(100vh - 48px); } }
+@media (prefers-reduced-motion: reduce) {
+  .gpn-book, .gpn-dialog, .gpn-overlay, .gpn-toast, .gpn-copied,
+  .gpn-tab, .gpn-card, .gpn-empty-arrow { animation: none !important; transition: none !important; }
+}
