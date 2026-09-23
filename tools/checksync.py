@@ -15,7 +15,11 @@
          panel.js   面板本體（網頁版和外掛長得、用起來一模一樣，靠的就是這份）
          styles.css 面板的樣式
     2. src/store.js  == web/store.js        （只有「共用資料契約」那一段）
+    3. manifest.json 的 version == panel.js 的 GPN_APP_VERSION
+       （設定視窗左下角顯示的版本號，用來確認外掛和網頁版是不是同一版）
 """
+import json
+import re
 import sys
 from pathlib import Path
 
@@ -91,6 +95,16 @@ def main():
             problems.append('store.js 的共用資料契約兩邊不一樣\n' + first_diff(src_block, web_block))
     else:
         print('OK    store.js 共用片段（%d 行）' % len(src_block.split('\n')))
+
+    # ---- 3. 版本號 ----
+    manifest_ver = json.loads(read(ROOT / 'manifest.json'))['version']
+    m = re.search(r"const GPN_APP_VERSION = '([^']+)'", read(ROOT / 'src/panel.js'))
+    panel_ver = m.group(1) if m else '(找不到)'
+    if manifest_ver != panel_ver:
+        problems.append(f'版本號不一樣：manifest.json 是 {manifest_ver}，panel.js 是 {panel_ver}'
+                        '（--fix 不會改這個，請手動把兩邊改成同一個）')
+    else:
+        print(f'OK    版本號 {manifest_ver}')
 
     if problems:
         print()

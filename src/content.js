@@ -326,6 +326,7 @@
 
     panel = gpnCreatePanel({
       root,
+      edition: '外掛',
       onUse: usePrompt,
       onOpenChange: (open) => {
         triggerBtn?.classList.toggle('gpn-is-open', open);

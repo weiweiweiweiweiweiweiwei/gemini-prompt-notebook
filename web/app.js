@@ -39,6 +39,7 @@
   const panel = gpnCreatePanel({
     root,
     standalone: true,
+    edition: '網頁版',
     notice: GpnStore.available() ? '' :
       '這個瀏覽器不能儲存資料（可能是無痕視窗，或設定擋掉了網站儲存空間）。' +
       '現在新增的提示詞，關掉分頁就會不見。請改用一般視窗開啟，或先用「備份／同步」存成檔案。',

@@ -2,30 +2,33 @@
 <html lang="zh-TW">
 <head>
 <meta charset="utf-8">
-<link rel="stylesheet" href="styles.css">
 <style>
-  html, body { margin: 0; width: 380px; height: 520px; overflow: hidden; }
+  /* Chrome 的小視窗最大 800 x 600，面板在裡面置中。
+     面板是毛玻璃，背後放和網頁版一樣的柔和色塊，玻璃感才出得來。 */
+  html, body { margin: 0; width: 780px; height: 600px; overflow: hidden; }
+  body {
+    background:
+      radial-gradient(420px 420px at 8% 10%, rgba(255, 190, 110, .42), transparent 62%),
+      radial-gradient(460px 460px at 94% 16%, rgba(110, 160, 255, .38), transparent 62%),
+      radial-gradient(500px 500px at 70% 100%, rgba(100, 200, 170, .34), transparent 62%),
+      #eef1f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    body {
+      background:
+        radial-gradient(420px 420px at 8% 10%, rgba(240, 183, 87, .16), transparent 62%),
+        radial-gradient(460px 460px at 94% 16%, rgba(110, 168, 254, .18), transparent 62%),
+        radial-gradient(500px 500px at 70% 100%, rgba(79, 201, 194, .14), transparent 62%),
+        #131314;
+    }
+  }
 </style>
 </head>
 <body>
-  <div class="gpn-root gpn-popup" id="root">
-    <!-- 主畫面：書籤 + 資料夾 + 卡片 -->
-    <div class="gpn-popup-view" id="mainView">
-      <div class="gpn-popup-head">
-        <span class="gpn-popup-title">常用提示詞</span>
-        <span class="gpn-popup-sub">點一下就複製，再到任何輸入框貼上</span>
-      </div>
-      <div class="gpn-popup-tabs" id="tabs" role="tablist"></div>
-      <div class="gpn-popup-folders" id="folders" role="tablist" hidden></div>
-      <div class="gpn-popup-list" id="list" role="list"></div>
-      <div class="gpn-popup-foot" id="foot"></div>
-    </div>
-
-    <!-- 第二畫面：備份與同步（和網頁版互換資料用） -->
-    <div class="gpn-popup-view" id="backupView" hidden></div>
-  </div>
+  <!-- 整個面板由 popup.js 畫出來，和 AI 網站裡、網頁版的是同一份（panel.js） -->
   <script src="store.js"></script>
   <script src="share.js"></script>
+  <script src="panel.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

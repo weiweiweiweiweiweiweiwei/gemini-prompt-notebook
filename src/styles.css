@@ -94,19 +94,8 @@ button { cursor: pointer; }
 /* 下面很多元件自己設了 display，會蓋掉瀏覽器內建的 [hidden]，這裡補回來 */
 [hidden] { display: none !important; }
 
-/* Popup 頁面的根容器（不是 Shadow DOM，所以要另外給基準樣式） */
-.gpn-root {
-  font-family: "Google Sans", "Google Sans Text", Roboto, "Noto Sans TC",
-               "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
-  font-size: 16px;
-  line-height: 1.5;
-  color: var(--text);
-  background: var(--surface);
-  -webkit-font-smoothing: antialiased;
-}
-
-/* ---------- Design tokens：淺色（Shadow DOM 和 Popup 共用） ---------- */
-:host, .gpn-root {
+/* ---------- Design tokens：淺色 ---------- */
+:host {
   color-scheme: light;                 /* 下拉選單等原生元件跟著主題 */
   --surface:           #ffffff;
   --surface-card:      #ffffff;
@@ -160,10 +149,9 @@ button { cursor: pointer; }
   --c-teal-accent:   #14a5a0;
 }
 
-/* ---------- Design tokens：深色（跟隨 Gemini 的 body.dark-theme） ----------
-   .gpn-root 那一半是給 Popup 的——它不是 Shadow DOM，:host 永遠選不到它，
-   少了這個選擇器，Popup 會一直停在淺色。 */
-:host([data-theme="dark"]), .gpn-root[data-theme="dark"] {
+/* ---------- Design tokens：深色 ----------
+   外掛跟著 AI 網站的深淺色；網頁版和工具列小視窗跟著系統。 */
+:host([data-theme="dark"]) {
   color-scheme: dark;
   --surface:           #1e1f20;
   --surface-card:      #2a2b2d;
@@ -964,8 +952,7 @@ button { cursor: pointer; }
   font-size: 14.5px;
   animation: gpn-shake .3s ease;
 }
-:host([data-theme="dark"]) .gpn-btn--del.is-confirm,
-.gpn-root[data-theme="dark"] .gpn-btn--del.is-confirm { color: #3c0f0d; }
+:host([data-theme="dark"]) .gpn-btn--del.is-confirm { color: #3c0f0d; }
 
 /* 匯入鈕：沒有可用內容時先關起來，按下去進入「再按一次」確認 */
 .gpn-btn[disabled] { opacity: .4; pointer-events: none; }
@@ -975,8 +962,7 @@ button { cursor: pointer; }
   font-size: 14.5px;
   animation: gpn-shake .3s ease;
 }
-:host([data-theme="dark"]) .gpn-btn--save.is-confirm,
-.gpn-root[data-theme="dark"] .gpn-btn--save.is-confirm { color: #3c0f0d; }
+:host([data-theme="dark"]) .gpn-btn--save.is-confirm { color: #3c0f0d; }
 
 @keyframes gpn-shake {
   0%,100% { transform: translateX(0) } 25% { transform: translateX(-4px) } 75% { transform: translateX(4px) }
@@ -1048,6 +1034,14 @@ button { cursor: pointer; }
   color: var(--text-mute);
 }
 .gpn-nav-badge.is-on { background: var(--primary); color: var(--on-primary); }
+/* 版本號：外掛和網頁版長得不一樣時，先比對這個數字 */
+.gpn-nav-version {
+  margin-top: auto;
+  padding: 12px 10px 0;
+  font-size: 12.5px;
+  color: var(--text-mute);
+  opacity: .85;
+}
 
 .gpn-settings-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .gpn-settings-body {
@@ -1145,7 +1139,7 @@ button { cursor: pointer; }
     scrollbar-width: none;
   }
   .gpn-settings-nav::-webkit-scrollbar { display: none; }
-  .gpn-dialog .gpn-settings-nav h2, .gpn-nav-group, .gpn-nav-icon { display: none; }
+  .gpn-dialog .gpn-settings-nav h2, .gpn-nav-group, .gpn-nav-icon, .gpn-nav-version { display: none; }
   .gpn-nav-item { min-height: 42px; white-space: nowrap; }
   .gpn-settings-body { padding: 18px 18px 8px; }
 }
@@ -1177,130 +1171,15 @@ button { cursor: pointer; }
 .gpn-toast.is-bad { background: var(--error); color: #ffffff; }
 
 /* ============================================================================
-   五、工具列 Popup（點 Chrome 擴充功能圖示開啟）
+   五、工具列小視窗（點 Chrome 擴充功能圖示開啟）
+   裡面是同一個面板；Chrome 的小視窗最大只有 800 x 600，所以邊距縮小、讓面板吃滿。
    ========================================================================== */
-.gpn-popup {
-  width: 380px;
-  height: 520px;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
+:host(.gpn-popup-host) .gpn-overlay { padding: 12px; }
+:host(.gpn-popup-host) .gpn-book {
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px);
+  height: calc(100vh - 24px);
 }
-.gpn-popup-head { flex: none; padding: 16px 18px 10px; }
-.gpn-popup-title { display: block; font-size: 17px; font-weight: 600; color: var(--text); }
-.gpn-popup-sub { display: block; margin-top: 2px; font-size: 12.5px; color: var(--text-mute); }
-
-.gpn-popup-tabs {
-  flex: none;
-  display: flex;
-  gap: 6px;
-  padding: 4px 18px 10px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.gpn-popup-tabs::-webkit-scrollbar { display: none; }
-.gpn-popup-tab {
-  flex: none;
-  height: 32px;
-  padding: 0 14px;
-  border-radius: 16px;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--text-mute);
-  background: var(--surface-input);
-  border: 1px solid var(--outline);
-  transition: background-color .14s ease, color .14s ease, border-color .14s ease;
-}
-.gpn-popup-tab:hover { background: var(--hover); }
-.gpn-popup-tab[data-color="amber"].is-active { background: color-mix(in srgb, var(--c-amber-accent) 18%, var(--glass)); color: var(--text); border-color: var(--c-amber-accent); }
-.gpn-popup-tab[data-color="green"].is-active { background: color-mix(in srgb, var(--c-green-accent) 18%, var(--glass)); color: var(--text); border-color: var(--c-green-accent); }
-.gpn-popup-tab[data-color="blue"].is-active { background: color-mix(in srgb, var(--c-blue-accent) 18%, var(--glass)); color: var(--text); border-color: var(--c-blue-accent); }
-.gpn-popup-tab[data-color="rose"].is-active { background: color-mix(in srgb, var(--c-rose-accent) 18%, var(--glass)); color: var(--text); border-color: var(--c-rose-accent); }
-.gpn-popup-tab[data-color="purple"].is-active { background: color-mix(in srgb, var(--c-purple-accent) 18%, var(--glass)); color: var(--text); border-color: var(--c-purple-accent); }
-.gpn-popup-tab[data-color="teal"].is-active { background: color-mix(in srgb, var(--c-teal-accent) 18%, var(--glass)); color: var(--text); border-color: var(--c-teal-accent); }
-
-/* Popup 的資料夾列：比書籤小一號，只有一個資料夾時整列不顯示 */
-.gpn-popup-folders {
-  flex: none;
-  display: flex;
-  gap: 6px;
-  padding: 0 18px 10px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.gpn-popup-folders::-webkit-scrollbar { display: none; }
-.gpn-popup-folder {
-  flex: none;
-  height: 30px;
-  padding: 0 12px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-mute);
-  border: 1px dashed var(--outline);
-  transition: background-color .14s ease, color .14s ease, border-color .14s ease;
-}
-.gpn-popup-folder:hover { background: var(--hover); }
-.gpn-popup-folder.is-active { color: var(--text); border-style: solid; border-color: var(--text-mute); background: var(--hover); }
-
-.gpn-popup-list {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  padding: 2px 14px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-/* Popup 的卡片沒有拖曳把手和鉛筆，只有標題 */
-.gpn-popup-card { grid-template-columns: 1fr; min-height: 58px; }
-.gpn-popup-card .gpn-title { padding: 10px 14px; border-radius: 16px; }
-.gpn-popup-card .gpn-title-text { font-size: 16px; }
-
-.gpn-popup-empty { margin: auto; text-align: center; color: var(--text-mute); padding: 20px; }
-
-.gpn-popup-foot {
-  flex: none;
-  display: flex; gap: 8px;
-  padding: 10px 14px 14px;
-  border-top: 1px solid var(--outline);
-}
-.gpn-popup-link {
-  flex: 1; min-width: 0;
-  height: 42px;
-  border-radius: 21px;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--primary);
-  background: transparent;
-  border: 1px solid var(--outline);
-  white-space: nowrap;
-  transition: background-color .14s ease, border-color .14s ease;
-}
-.gpn-popup-link:hover { background: var(--hover); border-color: var(--primary); }
-
-/* Popup 有兩個畫面（清單 / 備份），一次只顯示一個 */
-.gpn-popup-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.gpn-popup-view[hidden] { display: none; }
-
-.gpn-popup-head--back { display: flex; align-items: center; gap: 6px; padding-bottom: 12px; }
-.gpn-back {
-  flex: none;
-  width: 34px; height: 34px;
-  margin-left: -6px;
-  border-radius: 50%;
-  font-size: 20px; line-height: 1;
-  color: var(--text);
-  background: transparent;
-  transition: background-color .14s ease;
-}
-.gpn-back:hover { background: var(--hover); }
-.gpn-back:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
-
-.gpn-popup-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px 12px; scrollbar-width: thin; }
-.gpn-popup-body .gpn-field { margin-bottom: 0; }
-.gpn-popup-body .gpn-btn2 { min-width: 0; font-size: 14px; }
 
 /* ============================================================================
    六、毛玻璃的退場機制
@@ -1310,7 +1189,7 @@ button { cursor: pointer; }
 
 /* 1. 瀏覽器不支援 backdrop-filter → 沒有模糊就別留透明度 */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  :host, .gpn-root {
+  :host {
     --glass: var(--surface); --glass-soft: var(--surface);
     --glass-card: var(--surface-card); --glass-filter: none;
   }
@@ -1318,7 +1197,7 @@ button { cursor: pointer; }
 
 /* 2. 使用者在系統設定要求降低透明度（macOS/Windows 的輔助使用選項） */
 @media (prefers-reduced-transparency: reduce) {
-  :host, .gpn-root {
+  :host {
     --glass: var(--surface); --glass-soft: var(--surface);
     --glass-card: var(--surface-card); --glass-filter: none;
   }
@@ -1331,7 +1210,7 @@ button { cursor: pointer; }
 
 /* 3. 使用者要求高對比 */
 @media (prefers-contrast: more) {
-  :host, .gpn-root {
+  :host {
     --glass: var(--surface); --glass-soft: var(--surface);
     --glass-card: var(--surface-card); --glass-filter: none;
   }

@@ -1,26 +1,34 @@
 /**
  * 面板本體：書籤 ＞（資料夾）＞ 提示詞
  *
- * 外掛（src/content.js）和網頁版（web/app.js）用的是「同一份」面板，
- * 所以兩邊的長相、操作一模一樣。src/panel.js 和 web/panel.js 必須一字不差，
- * tools/checksync.py 會檢查。
+ * 三個地方用的是「同一份」面板，所以長相、操作一模一樣：
+ *   外掛：AI 網站裡的面板（src/content.js）、工具列小視窗（src/popup.js）
+ *   網頁版（web/app.js）
+ * src/panel.js 和 web/panel.js 必須一字不差，tools/checksync.py 會檢查。
  *
  * 資料夾是每個書籤各自決定要不要用的（齒輪 → 資料夾）：
  *   沒開 → 紙張裡只有卡片，和最早的版本一樣
  *   有開 → 左邊多一欄資料夾，點書籤一律先顯示第一個資料夾
  *
- * 兩邊的差別只由呼叫端決定：
+ * 各處的差別只由呼叫端決定：
  *   onUse       點提示詞時要做什麼
- *               外掛：填進 AI 的輸入框＋複製；網頁版：只能複製（同源政策）
- *   standalone  網頁版＝true：面板一直開著、沒有遮罩、點外面或按 Esc 都不會關
+ *               AI 網站裡的面板：填進輸入框＋複製；其他地方：只能複製（同源政策）
+ *   standalone  true＝面板就是整個畫面：一直開著、沒有遮罩、點外面或按 Esc 都不會關
  *
  * 依賴 store.js（資料格式、GpnStore）和 share.js（匯出／匯入），載入順序要在它們之後。
  */
 
 /**
+ * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
+ * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
+ */
+const GPN_APP_VERSION = '4.1.0';
+
+/**
  * @param {object}   opts
  * @param {ShadowRoot} opts.root         面板要畫在哪裡（樣式表由呼叫端掛好）
- * @param {boolean}  [opts.standalone]   網頁版
+ * @param {boolean}  [opts.standalone]   面板就是整個畫面（網頁版、工具列小視窗）
+ * @param {string}   [opts.edition]      顯示在版本號旁邊，例如「外掛」「網頁版」
  * @param {Function} opts.onUse          async (item) => ({ badge?, toast?, bad? })
  * @param {Function} [opts.onOpenChange] (open) => void，外掛用來同步觸發按鈕的狀態
  * @param {string}   [opts.notice]       紙張最上方的紅色提醒（例如網頁版不能存檔）
@@ -31,6 +39,7 @@ function gpnCreatePanel(opts) {
   const {
     root,
     standalone = false,
+    edition = '',
     onUse,
     onOpenChange = () => {},
     notice = '',
@@ -1048,7 +1057,12 @@ function gpnCreatePanel(opts) {
     const nav = el('nav', { class: 'gpn-settings-nav', role: 'tablist', 'aria-orientation': 'vertical' },
       el('h2', { text: '設定' }),
       ui.sNavGroup, ui.sNavItems[0], ui.sNavItems[1],
-      el('div', { class: 'gpn-nav-group', text: '所有書籤' }), ui.sNavItems[2]);
+      el('div', { class: 'gpn-nav-group', text: '所有書籤' }), ui.sNavItems[2],
+      // 外掛和網頁版長得不一樣時，先看這裡的數字是不是一樣
+      el('div', {
+        class: 'gpn-nav-version',
+        text: `版本 ${GPN_APP_VERSION}` + (edition ? `　${edition}` : ''),
+      }));
 
     /* ---- 名稱與顏色 ---- */
     ui.sName = el('input', {
@@ -1482,7 +1496,7 @@ function gpnCreatePanel(opts) {
   }
 
   function close() {
-    if (standalone) return;          // 網頁版的面板就是整個網頁，不能關
+    if (standalone) return;          // 網頁版、工具列小視窗：面板就是整個畫面，不能關
     closeEditor();
     closeNewTab();
     closeFolderEditor();
