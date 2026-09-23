@@ -7,170 +7,18 @@
 <meta name="description" content="常用提示詞：把你常用的 AI 指令存起來，點一下就複製。不用安裝、不用註冊。">
 <title>常用提示詞</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><text y='19' font-size='20'>📋</text></svg>">
-<link rel="stylesheet" href="styles.css">
-<script>
-  /* 在畫面畫出來之前就把主題定下來，否則深色使用者會先閃一下白底。
-     'auto' 在這裡就解析成實際的 light / dark，CSS 只要寫一份深色就好。 */
-  (() => {
-    let pref = 'auto';
-    try { pref = localStorage.getItem('gpn_theme') || 'auto'; } catch { /* 無痕模式 */ }
-    const dark = pref === 'dark' ||
-      (pref === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
-    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-  })();
-</script>
+<link rel="stylesheet" href="page.css">
 </head>
 <body>
-
-<div class="app" id="app">
-
-  <!-- ===== 左側書籤欄（寬螢幕才出現） ===== -->
-  <aside class="rail">
-    <div class="brand">
-      <span class="brand-mark" aria-hidden="true">📋</span>
-      <span class="brand-name">常用提示詞</span>
-    </div>
-
-    <nav class="railtabs" id="railtabs" aria-label="書籤"></nav>
-
-    <button class="rail-add" type="button" data-act="add-tab">＋ 新增書籤</button>
-
-    <div class="rail-foot">
-      <button class="rail-link" type="button" data-act="backup">備份／同步</button>
-      <button class="rail-link" type="button" data-act="theme"><span data-theme-label>外觀：自動</span></button>
-    </div>
-  </aside>
-
-  <!-- ===== 主區 ===== -->
-  <main class="main">
-    <header class="topbar">
-      <div class="topbar-row">
-        <h1 class="topbar-title" id="viewTitle">常用提示詞</h1>
-        <button class="icon-btn only-narrow" type="button" data-act="theme" aria-label="切換外觀">◐</button>
-        <button class="icon-btn only-narrow" type="button" data-act="backup" aria-label="備份與同步">⇄</button>
-      </div>
-      <div class="searchwrap">
-        <span class="search-icon" aria-hidden="true">🔍</span>
-        <input class="search" id="q" type="search" placeholder="搜尋提示詞…" aria-label="搜尋提示詞" autocomplete="off">
-        <button class="search-clear" id="qClear" type="button" aria-label="清除搜尋" hidden>✕</button>
-      </div>
-    </header>
-
-    <!-- 窄螢幕用的橫向書籤 -->
-    <div class="pillsrow only-narrow">
-      <div class="pills" id="pills" role="tablist" aria-label="書籤"></div>
-      <button class="icon-btn pill-gear" type="button" data-act="edit-tab" aria-label="書籤設定">⚙</button>
-    </div>
-
-    <div class="scroller" id="scroller">
-      <div class="grid" id="grid" role="list"></div>
-    </div>
-
-    <div class="actionbar">
-      <button class="primary" type="button" data-act="add-item">＋ 新增提示詞</button>
-      <button class="ghost only-wide" type="button" data-act="edit-tab">書籤設定</button>
-    </div>
-  </main>
-</div>
-
-<!-- ===== 提示詞編輯 ===== -->
-<dialog class="dlg" id="dlgItem">
-  <form method="dialog" class="dlg-inner" id="formItem">
-    <h2 id="itemHead">新增提示詞</h2>
-    <div class="dlg-body">
-      <label class="field">
-        <span class="flabel">按鈕顯示標題 <em>（卡片上看到的字）</em></span>
-        <input class="input" id="itemTitle" maxlength="40" placeholder="例如：翻譯成英文" required>
-      </label>
-      <label class="field">
-        <span class="flabel">實際的提示詞內容 <em>（按卡片時複製的文字）</em></span>
-        <textarea class="input area" id="itemBody" placeholder="這裡貼上真正要送給 AI 的完整指令…" required></textarea>
-      </label>
-    </div>
-    <div class="dlg-foot">
-      <button class="danger" type="button" id="itemDel">刪除</button>
-      <button class="ghost" type="button" data-close>取消</button>
-      <button class="primary" type="button" id="itemSave">儲存</button>
-    </div>
-  </form>
-</dialog>
-
-<!-- ===== 書籤編輯 ===== -->
-<dialog class="dlg dlg--sm" id="dlgTab">
-  <form method="dialog" class="dlg-inner" id="formTab">
-    <h2 id="tabHead">書籤設定</h2>
-    <div class="dlg-body">
-      <label class="field">
-        <span class="flabel">書籤名稱 <em>（最多 8 個字）</em></span>
-        <input class="input" id="tabName" maxlength="8" placeholder="例如：工作" required>
-      </label>
-      <div class="field">
-        <span class="flabel">書籤顏色</span>
-        <div class="swatches" id="tabSwatches"></div>
-      </div>
-      <div class="field" id="tabOrderField">
-        <span class="flabel">排列順序</span>
-        <div class="orderrow">
-          <button class="ghost" type="button" id="tabUp">◀ 往前</button>
-          <span class="orderpos" id="tabPos"></span>
-          <button class="ghost" type="button" id="tabDown">往後 ▶</button>
-        </div>
-      </div>
-    </div>
-    <div class="dlg-foot">
-      <button class="danger" type="button" id="tabDel">刪除</button>
-      <button class="ghost" type="button" data-close>取消</button>
-      <button class="primary" type="button" id="tabSave">儲存</button>
-    </div>
-  </form>
-</dialog>
-
-<!-- ===== 備份與同步 ===== -->
-<dialog class="dlg" id="dlgBackup">
-  <div class="dlg-inner">
-    <h2>備份與同步</h2>
-    <div class="dlg-body">
-      <p class="lede">這個網頁的提示詞只存在<strong>這台電腦的這個瀏覽器</strong>裡。要搬到別台、或跟家裡的 Chrome 外掛互通，就用下面的方式。</p>
-
-      <div class="field">
-        <span class="flabel">① 把資料帶出去</span>
-        <div class="brow">
-          <button class="ghost big" type="button" id="bDownload">⬇　下載備份檔</button>
-          <button class="ghost big" type="button" id="bCopy">⧉　複製代碼</button>
-        </div>
-        <div class="note" id="bStats"></div>
-      </div>
-
-      <hr class="sep">
-
-      <div class="field">
-        <span class="flabel">② 把資料帶回來</span>
-        <textarea class="input code" id="bCode" spellcheck="false" placeholder="在這裡貼上另一台複製的代碼…"></textarea>
-        <div class="brow">
-          <button class="ghost big" type="button" id="bPick">📁　改用備份檔…</button>
-          <button class="ghost big" type="button" id="bClear">清空</button>
-        </div>
-        <input type="file" id="bFile" accept=".json,application/json" hidden>
-
-        <div class="segrow">
-          <button class="seg is-on" type="button" data-mode="merge">合併<span>推薦</span></button>
-          <button class="seg" type="button" data-mode="replace">完全取代</button>
-        </div>
-        <div class="note" id="bModeNote"></div>
-        <div class="note status" id="bStatus"></div>
-      </div>
-    </div>
-    <div class="dlg-foot">
-      <button class="ghost" type="button" data-close>關閉</button>
-      <button class="primary" type="button" id="bImport" disabled>匯入</button>
-    </div>
-  </div>
-</dialog>
-
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<!--
+  畫面就是外掛在 Gemini 裡點開的那個面板，整個面板由 app.js 畫出來。
+  panel.js / styles.css / share.js 和外掛是同一份（tools/checksync.py 會檢查）。
+-->
+<noscript><p class="nojs">這個網頁需要開啟 JavaScript 才能使用。</p></noscript>
 
 <script src="store.js"></script>
 <script src="share.js"></script>
+<script src="panel.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -10,13 +10,17 @@
     python tools/checksync.py --fix     # 用 src/ 的內容覆寫 web/ 的對應片段
 
 檢查兩件事：
-    1. src/share.js  == web/share.js        （整個檔案）
+    1. 整個檔案一模一樣：
+         share.js   匯出／匯入的格式
+         panel.js   面板本體（網頁版和外掛長得、用起來一模一樣，靠的就是這份）
+         styles.css 面板的樣式
     2. src/store.js  == web/store.js        （只有「共用資料契約」那一段）
 """
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+WHOLE_FILES = ['share.js', 'panel.js', 'styles.css']
 BEGIN = '/* ==== 共用資料契約 開始'
 END = '/* ==== 共用資料契約 結束'
 
@@ -53,22 +57,23 @@ def main():
     fix = '--fix' in sys.argv
     problems = []
 
-    # ---- 1. share.js 整個檔案 ----
-    src_share, web_share = ROOT / 'src/share.js', ROOT / 'web/share.js'
-    if not web_share.exists():
-        if fix:
-            web_share.write_text(read(src_share), encoding='utf-8', newline='')
-            print('FIXED share.js（新建）')
+    # ---- 1. 整個檔案要一模一樣 ----
+    for name in WHOLE_FILES:
+        src, web = ROOT / 'src' / name, ROOT / 'web' / name
+        if not web.exists():
+            if fix:
+                web.write_text(read(src), encoding='utf-8', newline='')
+                print(f'FIXED {name}（新建）')
+            else:
+                problems.append(f'web/{name} 不存在')
+        elif read(src) != read(web):
+            if fix:
+                web.write_text(read(src), encoding='utf-8', newline='')
+                print(f'FIXED {name}')
+            else:
+                problems.append(f'{name} 兩邊不一樣\n' + first_diff(read(src), read(web)))
         else:
-            problems.append('web/share.js 不存在')
-    elif read(src_share) != read(web_share):
-        if fix:
-            web_share.write_text(read(src_share), encoding='utf-8', newline='')
-            print('FIXED share.js')
-        else:
-            problems.append('share.js 兩邊不一樣\n' + first_diff(read(src_share), read(web_share)))
-    else:
-        print('OK    share.js')
+            print(f'OK    {name}')
 
     # ---- 2. store.js 的共用片段 ----
     src_store, web_store = ROOT / 'src/store.js', ROOT / 'web/store.js'

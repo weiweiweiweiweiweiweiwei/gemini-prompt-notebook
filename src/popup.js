@@ -29,7 +29,14 @@
     matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 
   let data = gpnDefaultData();
+  let folderId = null;       // 和面板一樣：換書籤就回到第一個資料夾，不存檔
   const activeTab = () => data.tabs.find((t) => t.id === data.activeId) || data.tabs[0];
+  /** 目前的資料夾；書籤沒開資料夾時是 null */
+  const activeFolder = () => {
+    const tab = activeTab();
+    if (!tab.folders) return null;
+    return tab.folders.find((f) => f.id === folderId) || tab.folders[0];
+  };
 
   const COPY_MS = 1200;
 
@@ -66,6 +73,9 @@
 
   function render() {
     const tab = activeTab();
+    const folder = activeFolder();
+    const items = (folder || tab).items;
+    folderId = folder ? folder.id : null;
 
     /* 書籤列 */
     const tabs = $('tabs');
@@ -78,26 +88,39 @@
         title: t.label,
         onclick: async () => {
           data.activeId = t.id;
+          folderId = null;
           await GpnStore.save(data);       // 記住上次看的書籤，和網頁面板同步
           render();
         },
       }, t.label));
     }
 
+    /* 資料夾列：沒開資料夾、或只有一個資料夾時不佔空間 */
+    const folders = $('folders');
+    folders.hidden = !tab.folders || tab.folders.length < 2;
+    folders.replaceChildren(...(tab.folders || []).map((f) => el('button', {
+      class: 'gpn-popup-folder' + (f.id === folder.id ? ' is-active' : ''),
+      type: 'button', role: 'tab',
+      'aria-selected': String(f.id === folder.id),
+      title: f.label,
+      onclick: () => { folderId = f.id; render(); },
+    }, f.label)));
+    folders.querySelector('.is-active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+
     /* 卡片 */
     const list = $('list');
     list.replaceChildren();
 
-    if (!tab.items.length) {
+    if (!items.length) {
       list.append(el('div', { class: 'gpn-popup-empty' },
         el('div', { class: 'gpn-empty-emoji', text: '📒' }),
-        el('div', { class: 'gpn-empty-title', text: '這個書籤還沒有提示詞' }),
+        el('div', { class: 'gpn-empty-title', text: folder ? '這個資料夾還沒有提示詞' : '這個書籤還沒有提示詞' }),
         el('div', { class: 'gpn-empty-desc', text: '請到 Gemini 網頁的面板新增' })
       ));
       return;
     }
 
-    for (const item of tab.items) {
+    for (const item of items) {
       const card = el('div', { class: 'gpn-card gpn-popup-card', role: 'listitem' });
       card.append(el('button', {
         class: 'gpn-title', type: 'button', title: '點一下複製這段 Prompt',
@@ -139,8 +162,6 @@
   let backupMode = 'merge';
   let impArmed = false, impTimer = 0;
   const bui = {};
-
-  const countItems = (d) => d.tabs.reduce((n, t) => n + t.items.length, 0);
 
   function buildBackupView() {
     bui.stats = el('div', { class: 'gpn-note' });
@@ -269,7 +290,8 @@
           (p.skipped ? `（${p.skipped} 則重複會跳過）` : '')
         : `讀到 ${parsed.itemCount} 則，但你這台都已經有了`, 'ok');
     } else {
-      setStatus(`讀到 ${parsed.tabCount} 個書籤、${parsed.itemCount} 則，會取代全部內容`, 'ok');
+      setStatus(`讀到 ${parsed.tabCount} 個書籤、${parsed.folderCount} 個資料夾、` +
+        `${parsed.itemCount} 則，會取代全部內容`, 'ok');
     }
     return parsed;
   }
@@ -282,7 +304,7 @@
     if (!impArmed) {
       impArmed = true;
       bui.import.classList.add('is-confirm');
-      const have = countItems(data);
+      const have = gpnCountItems(data);
       bui.import.textContent = backupMode === 'merge'
         ? '確定合併？再按一次'
         : have ? `確定取代？現有 ${have} 則會不見` : '確定取代？再按一次';
@@ -300,6 +322,7 @@
       setStatus('', '');
     } else {
       data = gpnNormalize(parsed.data);
+      folderId = null;
       await GpnStore.save(data);
       closeBackup();
       render();
@@ -319,7 +342,8 @@
     bui.code.value = '';
     setMode('merge');                 // 每次都從最安全的選項開始
     bui.stats.textContent =
-      `這台目前有 ${data.tabs.length} 個書籤、${countItems(data)} 則提示詞`;
+      `這台目前有 ${data.tabs.length} 個書籤、${gpnCountFolders(data)} 個資料夾、` +
+      `${gpnCountItems(data)} 則提示詞`;
     $('mainView').hidden = true;
     $('backupView').hidden = false;
   }
@@ -328,6 +352,15 @@
     disarmImport();
     $('backupView').hidden = true;
     $('mainView').hidden = false;
+  }
+
+  // 書籤列、資料夾列都是橫向捲動；滑鼠滾輪預設只會上下捲，這裡轉成左右
+  for (const row of [$('tabs'), $('folders')]) {
+    row.addEventListener('wheel', (e) => {
+      if (row.scrollWidth <= row.clientWidth || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      row.scrollLeft += e.deltaY;
+      e.preventDefault();
+    }, { passive: false });
   }
 
   document.addEventListener('keydown', (e) => {

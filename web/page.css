@@ -1,0 +1,34 @@
+/* ============================================================================
+   網頁版的「網頁本身」：只負責背景。
+   面板的樣式在 styles.css（和外掛同一份），由 app.js 載進 Shadow DOM。
+
+   背景刻意放幾團柔和的色塊：面板是毛玻璃，
+   背後完全平的話看不出玻璃感，會變成一塊灰灰的板子。
+   ========================================================================== */
+html, body { margin: 0; height: 100%; }
+
+body {
+  font-family: "Google Sans", Roboto, "Noto Sans TC", "PingFang TC",
+               "Microsoft JhengHei", system-ui, sans-serif;
+  color: #1f1f1f;
+  background:
+    radial-gradient(38vmax 38vmax at 10% 14%, rgba(255, 190, 110, .42), transparent 62%),
+    radial-gradient(42vmax 42vmax at 92% 18%, rgba(110, 160, 255, .38), transparent 62%),
+    radial-gradient(46vmax 46vmax at 72% 96%, rgba(100, 200, 170, .34), transparent 62%),
+    #eef1f6;
+  background-attachment: fixed;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    color: #e3e3e3;
+    background:
+      radial-gradient(38vmax 38vmax at 10% 14%, rgba(240, 183, 87, .16), transparent 62%),
+      radial-gradient(42vmax 42vmax at 92% 18%, rgba(110, 168, 254, .18), transparent 62%),
+      radial-gradient(46vmax 46vmax at 72% 96%, rgba(79, 201, 194, .14), transparent 62%),
+      #131314;
+    background-attachment: fixed;
+  }
+}
+
+.nojs { margin: 40px 16px; text-align: center; font-size: 18px; }
