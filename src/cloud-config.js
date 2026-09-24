@@ -21,8 +21,8 @@
 const GPN_CLOUD = {
   url: 'https://jsgvyxbkvszvhkrpbvjy.supabase.co',
   key: 'sb_publishable_XA_Zi2ePU4c_om7G1q3inw_8Sw14GbN',
-  open: false,
-  providers: [],
+  open: true,
+  providers: ['google'],
   site: 'https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/',
 };
 
