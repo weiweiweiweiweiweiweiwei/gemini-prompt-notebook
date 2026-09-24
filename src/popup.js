@@ -34,6 +34,7 @@
     root,
     standalone: true,
     edition: '外掛小視窗',
+    cloud: gpnExtensionCloud(),       // 和 AI 網站裡的面板共用背景程式的登入狀態
     onUse: async (item) => (await gpnShareCopy(item.content))
       ? { badge: 'Copied' }
       : { toast: '複製失敗，請點右邊的鉛筆打開，再手動選取文字', bad: true },

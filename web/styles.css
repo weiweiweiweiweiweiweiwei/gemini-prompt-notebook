@@ -147,6 +147,7 @@ button { cursor: pointer; }
   --c-rose-accent:   #e05c86;
   --c-purple-accent: #8b5cf6;
   --c-teal-accent:   #14a5a0;
+  --c-recent-accent: #64748b;
 }
 
 /* ---------- Design tokens：深色 ----------
@@ -188,6 +189,7 @@ button { cursor: pointer; }
   --c-rose-accent:   #f386a6;
   --c-purple-accent: #b49bf7;
   --c-teal-accent:   #4fc9c2;
+  --c-recent-accent: #94a3b8;
 }
 
 /* ---------- 顏色對應 ----------
@@ -200,6 +202,7 @@ button { cursor: pointer; }
 [data-color="rose"]   { --accent: var(--c-rose-accent); }
 [data-color="purple"] { --accent: var(--c-purple-accent); }
 [data-color="teal"]   { --accent: var(--c-teal-accent); }
+[data-color="recent"] { --accent: var(--c-recent-accent); }
 
 /* ---------- 遮罩 ---------- */
 .gpn-overlay {
@@ -356,6 +359,8 @@ button { cursor: pointer; }
   transition: color .3s ease;
 }
 .gpn-tab.is-active .gpn-tab-main { color: var(--text); }
+.gpn-tab-icon { display: inline-flex; vertical-align: -3px; margin-right: 5px; }
+.gpn-tab-icon svg { width: 17px; height: 17px; fill: currentColor; }
 .gpn-tab-main:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
 
 /* 新增書籤 */
@@ -575,6 +580,32 @@ button { cursor: pointer; }
 .gpn-folder-add:hover { background: var(--hover); border-color: var(--primary); color: var(--primary); }
 .gpn-folder-add:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 
+/* 雲端同步狀態：沒登入時是「登入同步」邀請，登入後顯示同步到哪。點了打開帳號頁。 */
+.gpn-cloud-btn {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px 0 9px;
+  border-radius: 16px;
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text-mute);
+  transition: background-color .14s ease, color .14s ease;
+}
+.gpn-cloud-btn:hover { background: var(--hover); color: var(--text); }
+.gpn-cloud-btn:focus-visible { outline: 2px solid var(--primary); }
+.gpn-cloud-btn[data-kind="invite"] { color: var(--primary); border: 1px solid color-mix(in srgb, var(--primary) 45%, transparent); }
+.gpn-cloud-btn[data-kind="ok"] { color: var(--c-green-accent); }
+.gpn-cloud-btn[data-kind="warn"] { color: var(--c-amber-accent); }
+.gpn-cloud-btn[data-kind="bad"] { color: var(--error); }
+.gpn-cloud-icon { display: inline-flex; }
+.gpn-cloud-icon svg { width: 18px; height: 18px; display: block; fill: currentColor; }
+[data-kind="busy"] .gpn-cloud-icon svg { animation: gpn-spin 1.1s linear infinite; }
+@keyframes gpn-spin { to { transform: rotate(-360deg) } }
+
 /* 書籤的編輯鈕改放這裡：不佔書籤空間，書籤上的字才能置中 */
 .gpn-tab-edit {
   flex: none;
@@ -654,8 +685,43 @@ button { cursor: pointer; }
 }
 .gpn-list.is-dragging .gpn-card:not(.is-dragging) { opacity: .55; }
 
+/* ---------- 「最近使用」：日期分段 + 左邊顯示時間 ---------- */
+.gpn-day {
+  flex: none;
+  margin: 4px 4px -6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-mute);
+  letter-spacing: .5px;
+}
+.gpn-day:not(:first-child) { margin-top: 10px; }
+.gpn-card--recent { grid-template-columns: 78px 1fr 52px; }
+.gpn-card-time {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 6px;
+  font-size: 13px;
+  color: var(--text-mute);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* 「從哪個書籤來的」：放在預覽文字前面的小標籤 */
+.gpn-from {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: var(--hover);
+  font-size: 12.5px;
+}
+/* 底部「清除全部使用記錄」：刻意比「新增」低調，避免誤按 */
+.gpn-add--quiet { border-style: solid; color: var(--text-mute); font-weight: 500; font-size: 15px; }
+.gpn-add--quiet.is-confirm { background: var(--error); border-color: var(--error); color: var(--surface); font-weight: 600; }
+
 /* 複製回饋：卡片維持原本的深色，只讓 "Copied" 字樣輕輕升起（極簡） */
 .gpn-card.is-copied .gpn-grip,
+.gpn-card.is-copied .gpn-card-time,
 .gpn-card.is-copied .gpn-title,
 .gpn-card.is-copied .gpn-edit {
   opacity: 0;
@@ -955,7 +1021,7 @@ button { cursor: pointer; }
 :host([data-theme="dark"]) .gpn-btn--del.is-confirm { color: #3c0f0d; }
 
 /* 匯入鈕：沒有可用內容時先關起來，按下去進入「再按一次」確認 */
-.gpn-btn[disabled] { opacity: .4; pointer-events: none; }
+.gpn-btn[disabled] { opacity: .4; }
 .gpn-btn--save.is-confirm {
   background: var(--error);
   color: var(--surface);
@@ -1056,6 +1122,93 @@ button { cursor: pointer; }
 .gpn-lede { margin: -6px 0 18px; font-size: 14.5px; line-height: 1.7; color: var(--text-mute); }
 .gpn-btn--done { margin-left: auto; min-width: 128px; }
 .gpn-btn--block { display: block; width: 100%; margin-top: 16px; }
+
+/* ---- 帳號與同步 ---- */
+/* Google 登入鈕：照 Google 的規定用白底 + 彩色 G */
+.gpn-google-btn {
+  width: 100%;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border-radius: 26px;
+  border: 1px solid var(--outline-strong);
+  background: #ffffff;
+  color: #1f1f1f;
+  font-size: 16.5px;
+  font-weight: 600;
+  transition: box-shadow .16s ease, border-color .16s ease;
+}
+.gpn-google-btn:hover { box-shadow: var(--shadow-md); border-color: var(--text-mute); }
+.gpn-google-btn:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.gpn-google-g svg { width: 22px; height: 22px; display: block; }
+.gpn-or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0 16px;
+  font-size: 13.5px;
+  color: var(--text-mute);
+}
+.gpn-or::before, .gpn-or::after { content: ''; flex: 1; height: 1px; background: var(--glass-line); }
+.gpn-seg-row--top { margin: 0 0 18px; }
+.gpn-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--text-mute);
+  cursor: pointer;
+  user-select: none;
+}
+.gpn-check input { width: 18px; height: 18px; margin: 0; accent-color: var(--primary); cursor: pointer; }
+
+.gpn-account-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--outline);
+  border-radius: 16px;
+  background: var(--surface-input);
+}
+.gpn-account-avatar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+  color: var(--primary);
+}
+.gpn-account-avatar svg { width: 26px; height: 26px; fill: currentColor; }
+.gpn-account-info { min-width: 0; }
+.gpn-account-info .gpn-note { margin-top: 0; }
+.gpn-account-email {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gpn-account-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-mute);
+}
+.gpn-account-status[data-kind="ok"] { color: var(--c-green-accent); }
+.gpn-account-status[data-kind="warn"] { color: var(--c-amber-accent); }
+.gpn-account-status[data-kind="bad"] { color: var(--error); }
+.gpn-btn2[disabled], .gpn-btn[disabled] { opacity: .5; pointer-events: none; }
 
 /* 刪除書籤：和其他設定隔開，放在最下面 */
 .gpn-danger { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--glass-line); }
@@ -1222,6 +1375,8 @@ button { cursor: pointer; }
 /* 面板被擠窄（手機、很窄的視窗）時，資料夾從左邊直排改成上面一排可左右捲 */
 @container gpn-book (max-width: 600px) {
   .gpn-head-folders { display: none; }
+  .gpn-cloud-text { display: none; }
+  .gpn-cloud-btn { padding: 0 8px; }
   .gpn-body { flex-direction: column; }
   .gpn-folders { width: auto; border-right: 0; border-bottom: 1px solid var(--glass-line); }
   .gpn-folder-list {
@@ -1242,5 +1397,5 @@ button { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .gpn-book, .gpn-dialog, .gpn-overlay, .gpn-toast, .gpn-copied,
   .gpn-tab, .gpn-card, .gpn-folder, .gpn-switch, .gpn-switch::after,
-  .gpn-empty-arrow { animation: none !important; transition: none !important; }
+  .gpn-empty-arrow, .gpn-cloud-icon svg, .gpn-google-btn { animation: none !important; transition: none !important; }
 }

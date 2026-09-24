@@ -327,6 +327,7 @@
     panel = gpnCreatePanel({
       root,
       edition: '外掛',
+      cloud: gpnExtensionCloud(),     // 雲端同步交給背景程式（background.js）
       onUse: usePrompt,
       onOpenChange: (open) => {
         triggerBtn?.classList.toggle('gpn-is-open', open);

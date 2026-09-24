@@ -16,6 +16,7 @@
  *   ]
  * }
  * 舊版（v2、v3）匯出的備份也都吃得下，見 store.js 的升級規則。
+ * 「最近使用」記錄不放進備份：那是自己的使用習慣，分享給別人時不該帶過去。
  *
  * 依賴 store.js 的共用資料契約（gpnNormalize、GPN_MAX_* 等），載入順序要在它之後。
  */
@@ -191,6 +192,9 @@ function gpnMergeData(current, incoming) {
       mergeItems(folder, inFolder.items);
     }
   }
+
+  // 最近使用記錄：兩邊合在一起，依使用時間排，同一則只留最新那次（備份檔不含記錄，只有雲端同步會帶）
+  out.recent = gpnCleanRecent([...(out.recent || []), ...(incoming.recent || [])]);
 
   // 資料夾 id 若和別的書籤裡的撞到，normalize 會自動換一個新的
   return { data: gpnNormalize(out), added, newTabs, newFolders, skipped };

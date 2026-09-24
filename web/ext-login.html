@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex">
+<title>常用提示詞 · 外掛登入</title>
+<link rel="stylesheet" href="page.css">
+<style>
+  .box {
+    max-width: 440px; margin: 18vh auto 0; padding: 28px 26px;
+    border-radius: 24px; text-align: center;
+    background: rgba(255, 255, 255, .72); box-shadow: 0 8px 30px rgba(0, 0, 0, .12);
+    font-size: 18px; line-height: 1.7;
+  }
+  @media (prefers-color-scheme: dark) { .box { background: rgba(40, 41, 43, .8); } }
+  h1 { margin: 0 0 12px; font-size: 22px; }
+  [data-gpn-state="ok"] #msg { color: #1e8e3e; font-weight: 600; }
+  [data-gpn-state="bad"] #msg { color: #d93025; }
+  a { color: inherit; }
+</style>
+</head>
+<body>
+<!--
+  外掛「用 Google 帳號登入」的回程頁。真正的工作由外掛的 content script（src/ext-login.js）做；
+  這一頁只負責顯示訊息。沒裝外掛的人打開，幾秒後會看到說明。
+-->
+<div class="box">
+  <h1>常用提示詞</h1>
+  <div id="msg">正在完成登入…</div>
+</div>
+<script>
+  setTimeout(() => {
+    if (document.documentElement.dataset.gpnExt) return;       // 外掛有接手
+    document.getElementById('msg').innerHTML =
+      '這一頁是給 Chrome 外掛登入用的。<br>要用網頁版，請到 <a href="./">網頁版首頁</a>。';
+  }, 2500);
+</script>
+</body>
+</html>

@@ -19,6 +19,8 @@ const GPN_VERSION = 4;
 const GPN_MAX_TABS = 8;                  // 太多書籤會擠不下，設一個上限
 const GPN_MAX_FOLDERS = 12;              // 每個書籤最多幾個資料夾
 const GPN_DEFAULT_FOLDER = '一般';        // 書籤剛開啟資料夾時，原本的提示詞放在這裡
+const GPN_RECENT_ID = 't_recent';        // 「最近使用」書籤的 id（固定、不能刪）
+const GPN_RECENT_MAX = 50;               // 最近使用最多記幾筆
 const GPN_COLORS = ['amber', 'green', 'blue', 'rose', 'purple', 'teal'];
 const GPN_COLOR_LABELS = {
   amber: '牛皮黃', green: '森林綠', blue: '天空藍',
@@ -37,7 +39,26 @@ function gpnDefaultData() {
       { id: 't_fav', label: '常用', color: 'amber', items: [] },
       { id: 't_oth', label: '其他', color: 'green', items: [] },
     ],
+    recent: [],
   };
+}
+
+/** 整理最近使用記錄：新的在前、同一則只留最新那次、最多 GPN_RECENT_MAX 筆 */
+function gpnCleanRecent(arr) {
+  const seen = new Set();
+  return (Array.isArray(arr) ? arr : [])
+    .filter((r) => r && typeof r === 'object')
+    .map((r) => ({
+      id: typeof r.id === 'string' && r.id ? r.id : gpnNewId(),
+      title: String(r.title ?? '').slice(0, 60),
+      content: String(r.content ?? ''),
+      usedAt: Number(r.usedAt) || 0,
+      tabId: typeof r.tabId === 'string' ? r.tabId : '',
+      folderId: typeof r.folderId === 'string' ? r.folderId : '',
+    }))
+    .sort((a, b) => b.usedAt - a.usedAt)
+    .filter((r) => !seen.has(r.id) && seen.add(r.id))
+    .slice(0, GPN_RECENT_MAX);
 }
 
 function gpnCleanItems(arr) {
@@ -124,9 +145,10 @@ function gpnNormalize(raw) {
   // activeId：v2 以後直接用；v1 的 active 是 'favorite' / 'other'
   let activeId = raw.activeId;
   if (!activeId && raw.active) activeId = raw.active === 'other' ? 't_oth' : 't_fav';
-  if (!tabs.some((t) => t.id === activeId)) activeId = tabs[0].id;
+  if (activeId !== GPN_RECENT_ID && !tabs.some((t) => t.id === activeId)) activeId = tabs[0].id;
 
-  return { version: GPN_VERSION, activeId, tabs };
+  // 最近使用記錄的 id 指向提示詞，本來就會和提示詞的 id 重複，所以不參加上面的「不可重複」檢查
+  return { version: GPN_VERSION, activeId, tabs, recent: gpnCleanRecent(raw.recent) };
 }
 
 /** 書籤裡所有「裝提示詞的清單」：有資料夾就是各個資料夾，沒有就是書籤自己 */
@@ -193,15 +215,34 @@ const GpnStore = {
     try {
       this._mine = JSON.stringify(this.cache);
       localStorage.setItem(GPN_KEY, this._mine);
-      return true;
     } catch (err) {
       console.warn('[常用提示詞] 儲存失敗：', err);
       return false;
     }
+    for (const cb of this._onSave) cb(this.cache);
+    return true;
   },
 
-  /** 同一個瀏覽器開了好幾個分頁時，改了資料要互相跟上 */
+  /** 使用者在這個分頁改了資料（雲端同步靠這個知道要推上去） */
+  _onSave: [],
+  onLocalSave(cb) { this._onSave.push(cb); },
+
+  /** 雲端來的新資料：寫進來，並讓面板更新（這不算使用者改的，不會觸發 onLocalSave） */
+  _onExternal: [],
+  applyRemote(data) {
+    this.cache = gpnNormalize(data);
+    try {
+      this._mine = JSON.stringify(this.cache);
+      localStorage.setItem(GPN_KEY, this._mine);
+    } catch (err) {
+      console.warn('[常用提示詞] 儲存失敗：', err);
+    }
+    for (const cb of this._onExternal) cb(this.cache);
+  },
+
+  /** 同一個瀏覽器開了好幾個分頁時，改了資料要互相跟上；雲端來的新資料也走這裡 */
   onExternalChange(cb) {
+    this._onExternal.push(cb);
     window.addEventListener('storage', (e) => {
       if (e.key !== GPN_KEY) return;
       if (e.newValue === this._mine) return;      // 自己剛寫的就別再重畫

@@ -10,7 +10,8 @@
  *     { id, label, color, items: [ {id,title,content} ] },  // 不分資料夾（預設）
  *     { id, label, color, folders: [                         // 有開資料夾
  *         { id, label, items: [ {id,title,content} ] } ] },
- *   ]
+ *   ],
+ *   recent: [ { id, title, content, usedAt, tabId, folderId } ], // 最近使用記錄
  * }
  * 一個書籤只會有 items 或 folders 其中一個；有 folders 就代表開了資料夾，
  * 而且至少有一個資料夾。
@@ -19,6 +20,11 @@
  *   v1 { tabs: { favorite:{items}, other:{items} } }  → 兩個不分資料夾的書籤
  *   v2 { tabs: [ { id, label, color, items } ] }       → 長相本來就一樣，直接沿用
  *   v3 每個書籤都強制有資料夾；只有一個「一般」資料夾的，其實沒在分類 → 還原成不分資料夾
+ *
+ * 「最近使用」不是一般的書籤：它不能刪、不能放自己的提示詞，內容是自動記下來的，
+ * 所以不放在 tabs 裡，另外存一份 recent（最新的在最前面，最多 50 筆，同一則只留最新那次）。
+ * id 是原本那則提示詞的 id，畫面上會用它找回提示詞「現在」的標題和內容。
+ * 畫面上它是最左邊那個書籤，id 固定是 GPN_RECENT_ID。
  */
 
 /* ==== 共用資料契約 開始 ====================================================
@@ -32,6 +38,8 @@ const GPN_VERSION = 4;
 const GPN_MAX_TABS = 8;                  // 太多書籤會擠不下，設一個上限
 const GPN_MAX_FOLDERS = 12;              // 每個書籤最多幾個資料夾
 const GPN_DEFAULT_FOLDER = '一般';        // 書籤剛開啟資料夾時，原本的提示詞放在這裡
+const GPN_RECENT_ID = 't_recent';        // 「最近使用」書籤的 id（固定、不能刪）
+const GPN_RECENT_MAX = 50;               // 最近使用最多記幾筆
 const GPN_COLORS = ['amber', 'green', 'blue', 'rose', 'purple', 'teal'];
 const GPN_COLOR_LABELS = {
   amber: '牛皮黃', green: '森林綠', blue: '天空藍',
@@ -50,7 +58,26 @@ function gpnDefaultData() {
       { id: 't_fav', label: '常用', color: 'amber', items: [] },
       { id: 't_oth', label: '其他', color: 'green', items: [] },
     ],
+    recent: [],
   };
+}
+
+/** 整理最近使用記錄：新的在前、同一則只留最新那次、最多 GPN_RECENT_MAX 筆 */
+function gpnCleanRecent(arr) {
+  const seen = new Set();
+  return (Array.isArray(arr) ? arr : [])
+    .filter((r) => r && typeof r === 'object')
+    .map((r) => ({
+      id: typeof r.id === 'string' && r.id ? r.id : gpnNewId(),
+      title: String(r.title ?? '').slice(0, 60),
+      content: String(r.content ?? ''),
+      usedAt: Number(r.usedAt) || 0,
+      tabId: typeof r.tabId === 'string' ? r.tabId : '',
+      folderId: typeof r.folderId === 'string' ? r.folderId : '',
+    }))
+    .sort((a, b) => b.usedAt - a.usedAt)
+    .filter((r) => !seen.has(r.id) && seen.add(r.id))
+    .slice(0, GPN_RECENT_MAX);
 }
 
 function gpnCleanItems(arr) {
@@ -137,9 +164,10 @@ function gpnNormalize(raw) {
   // activeId：v2 以後直接用；v1 的 active 是 'favorite' / 'other'
   let activeId = raw.activeId;
   if (!activeId && raw.active) activeId = raw.active === 'other' ? 't_oth' : 't_fav';
-  if (!tabs.some((t) => t.id === activeId)) activeId = tabs[0].id;
+  if (activeId !== GPN_RECENT_ID && !tabs.some((t) => t.id === activeId)) activeId = tabs[0].id;
 
-  return { version: GPN_VERSION, activeId, tabs };
+  // 最近使用記錄的 id 指向提示詞，本來就會和提示詞的 id 重複，所以不參加上面的「不可重複」檢查
+  return { version: GPN_VERSION, activeId, tabs, recent: gpnCleanRecent(raw.recent) };
 }
 
 /** 書籤裡所有「裝提示詞的清單」：有資料夾就是各個資料夾，沒有就是書籤自己 */
