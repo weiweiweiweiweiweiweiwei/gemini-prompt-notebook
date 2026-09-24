@@ -88,3 +88,29 @@ $$;
 
 revoke all on function public.gpn_save(jsonb, bigint) from public, anon;
 grant execute on function public.gpn_save(jsonb, bigint) to authenticated;
+
+-- ----------------------------------------------------------------------------
+-- 刪除我的帳號：使用者在「帳號與同步」自己按的（按兩次）。
+-- 刪掉登入帳號；雲端上的筆記本因為 on delete cascade 會一起刪掉。
+-- 一般使用者碰不到 auth.users，所以這個函式用 security definer（以擁有者身分執行），
+-- 但只會刪「呼叫的人自己」那一個帳號（auth.uid()），刪不到別人。
+-- Supabase 的安全檢查（Advisors）會對這個函式出一個黃色警告，是刻意的，不用處理。
+-- ----------------------------------------------------------------------------
+create or replace function public.gpn_delete_my_account()
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  uid uuid := auth.uid();
+begin
+  if uid is null then
+    raise exception '請先登入' using errcode = '28000';
+  end if;
+  delete from auth.users where id = uid;
+end;
+$$;
+
+revoke all on function public.gpn_delete_my_account() from public, anon;
+grant execute on function public.gpn_delete_my_account() to authenticated;

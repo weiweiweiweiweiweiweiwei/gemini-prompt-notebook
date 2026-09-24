@@ -41,27 +41,30 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 /**
- * 用 Google 登入：
- *   1. 面板按下去 → 這裡開一個新分頁去 Google 登入
- *   2. 登入完 Google／Supabase 把分頁導回網頁版的 ext-login.html?code=…
+ * 社群登入（Google、LINE、Facebook…）：
+ *   1. 面板按下去 → 這裡開一個新分頁去那一家登入
+ *   2. 登入完，Supabase 把分頁導回網頁版的 ext-login.html?code=…
  *   3. 那一頁的 content script（ext-login.js）把 code 交回來 → 這裡換成登入 → 關掉那個分頁
  * 不用 chrome.identity：那個要固定外掛的 ID，已經裝好的外掛換 ID 會讀不到原本的提示詞。
  */
-async function gpnGoogleStart(sender) {
+async function gpnOAuthStart(provider, sender) {
   const state = await gpnSync.getState();
-  if (!state.google) return { ok: false, error: 'Google 登入還沒有設定好' };
-  const url = await gpnSync.googleUrl(new URL('ext-login.html', GPN_CLOUD.site).href);
+  if (!state.providers.includes(provider)) return { ok: false, error: '這種登入方式還沒有設定好' };
+  const url = await gpnSync.oauthUrl(provider, new URL('ext-login.html', GPN_CLOUD.site).href);
   const opener = sender.tab?.id;
   await chrome.tabs.create({ url, ...(opener ? { openerTabId: opener } : {}) });
   return { ok: true, opened: true };
 }
 
-async function gpnGoogleFinish(code, sender) {
-  const r = await gpnSync.finishGoogle(code);
+async function gpnOAuthFinish(code, sender) {
+  const r = await gpnSync.finishOAuth(code);
   // 登入成功就把那個分頁關掉，回到原本的 AI 網站
   if (r.ok && sender.tab?.id) setTimeout(() => chrome.tabs.remove(sender.tab.id).catch(() => {}), 1500);
   return r;
 }
+
+// 驗證信、重設密碼信的連結一律回到網頁版（外掛沒有網址可以回來）
+const gpnSite = () => GPN_CLOUD.site;
 
 // 面板、小視窗的請求
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
@@ -69,10 +72,13 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   const ops = {
     state: () => gpnSync.getState(),
     signIn: () => gpnSync.signIn(msg.email, msg.password),
-    signUp: () => gpnSync.signUp(msg.email, msg.password),
-    googleStart: () => gpnGoogleStart(sender),
-    googleFinish: () => gpnGoogleFinish(String(msg.code || ''), sender),
+    signUp: () => gpnSync.signUp(msg.email, msg.password, gpnSite()),
+    resendConfirm: () => gpnSync.resendConfirm(msg.email, gpnSite()),
+    resetPassword: () => gpnSync.resetPassword(msg.email, gpnSite()),
+    oauthStart: () => gpnOAuthStart(String(msg.provider || ''), sender),
+    oauthFinish: () => gpnOAuthFinish(String(msg.code || ''), sender),
     signOut: () => gpnSync.signOut({ wipe: !!msg.wipe }),
+    deleteAccount: () => gpnSync.deleteAccount(),
     syncNow: () => gpnSync.syncNow(),
   };
   const run = ops[msg.op];

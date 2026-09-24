@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.3.0';
+const GPN_APP_VERSION = '4.4.0';
 
 /**
  * @param {object}   opts
@@ -94,6 +94,14 @@ function gpnCreatePanel(opts) {
 
   const ICON_CLOSE =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
+
+  /* 社群登入的品牌圖示：LINE、Facebook、Apple 的圖形取自 Simple Icons（CC0 授權） */
+  const ICON_LINE =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg>';
+  const ICON_FACEBOOK =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>';
+  const ICON_APPLE =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg>';
 
   /** Google 登入鈕規定要用的彩色 G */
   const ICON_GOOGLE =
@@ -1384,8 +1392,9 @@ function gpnCreatePanel(opts) {
     disarmImport();
     disarmWipe();
     hideFolderConfirm();
+    disarmAccountDelete();
     // 密碼不要留在畫面上
-    if (ui.aPass) { ui.aPass.value = ''; ui.aPass2.value = ''; }
+    if (ui.aPass) { for (const n of [ui.aPass, ui.aPass2, ui.aNew1, ui.aNew2]) n.value = ''; }
   }
 
   function showSection(key) {
@@ -1399,6 +1408,7 @@ function gpnCreatePanel(opts) {
     hideFolderConfirm();
     disarmTabDelete();
     disarmWipe();
+    disarmAccountDelete();
   }
 
   /** 設定視窗裡所有「跟著資料變」的文字，一次更新 */
@@ -1541,15 +1551,31 @@ function gpnCreatePanel(opts) {
 
   /* ---- 帳號與同步 ----
      登入同一個帳號，外掛、網頁版、每一台電腦的提示詞就會自動同步（見 sync.js）。
-     沒登入也能照常用，只是資料只存在這一台。 */
+     沒登入也能照常用，只是資料只存在這一台。
+
+     會經歷的流程：
+       社群登入：按「用 ○○ 帳號登入」→ 到那一家選帳號 → 回來就登入了（第一次會自動建帳號）
+       Email 註冊：填 Email、密碼 → 收驗證信 → 點信裡的連結 → 回到網頁版就登入了
+       忘記密碼：填 Email → 收「重設密碼」信 → 點連結回到網頁版 → 設新密碼 */
+
+  /** 支援的社群登入。cloud-config.js 的 providers 開了哪幾家，畫面就出現哪幾顆 */
+  const PROVIDERS = {
+    google: { name: 'Google', icon: ICON_GOOGLE },
+    'custom:line': { name: 'LINE', icon: ICON_LINE },
+    facebook: { name: 'Facebook', icon: ICON_FACEBOOK },
+    apple: { name: 'Apple', icon: ICON_APPLE },
+  };
+  const providerName = (p) => PROVIDERS[p]?.name || (p === 'email' || !p ? 'Email' : p);
+  let pendingEmail = '';        // 剛註冊、等著驗證的 Email（「重新寄驗證信」用）
+  let deleteArmed = false, deleteTimer = 0;
 
   function buildAccountSection() {
-    /* 還沒設定雲端（cloud-config.js 沒填）時顯示的說明 */
-    ui.aNotReady = el('div', { class: 'gpn-note gpn-note--roomy',
-      text: '雲端同步還沒有設定好，暫時只能存在這台電腦。' +
-            '（給管理員：請在 cloud-config.js 填入 Supabase 的網址和公開金鑰。）' });
+    /* ---- 沒登入：社群登入 ＋ Email 登入／註冊 ---- */
+    ui.aSocial = el('div', { class: 'gpn-social' });
+    ui.aSocialBox = el('div', {},
+      ui.aSocial,
+      el('div', { class: 'gpn-or' }, el('span', { text: '或用 Email 和密碼' })));
 
-    /* ---- 沒登入：登入／註冊 ---- */
     ui.aSignin = el('button', { class: 'gpn-seg is-on', type: 'button', onclick: () => setAccountMode('signin') }, '登入');
     ui.aSignup = el('button', { class: 'gpn-seg', type: 'button', onclick: () => setAccountMode('signup') }, '註冊新帳號');
 
@@ -1575,34 +1601,51 @@ function gpnCreatePanel(opts) {
       },
     });
     ui.aPassLabel = el('span', { text: '（至少 6 個字）' });
+    ui.aForgot = el('button', { class: 'gpn-link', type: 'button', onclick: onForgot }, '忘記密碼？');
     ui.aMsg = el('div', { class: 'gpn-note gpn-note--status', role: 'status' });
+    ui.aResend = el('button', { class: 'gpn-btn2', type: 'button', onclick: onResend }, '📧　重新寄驗證信');
+    ui.aResend.hidden = true;
     ui.aSubmit = el('button', {
       class: 'gpn-btn gpn-btn--save gpn-btn--block', type: 'button', onclick: onAccountSubmit,
     }, '登入');
-
-    // 用 Google 帳號登入：不用另外記密碼，對長輩最省事。Supabase 設定好 Google 之後才會出現。
-    ui.aGoogle = el('button', { class: 'gpn-google-btn', type: 'button', onclick: onGoogle },
-      el('span', { class: 'gpn-google-g', html: ICON_GOOGLE }), el('span', { text: '用 Google 帳號登入' }));
-    ui.aGoogleBox = el('div', { class: 'gpn-google-box' },
-      ui.aGoogle,
-      el('div', { class: 'gpn-or' }, el('span', { text: '或用 Email 和密碼' })));
 
     ui.aOut = el('div', {},
       el('p', { class: 'gpn-lede', text:
         '登入同一個帳號，外掛、網頁版、每一台電腦的提示詞就會自動同步，換電腦也不怕不見。' +
         '不登入也能照常用，只是資料只存在這台電腦。' }),
-      ui.aGoogleBox,
+      ui.aSocialBox,
       el('div', { class: 'gpn-seg-row gpn-seg-row--top' }, ui.aSignin, ui.aSignup),
       field('Email', null, ui.aEmail),
       el('div', { class: 'gpn-field' },
         el('label', { class: 'gpn-label' }, '密碼', ui.aPassLabel),
         ui.aPass,
-        el('label', { class: 'gpn-check' }, ui.aShow, el('span', { text: '顯示密碼' }))),
+        el('div', { class: 'gpn-pass-row' },
+          el('label', { class: 'gpn-check' }, ui.aShow, el('span', { text: '顯示密碼' })),
+          ui.aForgot)),
       ui.aPass2Field,
       ui.aMsg,
+      ui.aResend,
       ui.aSubmit);
 
+    /* ---- 從「重設密碼」信回來：設新密碼 ---- */
+    ui.aNew1 = el('input', { class: 'gpn-input', type: 'password', autocomplete: 'new-password' });
+    ui.aNew2 = el('input', {
+      class: 'gpn-input', type: 'password', autocomplete: 'new-password',
+      onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); onNewPassword(); } },
+    });
+    ui.aNewMsg = el('div', { class: 'gpn-note gpn-note--status', role: 'status' });
+    ui.aNewBtn = el('button', {
+      class: 'gpn-btn gpn-btn--save gpn-btn--block', type: 'button', onclick: onNewPassword,
+    }, '更新密碼');
+    ui.aRecover = el('div', { class: 'gpn-recover' },
+      el('div', { class: 'gpn-label', text: '請設定新的密碼' }),
+      el('div', { class: 'gpn-note', text: '你是從「重設密碼」的信回來的，已經先幫你登入了。' }),
+      field('新密碼', '（至少 6 個字）', ui.aNew1),
+      field('再輸入一次新密碼', null, ui.aNew2),
+      ui.aNewMsg, ui.aNewBtn);
+
     /* ---- 已登入 ---- */
+    ui.aWhoHow = el('div', { class: 'gpn-note' });
     ui.aWho = el('div', { class: 'gpn-account-email' });
     ui.aStatusIcon = el('span', { class: 'gpn-cloud-icon' });
     ui.aStatus = el('span');
@@ -1610,12 +1653,15 @@ function gpnCreatePanel(opts) {
     ui.aWipe = el('button', {
       class: 'gpn-btn gpn-btn--del', type: 'button', onclick: () => onSignOut(true),
     }, '登出並清除這台電腦上的提示詞');
+    ui.aDelete = el('button', {
+      class: 'gpn-btn gpn-btn--del', type: 'button', onclick: onDeleteAccount,
+    }, '刪除我的帳號');
 
     ui.aIn = el('div', {},
+      ui.aRecover,
       el('div', { class: 'gpn-account-card' },
         el('span', { class: 'gpn-account-avatar', html: ICON_PERSON }),
-        el('div', { class: 'gpn-account-info' },
-          el('div', { class: 'gpn-note', text: '已登入' }), ui.aWho)),
+        el('div', { class: 'gpn-account-info' }, ui.aWhoHow, ui.aWho)),
       el('div', { class: 'gpn-account-status' }, ui.aStatusIcon, ui.aStatus),
       el('div', { class: 'gpn-brow' },
         ui.aSyncBtn,
@@ -1627,10 +1673,32 @@ function gpnCreatePanel(opts) {
         el('div', { class: 'gpn-label', text: '在別人的電腦上用完了？' }),
         el('div', { class: 'gpn-note', text:
           '登出，並把這台電腦上的提示詞清掉，別人就看不到。雲端上的資料不會刪，下次登入就回來了。' }),
-        ui.aWipe));
+        ui.aWipe),
+      el('div', { class: 'gpn-danger' },
+        el('div', { class: 'gpn-label', text: '不想用了？' }),
+        el('div', { class: 'gpn-note', text:
+          '永久刪除這個帳號，和存在雲端上的所有提示詞、使用記錄。刪了就找不回來。' +
+          '這台電腦上的提示詞會留著。' }),
+        ui.aDelete));
 
     return el('section', { class: 'gpn-section', 'data-section': 'account' },
-      el('h3', { text: '帳號與同步' }), ui.aNotReady, ui.aOut, ui.aIn);
+      el('h3', { text: '帳號與同步' }), ui.aOut, ui.aIn,
+      el('a', {
+        class: 'gpn-link gpn-privacy', href: new URL('privacy.html', GPN_CLOUD.site).href,
+        target: '_blank', rel: 'noopener',
+      }, '隱私權政策：我們存了什麼、怎麼刪除'));
+  }
+
+  /** 社群登入按鈕：照 cloud-config.js 的 providers 畫出來 */
+  function renderSocial(providers) {
+    const key = providers.join(',');
+    if (ui.aSocial.dataset.key === key) return;
+    ui.aSocial.dataset.key = key;
+    ui.aSocial.replaceChildren(...providers.filter((p) => PROVIDERS[p]).map((p) => el('button', {
+      class: 'gpn-social-btn', type: 'button', 'data-provider': p.replace('custom:', ''),
+      onclick: (e) => onSocial(p, e.currentTarget),
+    }, el('span', { class: 'gpn-social-icon', html: PROVIDERS[p].icon }),
+       el('span', { text: `用 ${PROVIDERS[p].name} 帳號登入` }))));
   }
 
   function setAccountMode(mode) {
@@ -1640,32 +1708,37 @@ function gpnCreatePanel(opts) {
     ui.aSignup.classList.toggle('is-on', up);
     ui.aPass2Field.hidden = !up;
     ui.aPassLabel.hidden = !up;
+    ui.aForgot.hidden = up;
     ui.aPass.autocomplete = up ? 'new-password' : 'current-password';
-    ui.aSubmit.textContent = up ? '註冊並登入' : '登入';
+    ui.aSubmit.textContent = up ? '註冊' : '登入';
+    ui.aResend.hidden = true;
     setAccountMsg('');
   }
 
   function resetAccountForm() {
     if (!ui.aOut) return;
-    ui.aPass.value = '';
-    ui.aPass2.value = '';
+    for (const n of [ui.aPass, ui.aPass2, ui.aNew1, ui.aNew2]) n.value = '';
     ui.aShow.checked = false;
     for (const n of [ui.aPass, ui.aPass2]) n.type = 'password';
     for (const n of [ui.aEmail, ui.aPass, ui.aPass2]) n.classList.remove('is-bad');
     setAccountMode('signin');
     disarmWipe();
+    disarmAccountDelete();
     refreshAccount();
   }
 
   function focusAccount() {
     if (ui.aOut && !ui.aOut.hidden) (ui.aEmail.value ? ui.aPass : ui.aEmail).focus();
+    else if (ui.aRecover && !ui.aRecover.hidden) ui.aNew1.focus();
   }
 
-  function setAccountMsg(msg, kind = 'bad') {
-    ui.aMsg.textContent = msg;
-    ui.aMsg.classList.toggle('is-bad', !!msg && kind === 'bad');
-    ui.aMsg.classList.toggle('is-ok', !!msg && kind === 'ok');
+  function setAccountMsg(msg, kind = 'bad', node = ui.aMsg) {
+    node.textContent = msg;
+    node.classList.toggle('is-bad', !!msg && kind === 'bad');
+    node.classList.toggle('is-ok', !!msg && kind === 'ok');
   }
+
+  const emailOk = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 
   async function onAccountSubmit() {
     if (ui.aSubmit.disabled) return;
@@ -1675,7 +1748,7 @@ function gpnCreatePanel(opts) {
 
     // 先在這裡擋掉常見的打錯，不必等雲端回覆
     const bad = (node, msg) => { node.classList.add('is-bad'); node.focus(); setAccountMsg(msg); };
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return bad(ui.aEmail, '請輸入正確的 Email');
+    if (!emailOk(email)) return bad(ui.aEmail, '請輸入正確的 Email');
     if (!pw) return bad(ui.aPass, '請輸入密碼');
     if (up && pw.length < 6) return bad(ui.aPass, '密碼至少要 6 個字');
     if (up && pw !== ui.aPass2.value) return bad(ui.aPass2, '兩次輸入的密碼不一樣');
@@ -1684,38 +1757,100 @@ function gpnCreatePanel(opts) {
     ui.aSubmit.disabled = true;
     ui.aSubmit.textContent = up ? '註冊中…' : '登入中…';
     setAccountMsg('');
+    ui.aResend.hidden = true;
     const r = await (up ? cloud.signUp(email, pw) : cloud.signIn(email, pw));
     ui.aSubmit.disabled = false;
     ui.aSubmit.textContent = label;
 
-    if (!r || !r.ok) { setAccountMsg(r?.error || '登入失敗，請再試一次'); return; }
+    if (!r || !r.ok) {
+      setAccountMsg(r?.error || '登入失敗，請再試一次');
+      if (r?.unconfirmed) { pendingEmail = email; ui.aResend.hidden = false; }
+      return;
+    }
     if (r.needConfirm) {
+      // 註冊成功，但要先到信箱點驗證連結
+      pendingEmail = email;
       setAccountMode('signin');
       ui.aPass.value = '';
-      setAccountMsg('註冊成功！請到信箱點確認連結，再回來這裡登入。', 'ok');
+      setAccountMsg(`註冊成功！驗證信已經寄到 ${email}。請打開那封信，按「確認我的信箱」` +
+        (cloud.linksOpenWeb
+          ? '。驗證完，回到這裡輸入密碼、按「登入」就好。'
+          : '，就會回到網頁版並自動登入。') +
+        '（找不到信的話看一下垃圾郵件）', 'ok');
+      ui.aResend.hidden = false;
       return;
     }
 
     ui.aPass.value = '';
     ui.aPass2.value = '';
     folderId = null;
-    toast(r.error ? `已登入，但同步失敗：${r.error}`
-      : r.merged ? `已登入。這台原本的 ${r.merged} 則已經合併到雲端`
-      : r.pulled ? `已登入，從雲端載入了 ${r.pulled} 則提示詞`
-      : r.uploaded ? `已登入，這台的 ${r.uploaded} 則已經存到雲端`
-      : '已登入，之後會自動同步', !!r.error);
+    toast(signedInMessage(r), !!r.error);
     refreshCloud(await cloud.getState());
   }
 
-  /** 用 Google 登入：網頁版會直接換到 Google 的登入頁；外掛會另開一個分頁，登入完自己關掉 */
-  async function onGoogle() {
-    ui.aGoogle.disabled = true;
+  /** 登入成功後要跟他說的話（依這次同步的結果） */
+  function signedInMessage(r) {
+    return r.error ? `已登入，但同步失敗：${r.error}`
+      : r.merged ? `已登入。這台原本的 ${r.merged} 則已經合併到雲端`
+      : r.pulled ? `已登入，從雲端載入了 ${r.pulled} 則提示詞`
+      : r.uploaded ? `已登入，這台的 ${r.uploaded} 則已經存到雲端`
+      : '已登入，之後會自動同步';
+  }
+
+  async function onResend() {
+    const email = pendingEmail || ui.aEmail.value.trim();
+    if (!emailOk(email)) { setAccountMsg('請先在上面輸入註冊時用的 Email'); return; }
+    ui.aResend.disabled = true;
+    const r = await cloud.resendConfirm(email);
+    ui.aResend.disabled = false;
+    setAccountMsg(r?.ok ? `已經重新寄到 ${email}，請到信箱看看（也看一下垃圾郵件）。`
+      : (r?.error || '寄不出去，請稍後再試'), r?.ok ? 'ok' : 'bad');
+  }
+
+  async function onForgot() {
+    const email = ui.aEmail.value.trim();
+    if (!emailOk(email)) {
+      ui.aEmail.classList.add('is-bad');
+      ui.aEmail.focus();
+      setAccountMsg('請先在上面輸入你註冊時用的 Email，再按「忘記密碼？」');
+      return;
+    }
+    ui.aForgot.disabled = true;
+    const r = await cloud.resetPassword(email);
+    ui.aForgot.disabled = false;
+    setAccountMsg(r?.ok
+      ? `如果 ${email} 有註冊過，我們已經寄出「重設密碼」的信。請打開那封信按連結，` +
+        (cloud.linksOpenWeb
+          ? '會打開網頁版讓你設新密碼；設好之後，回到這裡用新密碼登入。'
+          : '會回到網頁版讓你設新密碼。')
+      : (r?.error || '寄不出去，請稍後再試'), r?.ok ? 'ok' : 'bad');
+  }
+
+  async function onNewPassword() {
+    const pw = ui.aNew1.value;
+    if (pw.length < 6) { setAccountMsg('密碼至少要 6 個字', 'bad', ui.aNewMsg); ui.aNew1.focus(); return; }
+    if (pw !== ui.aNew2.value) { setAccountMsg('兩次輸入的密碼不一樣', 'bad', ui.aNewMsg); ui.aNew2.focus(); return; }
+    ui.aNewBtn.disabled = true;
+    const r = await cloud.updatePassword(pw);
+    ui.aNewBtn.disabled = false;
+    if (!r?.ok) { setAccountMsg(r?.error || '更新失敗，請再試一次', 'bad', ui.aNewMsg); return; }
+    ui.aNew1.value = '';
+    ui.aNew2.value = '';
+    setAccountMsg('', 'ok', ui.aNewMsg);
+    toast('密碼已經更新，之後請用新密碼登入');
+    refreshCloud(await cloud.getState());
+  }
+
+  /** 社群登入：網頁版會直接換到那一家的登入頁；外掛會另開一個分頁，登入完自己關掉 */
+  async function onSocial(provider, btn) {
+    btn.disabled = true;
     setAccountMsg('');
-    const r = await cloud.signInWithGoogle();
-    ui.aGoogle.disabled = false;
-    if (!r || !r.ok) { setAccountMsg(r?.error || '沒辦法開始 Google 登入，請稍後再試'); return; }
+    const r = await cloud.signInWithProvider(provider);
+    btn.disabled = false;
+    if (!r || !r.ok) { setAccountMsg(r?.error || '沒辦法開始登入，請稍後再試'); return; }
     if (r.opened) {
-      setAccountMsg('已經開了一個新分頁，請在那裡選你的 Google 帳號；登入完會自動回到這裡。', 'ok');
+      setAccountMsg(`已經開了一個新分頁，請在那裡用 ${providerName(provider)} 登入；` +
+        '登入完那個分頁會自動關掉，回到這裡就好。', 'ok');
     }
   }
 
@@ -1747,6 +1882,30 @@ function gpnCreatePanel(opts) {
     clearTimeout(wipeTimer);
     wipeArmed = false;
     if (ui.aWipe) disarmButton(ui.aWipe, '登出並清除這台電腦上的提示詞');
+  }
+
+  /** 刪除帳號：永久刪除，按兩次 */
+  async function onDeleteAccount() {
+    if (!deleteArmed) {
+      deleteArmed = true;
+      armButton(ui.aDelete, '確定永久刪除帳號和雲端上的提示詞？再按一次');
+      clearTimeout(deleteTimer);
+      deleteTimer = setTimeout(disarmAccountDelete, 6000);
+      return;
+    }
+    disarmAccountDelete();
+    ui.aDelete.disabled = true;
+    const r = await cloud.deleteAccount();
+    ui.aDelete.disabled = false;
+    if (!r?.ok) { toast(r?.error || '刪除失敗，請稍後再試', true); return; }
+    toast('帳號已經刪除。這台電腦上的提示詞還在，只是不會再同步');
+    refreshCloud(await cloud.getState());
+  }
+
+  function disarmAccountDelete() {
+    clearTimeout(deleteTimer);
+    deleteArmed = false;
+    if (ui.aDelete) disarmButton(ui.aDelete, '刪除我的帳號');
   }
 
   /** 「剛剛」「5 分鐘前」「14:32」 */
@@ -1793,7 +1952,7 @@ function gpnCreatePanel(opts) {
     ui.cloudIcon.innerHTML = d.icon;
     ui.cloudText.textContent = d.short;
     ui.cloudBtn.title = st.signedIn
-      ? `${st.email}　${d.long || d.short}（點一下看帳號）`
+      ? `${st.email || providerName(st.provider) + ' 帳號'}　${d.long || d.short}（點一下看帳號）`
       : '登入帳號，每台電腦的提示詞就會自動同步';
 
     refreshAccount();
@@ -1802,18 +1961,23 @@ function gpnCreatePanel(opts) {
   function refreshAccount() {
     if (!ui.aOut) return;
     const st = cloudState;
-    ui.aNotReady.hidden = !!st.configured;
     ui.aOut.hidden = !st.configured || !!st.signedIn;
     ui.aIn.hidden = !st.configured || !st.signedIn;
-    // Google 登入：雲端那邊設定好（st.google），而且這個環境做得到（例如直接開檔案的網頁版就不行）
-    ui.aGoogleBox.hidden = !st.google || cloud.canGoogle === false;
+
+    // 社群登入：後台開好了哪幾家（st.providers），而且這個環境做得到（直接開檔案的網頁版就不行）
+    const providers = cloud.canSocial === false ? [] : (st.providers || []);
+    renderSocial(providers);
+    ui.aSocialBox.hidden = !providers.length;
+
     if (!st.signedIn) {
       // 登入過期之類的訊息，第一次顯示在表單上
       if (st.message && !ui.aMsg.textContent) setAccountMsg(st.message);
       return;
     }
     const d = describeCloud(st);
-    ui.aWho.textContent = st.email || '';
+    ui.aRecover.hidden = !st.recovery;
+    ui.aWhoHow.textContent = `已登入（用 ${providerName(st.provider)} 帳號）`;
+    ui.aWho.textContent = st.email || `${providerName(st.provider)} 帳號`;
     ui.aStatusIcon.innerHTML = d.icon;
     ui.aStatus.textContent = d.long;
     ui.aStatus.parentElement.setAttribute('data-kind', d.kind);
@@ -2084,6 +2248,10 @@ function gpnCreatePanel(opts) {
     setInterval(() => { if (isOpen()) refreshCloud(); }, 30_000);
   }
 
-  // toast：網頁版從 Google 登入回來時，用它顯示結果
-  return { open, close, isOpen, toast };
+  // toast：網頁版從登入、驗證信回來時，用它顯示結果
+  // openAccount：從「重設密碼」信回來時，直接打開帳號頁讓他設新密碼
+  return {
+    open, close, isOpen, toast,
+    openAccount: () => { if (cloud && cloudState.configured) openSettings(data.activeId, 'account'); },
+  };
 }

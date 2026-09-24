@@ -1124,8 +1124,9 @@ button { cursor: pointer; }
 .gpn-btn--block { display: block; width: 100%; margin-top: 16px; }
 
 /* ---- 帳號與同步 ---- */
-/* Google 登入鈕：照 Google 的規定用白底 + 彩色 G */
-.gpn-google-btn {
+/* 社群登入按鈕：照各家的品牌規定配色（Google 白底彩色 G、LINE 綠、Facebook 藍、Apple 黑） */
+.gpn-social { display: flex; flex-direction: column; gap: 10px; }
+.gpn-social-btn {
   width: 100%;
   height: 52px;
   display: flex;
@@ -1133,16 +1134,47 @@ button { cursor: pointer; }
   justify-content: center;
   gap: 12px;
   border-radius: 26px;
-  border: 1px solid var(--outline-strong);
-  background: #ffffff;
-  color: #1f1f1f;
+  border: 1px solid transparent;
   font-size: 16.5px;
   font-weight: 600;
-  transition: box-shadow .16s ease, border-color .16s ease;
+  transition: box-shadow .16s ease, filter .16s ease;
 }
-.gpn-google-btn:hover { box-shadow: var(--shadow-md); border-color: var(--text-mute); }
-.gpn-google-btn:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
-.gpn-google-g svg { width: 22px; height: 22px; display: block; }
+.gpn-social-btn:hover { box-shadow: var(--shadow-md); filter: brightness(1.04); }
+.gpn-social-btn:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.gpn-social-btn[disabled] { opacity: .6; pointer-events: none; }
+.gpn-social-icon svg { width: 22px; height: 22px; display: block; fill: currentColor; }
+.gpn-social-btn[data-provider="google"]   { background: #ffffff; color: #1f1f1f; border-color: var(--outline-strong); }
+.gpn-social-btn[data-provider="line"]     { background: #06c755; color: #ffffff; }
+.gpn-social-btn[data-provider="facebook"] { background: #1877f2; color: #ffffff; }
+.gpn-social-btn[data-provider="apple"]    { background: #000000; color: #ffffff; }
+:host([data-theme="dark"]) .gpn-social-btn[data-provider="apple"] { background: #ffffff; color: #000000; }
+
+/* 文字連結樣式的小按鈕（忘記密碼？、隱私權政策） */
+.gpn-link {
+  padding: 4px 2px;
+  font-size: 14px;
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.gpn-link:hover { filter: brightness(1.15); }
+.gpn-link:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+.gpn-pass-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.gpn-pass-row .gpn-check { margin-top: 8px; }
+.gpn-privacy { display: inline-block; margin-top: 22px; font-size: 13px; color: var(--text-mute); }
+.gpn-note--status + .gpn-btn2 { width: 100%; margin-top: 10px; }
+
+/* 從「重設密碼」信回來：請他設新密碼（放在已登入畫面最上面） */
+.gpn-recover {
+  margin-bottom: 20px;
+  padding: 16px 18px 18px;
+  border-radius: 16px;
+  border: 2px solid var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+.gpn-recover .gpn-field { margin: 14px 0 0; }
+
 .gpn-or {
   display: flex;
   align-items: center;
@@ -1397,5 +1429,5 @@ button { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .gpn-book, .gpn-dialog, .gpn-overlay, .gpn-toast, .gpn-copied,
   .gpn-tab, .gpn-card, .gpn-folder, .gpn-switch, .gpn-switch::after,
-  .gpn-empty-arrow, .gpn-cloud-icon svg, .gpn-google-btn { animation: none !important; transition: none !important; }
+  .gpn-empty-arrow, .gpn-cloud-icon svg, .gpn-social-btn { animation: none !important; transition: none !important; }
 }

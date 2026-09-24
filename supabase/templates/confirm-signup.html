@@ -1,0 +1,18 @@
+<!--
+  Supabase → Authentication → Emails → Templates → Confirm sign up
+  主旨（Subject）：請確認你的信箱｜常用提示詞
+  把下面整段貼到 Message body。{{ .ConfirmationURL }} 會被 Supabase 換成真正的驗證連結。
+  寫得簡短、沒有行銷字眼、只有一個按鈕：比較不會被當成垃圾信。
+-->
+<div style="font-family: 'Microsoft JhengHei', 'PingFang TC', 'Noto Sans TC', sans-serif; font-size: 17px; line-height: 1.8; color: #1f1f1f; max-width: 520px;">
+  <h2 style="font-size: 22px; margin: 0 0 12px;">請確認你的信箱</h2>
+  <p>你剛剛用這個信箱註冊了「常用提示詞」。請按下面的按鈕完成驗證：</p>
+  <p style="margin: 28px 0;">
+    <a href="{{ .ConfirmationURL }}"
+       style="display: inline-block; padding: 14px 32px; border-radius: 28px; background: #0b57d0; color: #ffffff; text-decoration: none; font-weight: bold; font-size: 18px;">
+      確認我的信箱
+    </a>
+  </p>
+  <p>按完會回到網頁版，並自動登入。這個連結有時間限制、只能用一次；過期的話，回到登入畫面按「重新寄驗證信」就好。</p>
+  <p style="color: #5f6368; font-size: 14px;">如果不是你本人註冊的，不用理會這封信，帳號不會被啟用。</p>
+</div>

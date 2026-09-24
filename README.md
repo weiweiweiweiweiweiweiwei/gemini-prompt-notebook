@@ -164,8 +164,34 @@
 
 ### 方法一：登入帳號，自動同步（推薦）
 
-**齒輪 → 帳號與同步**（或紙張右上角的「**登入同步**」）→ **用 Google 帳號登入**，或用 Email 和密碼登入／註冊。
-外掛、網頁版、每一台電腦登入 **同一個帳號**，之後就不用管了：
+**齒輪 → 帳號與同步**（或紙張右上角的「**登入同步**」），選一種方式登入：
+
+| 方式 | 過程 | 備註 |
+|---|---|---|
+| **用 Google 帳號登入** | 選好帳號就回來 | 不用另外記密碼，最推薦 |
+| **用 LINE 帳號登入** | 在 LINE 的頁面確認（掃 QR Code 或輸入 LINE 密碼） | LINE 可能不提供 Email，帳號頁會顯示「LINE 帳號」 |
+| **用 Facebook 帳號登入** | 在 Facebook 的頁面確認 | |
+| **Email ＋ 密碼** | 註冊後要到信箱點驗證信 | 不想用社群帳號的人 |
+
+（只會出現管理員有打開的方式，見下面的「帳號系統的設定」。）
+
+外掛、網頁版、每一台電腦登入 **同一個帳號**，之後就不用管了。
+**每一台都用同一種方式登入** 最不會搞混——用 LINE 登入和用 Email 註冊，是兩個不同的帳號。
+
+**用 Email 註冊的過程：**
+
+1. 按 **註冊新帳號** → 輸入 Email、密碼（至少 6 個字）、再輸入一次密碼 → 按 **註冊**。
+2. 到信箱找「請確認你的信箱｜常用提示詞」（找不到就看垃圾郵件），按 **確認我的信箱**。
+3. 會打開網頁版並自動登入。在外掛裡註冊的，驗證完回到外掛輸入密碼按 **登入**。
+
+- 還沒點驗證信就按登入：會提醒你，並出現 **重新寄驗證信**。
+- **忘記密碼？**：先在上面填 Email 再按它 → 收信按 **設定新密碼** → 網頁版會直接跳出「請設定新的密碼」。
+- 信裡的連結有時間限制、只能用一次；過期了就重新寄一封。
+
+**社群登入的過程：** 網頁版會換到那一家的登入頁，登入完就回來；外掛會另開一個分頁，登入完那個分頁會自己關掉。
+（直接雙擊開檔案的網頁版沒有社群登入按鈕——那一家沒辦法把人帶回電腦裡的檔案。）
+
+登入之後：
 
 - 改了提示詞，大約一秒內就存到雲端；打開面板、回到網頁版的分頁時，會先把別台改的拉下來。
 - 紙張右上角看得到狀態：**已同步**（綠）／**待同步**／**同步中**／**未連線**（黃，恢復網路後會自己補上）。
@@ -174,12 +200,10 @@
 - **登出**：這台的提示詞留著，只是不再同步。
   在別人的電腦上用完，請按 **登出並清除這台電腦上的提示詞**（雲端的不會刪，下次登入就回來）。
 - 同一台電腦換別人登入，不會把前一個人的提示詞帶進新帳號。
+- **刪除我的帳號**（按兩次）：帳號和雲端上的提示詞永久刪除，這台電腦上的留著。
 
 > 沒登入也能照常使用，只是資料只存在那一台。
-
-**用 Google 帳號登入** 不用另外記密碼：
-網頁版會換到 Google 的登入頁，選好帳號就回來；外掛會另開一個分頁，登入完那個分頁會自己關掉。
-（直接雙擊開檔案的網頁版沒有這顆按鈕——Google 沒辦法把人帶回電腦裡的檔案。）
+> 存了什麼、誰看得到、怎麼刪除，寫在 [隱私權政策](https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/privacy.html)。
 
 ### 方法二：手動匯出／匯入（不想用帳號、或要分享給別人時）
 
@@ -225,40 +249,135 @@
 
 ---
 
-### 雲端同步的第一次設定（管理員做一次就好）
+### 帳號系統的設定（管理員做一次就好）
 
-雲端用的是 [Supabase](https://supabase.com)（免費方案就夠用）。
+整個過程長這樣，每一步做完都可以先停下來：
 
-1. 在 Supabase 建一個專案。
-2. 左邊 **SQL Editor** → 貼上 `supabase/schema.sql` 的全部內容 → **Run**。
-   （建立資料表和權限規則：每個帳號只能讀寫自己的那一列。重複執行也沒關係。）
-3. **Authentication → Sign In / Providers → Email**：把 **Confirm email** 關掉。
-   原因：Supabase 內建的寄信服務只會寄給專案團隊成員，其他人收不到註冊確認信、就登入不了。
-   之後若設定了自己的寄信服務（SMTP），可以再打開。
-4. **Project Settings → API Keys**：複製 **Project URL** 和 **Publishable key**（舊專案叫 anon key），
-   填進 `src/cloud-config.js`，再跑 `python tools/checksync.py --fix` 複製到 `web/`。
-   **不要** 用 secret key／service_role key——那把可以讀寫所有人的資料。
-5. **Authentication → URL Configuration**：
-   - **Site URL**：`https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/`
-   - **Redirect URLs** 加一條：`https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/**`
-     （網頁版和外掛的 Google 登入，登入完都會回到這個網站；外掛是回到其中的 `ext-login.html` 再交給外掛）
-6. 推上 GitHub（網頁版會自動重新發布），外掛到 `chrome://extensions` 按 ⟳ 重新載入。
+```
+① 資料庫  →  ② 網址設定  →  ③ 寄信（SMTP）和信件範本  →  ④ 社群登入（Google／LINE／Facebook 各自申請）
+                                                                  ↓
+                                ⑥ 正式打開（open: true） ←  ⑤ 自己先試（?try-cloud=1）
+```
 
-`cloud-config.js` 留空的話就沒有雲端功能，和以前一樣只存在本機。
+目前的 Supabase 專案：**gemini-prompt-notebook**（東京機房，免費方案），網址 `https://jsgvyxbkvszvhkrpbvjy.supabase.co`。
+下面「Callback URL」都是：`https://jsgvyxbkvszvhkrpbvjy.supabase.co/auth/v1/callback`
 
-#### 打開「用 Google 帳號登入」（選用）
+#### ① 資料庫（已完成）
+
+**SQL Editor** → 貼上 `supabase/schema.sql` 的全部內容 → **Run**。
+建立資料表、權限規則（每個帳號只能讀寫自己的那一列）和「刪除我的帳號」要用的函式。重複執行也沒關係。
+
+`src/cloud-config.js` 裡的 `url`、`key` 已經填好。`key` 是 **Publishable key**，本來就是公開的；
+**絕對不要** 把 secret key／service_role key 放進程式——那把可以讀寫所有人的資料。
+
+#### ② 網址設定
+
+**Authentication → URL Configuration**：
+
+- **Site URL**：`https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/`
+- **Redirect URLs** 加一條：`https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/**`
+  （社群登入、驗證信、重設密碼信，最後都會回到這個網站；外掛是回到其中的 `ext-login.html` 再交給外掛）
+
+#### ③ 寄信（SMTP）和信件範本
+
+Supabase 內建的寄信服務 **只會寄給專案團隊成員**，一般人收不到驗證信，所以要接自己的寄信服務。
+最簡單的是用一個 Gmail 帳號寄（建議另外開一個專用的 Gmail）：
+
+1. 那個 Google 帳號 → **安全性** → 開啟 **兩步驟驗證**。
+2. 同一頁搜尋「**應用程式密碼**」→ 建立一組（名稱隨便，例如 Supabase）→ 會得到一組 16 個字母的密碼。
+   這組密碼只貼在 Supabase 後台，不要放進程式、不要傳給別人。
+3. Supabase → **Authentication → Emails → SMTP Settings** → 打開 **Enable custom SMTP**：
+   - Sender email：那個 Gmail　／　Sender name：`常用提示詞`
+   - Host：`smtp.gmail.com`　／　Port：`587`
+   - Username：那個 Gmail　／　Password：剛剛的 16 個字母
+4. **Authentication → Emails → Templates**：
+   - **Confirm sign up**：主旨 `請確認你的信箱｜常用提示詞`，內容貼 `supabase/templates/confirm-signup.html`
+   - **Reset password**：主旨 `重設密碼｜常用提示詞`，內容貼 `supabase/templates/reset-password.html`
+5. **Authentication → Sign In / Providers → Email**：確認 **Confirm email** 是 **開著** 的。
+6. （選用）**Authentication → Rate Limits** 可以調整每小時最多寄幾封信。個人 Gmail 一天大約能寄 500 封，家用綽綽有餘。
+
+設好之後，用自己的另一個信箱註冊一次試試看。
+
+#### ④-1 Google 登入
 
 1. [Google Cloud Console](https://console.cloud.google.com/) 建一個專案。
 2. **APIs & Services → OAuth consent screen**：User type 選 **External**，App name 填「常用提示詞」，
-   填支援用的 Email，其他都用預設。建好後按 **Publish app**（沒發布的話，只有加進 Test users 的人能登入）。
+   填支援用的 Email；隱私權政策網址填 `https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/privacy.html`。建好後按 **Publish app**
+   （沒發布的話，只有加進 Test users 的人能登入）。
 3. **APIs & Services → Credentials → Create credentials → OAuth client ID**：
    - Application type：**Web application**
-   - Authorized redirect URIs：`https://<你的專案代號>.supabase.co/auth/v1/callback`
-     （Supabase 的 Google 設定頁上有這個網址可以直接複製）
-4. 把拿到的 **Client ID** 和 **Client secret** 貼到 Supabase 的
-   **Authentication → Sign In / Providers → Google**，打開 **Enable**。
-   Client secret 只貼在 Supabase 後台，**不要** 放進程式碼。
-5. `src/cloud-config.js` 的 `google` 改成 `true`，跑 `python tools/checksync.py --fix`，推上 GitHub。
+   - Authorized redirect URIs：上面的 Callback URL
+4. 把 **Client ID** 和 **Client secret** 貼到 Supabase 的 **Authentication → Sign In / Providers → Google**，打開 **Enable**。
+
+#### ④-2 LINE 登入
+
+Supabase 沒有內建 LINE，但 LINE 支援 OpenID Connect，可以用「自訂登入方式」接上（免費方案最多 3 個）。
+
+1. [LINE Developers Console](https://developers.line.biz/console/) 用自己的 LINE 帳號登入 → 建立一個 **Provider**（名稱：常用提示詞）。
+2. 在 Provider 裡 **Create a new channel** → 選 **LINE Login** → 地區選台灣、App types 勾 **Web app**，其他照填。
+3. 這個 channel 的 **LINE Login** 分頁 → **Callback URL** 填上面的 Callback URL。
+4. （選用）**Basic settings → OpenID Connect → Email address permission → Apply**：
+   要上傳一張「會怎麼使用 Email」的截圖（可以用隱私權政策頁的截圖）。
+   沒申請也能登入，只是拿不到 Email，帳號頁會顯示「LINE 帳號」。
+5. 把 channel 從 **Developing** 改成 **Published**（沒發布的話只有自己能登入）。
+6. **Basic settings** 抄下 **Channel ID** 和 **Channel secret**。
+7. Supabase → **Authentication → Sign In / Providers → New Provider** → 選 **Auto-discovery (OIDC)**：
+   - Identifier：`custom:line`
+   - Client ID：Channel ID　／　Client Secret：Channel secret
+   - Issuer URL：`https://access.line.me`
+   - Scopes：有申請 Email 權限就用 `openid profile email`，沒申請就用 `openid profile`
+   - 按 **Create and enable provider**。
+
+#### ④-3 Facebook 登入
+
+1. [Meta for Developers](https://developers.facebook.com/) → **我的應用程式 → 建立應用程式** →
+   用途選「**使用 Facebook 登入驗證用戶身分並要求取得資料**」，名稱填「常用提示詞」。
+2. **使用案例 → Facebook 登入 → 自訂**：權限加上 **email**；設定裡的
+   **有效的 OAuth 重新導向 URI** 填上面的 Callback URL。
+3. **應用程式設定 → 基本資料**：
+   - 隱私政策網址：`https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/privacy.html`
+   - 用戶資料刪除 → 資料刪除說明網址：`https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/privacy.html#delete`
+   - 填好應用程式圖示和類別。
+4. 抄下 **應用程式編號** 和 **應用程式密鑰**，貼到 Supabase 的 **Sign In / Providers → Facebook**，打開 **Enable**。
+5. 把應用程式切換成 **上線（Live）**（開發模式下只有自己能登入）。
+
+#### ④-4 Apple 登入（先不做）
+
+要付費的 Apple Developer Program（每年 US$99）才能申請。程式已經支援，之後要加的話在 `providers` 加 `'apple'`。
+
+#### ⑤ 自己先試
+
+`cloud-config.js` 的 `open` 還是 `false` 時，所有人都看不到帳號功能（和以前一樣）。
+管理員想先試用，在網頁版網址後面加 **`?try-cloud=1`**：
+
+```
+https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/?try-cloud=1
+```
+
+只有「這個瀏覽器」會打開帳號功能，而且會記住；加 `?try-cloud=0` 就關回去。
+（外掛不吃這個開關，要等 ⑥ 打開後才會出現帳號功能。）
+
+`providers` 要先填上已經設好的登入方式，試用時才會出現那幾顆按鈕：
+
+```js
+providers: ['google', 'custom:line', 'facebook'],   // 只放已經在 Supabase 打開的
+```
+
+#### ⑥ 正式打開
+
+1. `src/cloud-config.js`：`open` 改成 `true`，`providers` 確認只放已經設好的。
+2. 調高 `manifest.json` 的 `version` 和 `src/panel.js` 的 `GPN_APP_VERSION`。
+3. 跑 `python tools/checksync.py --fix`，推上 GitHub（網頁版會自動重新發布）。
+4. 外掛到 `chrome://extensions` 按 ⟳ 重新載入。
+
+#### 管理員在後台看得到什麼？
+
+| 在哪裡 | 看得到 | 看不到 |
+|---|---|---|
+| **Authentication → Users** | Email、用哪種方式登入、註冊時間、最後登入時間 | **密碼**。Email 註冊的密碼只存「雜湊」（無法還原）；用 Google／LINE／Facebook 登入的人，密碼是在那一家輸入的，這邊根本拿不到 |
+| **Table Editor → notebooks** | 每個人的提示詞內容（後台是管理員權限，不受「只能看自己」的規則限制） | |
+
+後台可以幫忙：刪除某個使用者（他的提示詞會一起刪掉）、寄重設密碼信給他。
 
 ---
 
@@ -319,18 +438,20 @@ src/
   cloud-config.js      雲端的連線設定（Supabase 網址和公開金鑰）
   background.js        外掛的背景程式：整個外掛只有它一個在跟雲端溝通
   cloud-ext.js         外掛的面板和小視窗用來請背景程式做事
-  ext-login.js         外掛用 Google 登入的最後一步（只在網頁版的 ext-login.html 上執行）
+  ext-login.js         外掛用社群帳號登入的最後一步（只在網頁版的 ext-login.html 上執行）
 web/
   index.html           網頁版
   app.js               網頁版專屬：把面板放在網頁正中間、點提示詞改成只複製
   page.css             網頁本身的背景
-  ext-login.html       外掛用 Google 登入時的回程頁（沒裝外掛的人打開只會看到說明）
+  ext-login.html       外掛用社群帳號登入時的回程頁（沒裝外掛的人打開只會看到說明）
+  privacy.html         隱私權政策（Google、Facebook 申請登入時要填這個網址）
   store.js             同樣的資料格式 + localStorage 存取
   share.js / panel.js / styles.css / sync.js / cloud-config.js   和 src/ 同一份
 presets/
   chatgpt-99-prompts.json            可以直接匯入的 99 個提示詞
 supabase/
-  schema.sql           雲端資料庫的資料表和權限規則
+  schema.sql           雲端資料庫的資料表、權限規則、刪除帳號的函式
+  templates/           驗證信、重設密碼信的範本（貼到 Supabase 後台）
 tools/
   checksync.py         檢查 src/ 和 web/ 的共用程式碼有沒有分岔
 .github/workflows/
@@ -384,6 +505,13 @@ python tools/checksync.py --fix    # 用 src/ 的內容覆蓋 web/
 **右上角一直顯示「未連線」或「同步失敗」？**
 提示詞還是有存在這台電腦，恢復網路後會自己補同步。一直不好的話，到 **齒輪 → 帳號與同步** 看錯誤訊息，
 或按「立即同步」再試一次。外掛剛更新過的話，先重新整理 AI 網站的分頁。
+
+**收不到驗證信／重設密碼信？**
+先看垃圾郵件。還是沒有的話，回到登入畫面按「重新寄驗證信」（或再按一次「忘記密碼？」）。
+一直都收不到，請管理員確認 ③ 的 SMTP 設定。
+
+**點信裡的連結說「已經過期或用過了」？**
+連結只能用一次、而且有時間限制。回到登入畫面重新寄一封，點最新的那封。
 
 **登入說「登入已過期」？**
 很久沒用、或在別處改了密碼時會這樣，重新登入就好，提示詞不會不見。

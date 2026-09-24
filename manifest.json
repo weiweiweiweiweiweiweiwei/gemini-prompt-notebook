@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Gemini 常用提示詞筆記本",
-  "version": "4.3.0",
+  "version": "4.4.0",
   "description": "在 Gemini、ChatGPT、Claude 的輸入框工具列加入原生風格的「常用提示詞」按鈕，點一下就能把常用 Prompt 填進輸入框。",
   "permissions": ["storage"],
   "host_permissions": [

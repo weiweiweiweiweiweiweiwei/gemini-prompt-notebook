@@ -9,6 +9,7 @@
  * 沒有任何繞過方法。所以這裡一律是「點一下複製，再自己貼上」。
  *
  * 資料存在這個瀏覽器（localStorage）；登入帳號後，由 sync.js 和雲端自動同步。
+ * 社群登入、驗證信、重設密碼信，最後都會回到這一頁，由最下面那段接手。
  */
 (() => {
   'use strict';
@@ -37,6 +38,15 @@
   media.addEventListener('change', applyTheme);
 
   /* ========== 雲端同步 ========== */
+
+  // 管理員試用開關：網址加 ?try-cloud=1 → 這個瀏覽器先打開帳號功能（cloud-config.js 的 open 還沒打開時用）
+  const params = new URLSearchParams(location.search);
+  if (params.has('try-cloud')) {
+    try {
+      if (params.get('try-cloud') === '0') localStorage.removeItem('gpn_try_cloud');
+      else localStorage.setItem('gpn_try_cloud', '1');
+    } catch { /* 無痕模式 */ }
+  }
 
   const kv = {
     get: async (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
@@ -67,15 +77,12 @@
   window.addEventListener('focus', pull);
   window.addEventListener('online', () => { lastPull = 0; pull(); });
 
-  /* ---- 用 Google 帳號登入 ----
-     出發：換到 Google 的登入頁；登入完 Supabase 會帶著 ?code=… 回到這一頁，再由 sync.js 換成登入。
-     直接雙擊開檔案（file://）時 Google 沒辦法把人帶回來，所以那時候不顯示這顆按鈕。 */
+  /* ---- 登入完、點了信裡的連結之後，都會回到「這一頁」 ----
+     社群登入：換到那一家的登入頁，回來時網址帶著 ?code=…
+     驗證信、重設密碼信：回來時網址帶著 #access_token=…&type=signup／recovery
+     直接雙擊開檔案（file://）時沒辦法被帶回來，所以那時候不顯示社群登入按鈕。 */
   const here = location.origin + location.pathname;
-  const canGoogle = location.protocol === 'https:' || /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
-  const signInWithGoogle = async () => {
-    location.assign(await sync.googleUrl(here));
-    return { ok: true, leaving: true };
-  };
+  const canSocial = location.protocol === 'https:' || /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 
   const panel = gpnCreatePanel({
     root,
@@ -85,8 +92,17 @@
       '這個瀏覽器不能儲存資料（可能是無痕視窗，或設定擋掉了網站儲存空間）。' +
       '現在新增的提示詞，關掉分頁就會不見。請改用一般視窗開啟，或登入帳號讓它存到雲端。',
     cloud: {
-      ...sync, signInWithGoogle, canGoogle,
+      ...sync,
+      canSocial,
       onState: (cb) => { stateListeners.push(cb); },
+      signInWithProvider: async (provider) => {
+        location.assign(await sync.oauthUrl(provider, here));
+        return { ok: true, leaving: true };
+      },
+      // 信裡的連結要回到這一頁
+      signUp: (email, password) => sync.signUp(email, password, here),
+      resendConfirm: (email) => sync.resendConfirm(email, here),
+      resetPassword: (email) => sync.resetPassword(email, here),
     },
     onUse: async (item) => (await gpnShareCopy(item.content))
       ? { badge: 'Copied' }
@@ -94,21 +110,40 @@
   });
   panel.open();
 
-  // 從 Google 登入回來
-  const back = new URLSearchParams(location.search);
-  if (back.has('code') || back.has('error')) {
+  const signedIn = (r) => (r.error ? `已登入，但同步失敗：${r.error}`
+    : r.merged ? `已登入。這台原本的 ${r.merged} 則已經合併到雲端`
+    : r.pulled ? `已登入，從雲端載入了 ${r.pulled} 則提示詞`
+    : r.uploaded ? `已登入，這台的 ${r.uploaded} 則已經存到雲端`
+    : '已登入，之後會自動同步');
+
+  // 社群登入回來
+  if (params.has('code') || params.has('error')) {
     history.replaceState(null, '', here);          // 網址上的 code 用完就拿掉
-    const err = back.get('error_description') || back.get('error');
-    if (err) {
-      panel.toast('Google 登入沒有完成：' + err, true);
+    const err = params.get('error_description') || params.get('error');
+    if (params.get('error') === 'access_denied') {
+      panel.toast('登入沒有完成（按了取消，或沒有同意授權）。想登入時再按一次就好', true);
+    } else if (err) {
+      panel.toast('登入沒有完成：' + err, true);
     } else {
-      sync.finishGoogle(back.get('code')).then((r) => {
-        panel.toast(!r.ok ? r.error
-          : r.merged ? `已登入。這台原本的 ${r.merged} 則已經合併到雲端`
-          : r.pulled ? `已登入，從雲端載入了 ${r.pulled} 則提示詞`
-          : r.uploaded ? `已登入，這台的 ${r.uploaded} 則已經存到雲端`
-          : '已登入，之後會自動同步', !r.ok);
-      });
+      sync.finishOAuth(params.get('code')).then((r) => panel.toast(r.ok ? signedIn(r) : r.error, !r.ok));
     }
+  }
+
+  // 點了驗證信、重設密碼信的連結回來
+  const hash = location.hash.slice(1);
+  if (/(^|&)(access_token|error|error_code)=/.test(hash)) {
+    history.replaceState(null, '', here);          // token 不要留在網址上
+    sync.adoptFromUrl(hash).then((r) => {
+      if (!r) return;
+      if (!r.ok) { panel.toast(r.error, true); return; }
+      if (r.type === 'recovery') {
+        panel.openAccount();                       // 帳號頁會請他設新密碼
+        panel.toast('已經登入了，請設定新的密碼');
+      } else if (r.type === 'signup') {
+        panel.toast('信箱驗證完成！' + signedIn(r));
+      } else {
+        panel.toast(signedIn(r));
+      }
+    });
   }
 })();

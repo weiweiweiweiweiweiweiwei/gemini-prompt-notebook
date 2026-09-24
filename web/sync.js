@@ -28,7 +28,7 @@ const GPN_SYNC_KEY = 'gpn_sync_v1';         // 同步進度（雲端版本、上
 
 /**
  * @param {object}   o
- * @param {object}   o.config       GPN_CLOUD：{ url, key }
+ * @param {object}   o.config       GPN_CLOUD：{ url, key, providers }
  * @param {object}   o.kv           非同步的小儲存：get(key) / set(key, value) / remove(key)
  * @param {Function} o.readLocal    async () => 這台目前的資料
  * @param {Function} o.writeRemote  async (data) => 把雲端來的資料寫進這台，並讓畫面跟著更新
@@ -45,15 +45,19 @@ function gpnCreateSync(o) {
   const base = configured ? String(config.url).replace(/\/+$/, '') : '';
 
   const EMPTY_META = { userId: null, base: 0, hash: null, lastSyncAt: 0 };
-  let session = null;   // { access_token, refresh_token, expires_at(ms), user: { id, email } }
+  let session = null;   // { access_token, refresh_token, expires_at(ms), user: { id, email, provider } }
   let meta = { ...EMPTY_META };
   let state = {
-    configured, google: configured && !!config.google, signedIn: false, email: '',
+    configured,
+    providers: configured && Array.isArray(config.providers) ? config.providers : [],  // 開好的社群登入
+    signedIn: false, email: '', provider: '',
+    recovery: false,      // 從「重設密碼」信回來：畫面要請他設新密碼
     phase: 'idle',        // idle | syncing | offline | error
     pending: false,       // 這台有改過、還沒送上雲端
     lastSyncAt: 0, message: '',
   };
   let running = null;
+  let switching = null;   // 正在換帳號（登入、登出、刪帳號）
   let timer = 0;
 
   function setState(patch) {
@@ -66,7 +70,8 @@ function gpnCreateSync(o) {
     session = (await kv.get(GPN_SESSION_KEY)) || null;
     meta = { ...EMPTY_META, ...((await kv.get(GPN_SYNC_KEY)) || {}) };
     setState({
-      signedIn: !!session, email: session?.user?.email || '', lastSyncAt: meta.lastSyncAt || 0,
+      signedIn: !!session, email: session?.user?.email || '', provider: session?.user?.provider || '',
+      lastSyncAt: meta.lastSyncAt || 0,
     });
   })();
 
@@ -109,7 +114,7 @@ function gpnCreateSync(o) {
       access_token: r.access_token,
       refresh_token: r.refresh_token,
       expires_at: r.expires_at ? r.expires_at * 1000 : Date.now() + (r.expires_in || 3600) * 1000,
-      user: { id: r.user?.id, email: r.user?.email },
+      user: { id: r.user?.id, email: r.user?.email || '', provider: r.user?.app_metadata?.provider || '' },
     };
   }
 
@@ -144,6 +149,9 @@ function gpnCreateSync(o) {
     const s = `${e?.code || ''} ${e?.message || ''}`;
     if (/invalid_credentials|invalid login credentials|invalid_grant/i.test(s)) return 'Email 或密碼不對';
     if (/email_not_confirmed|not confirmed/i.test(s)) return '這個帳號還沒完成信箱驗證，請先到信箱點確認連結';
+    if (/otp_expired|link is invalid|has expired/i.test(s)) return '這個連結已經過期或用過了，請回到登入畫面重新寄一次';
+    if (/same_password|different from the old/i.test(s)) return '新密碼不能和舊密碼一樣';
+    if (/over_email_send_rate_limit|email rate limit/i.test(s)) return '寄信太頻繁了，請過幾分鐘再試';
     if (/user_already_exists|already registered/i.test(s)) return '這個 Email 已經註冊過了，請直接登入';
     if (/weak_password|at least \d+ characters|password should/i.test(s)) return '密碼太短，至少要 6 個字';
     if (/email_address_invalid|invalid format|validate email/i.test(s)) return 'Email 格式不對';
@@ -266,6 +274,7 @@ function gpnCreateSync(o) {
     if (running) return running;
     running = (async () => {
       await ready;
+      while (switching) await switching.catch(() => {});   // 正在換帳號：換好再同步
       if (!configured) return {};
       setState({ phase: 'syncing' });
       try {
@@ -293,49 +302,153 @@ function gpnCreateSync(o) {
 
   /* ========== 帳號 ========== */
 
+  /**
+   * 換帳號（登入、登出、刪帳號）。舊帳號那一輪同步可能還在跑（例如剛打開頁面就點了驗證信），
+   * 它跑完會把「舊的登入」和「舊的同步進度」寫回去，蓋掉剛換好的。
+   * 所以先等它跑完；並且拿同一把鎖，和同一個瀏覽器其他分頁的同步錯開。
+   */
+  async function switchUser(fn) {
+    while (running || switching) await (running || switching).catch(() => {});
+    switching = lock('gpn-sync', fn);
+    try { return await switching; } finally { switching = null; }
+  }
+
   async function afterSignIn(s) {
-    await saveSession(s);
-    meta = { ...EMPTY_META, ...((await kv.get(GPN_SYNC_KEY)) || {}) };
-    if (meta.userId !== s.user.id) {
-      // 換了一個帳號（或第一次登入）：從頭同步。
-      // meta.userId 是空的 = 這台的資料從來沒屬於過任何帳號 → 和雲端合併
-      meta = { ...EMPTY_META, userId: s.user.id, adopt: meta.userId ? 'replace' : 'merge' };
-      await saveMeta();
-    }
-    setState({ signedIn: true, email: s.user.email || '', message: '' });
+    await switchUser(async () => {
+      await saveSession(s);
+      meta = { ...EMPTY_META, ...((await kv.get(GPN_SYNC_KEY)) || {}) };
+      if (meta.userId !== s.user.id) {
+        // 換了一個帳號（或第一次登入）：從頭同步。
+        // meta.userId 是空的 = 這台的資料從來沒屬於過任何帳號 → 和雲端合併
+        meta = { ...EMPTY_META, userId: s.user.id, adopt: meta.userId ? 'replace' : 'merge' };
+        await saveMeta();
+      }
+    });
+    setState({ signedIn: true, email: s.user.email || '', provider: s.user.provider || '', message: '' });
     const note = await syncNow();
     return { ok: true, ...note };
   }
 
+  const notReady = { ok: false, error: '雲端同步還沒設定' };
+  const withRedirect = (path, redirectTo) =>
+    path + (redirectTo ? '?' + new URLSearchParams({ redirect_to: redirectTo }) : '');
+
   async function signIn(email, password) {
     await ready;
-    if (!configured) return { ok: false, error: '雲端同步還沒設定' };
+    if (!configured) return notReady;
     try {
       const r = await call('/auth/v1/token?grant_type=password', {
         method: 'POST', body: { email, password },
       });
       return await afterSignIn(toSession(r));
     } catch (e) {
-      return { ok: false, error: explain(e) };
+      // 還沒驗證信箱：告訴畫面，讓它出現「重新寄驗證信」
+      const unconfirmed = /email_not_confirmed|not confirmed/i.test(`${e.code} ${e.message}`);
+      return { ok: false, error: explain(e), unconfirmed };
     }
   }
 
-  async function signUp(email, password) {
+  /**
+   * 註冊。Supabase 開著「要驗證信箱」時，這裡不會直接登入，而是寄一封驗證信；
+   * 點信裡的連結會回到網頁版（redirectTo），在那裡完成登入（見 adoptFromUrl）。
+   */
+  async function signUp(email, password, redirectTo) {
     await ready;
-    if (!configured) return { ok: false, error: '雲端同步還沒設定' };
+    if (!configured) return notReady;
     try {
-      const r = await call('/auth/v1/signup', { method: 'POST', body: { email, password } });
-      // Supabase 若開了「要先確認信箱」，註冊後不會直接登入
-      if (!r?.access_token) return { ok: true, needConfirm: true };
+      const r = await call(withRedirect('/auth/v1/signup', redirectTo), {
+        method: 'POST', body: { email, password },
+      });
+      if (!r?.access_token) return { ok: true, needConfirm: true, email };
       return await afterSignIn(toSession(r));
     } catch (e) {
       return { ok: false, error: explain(e) };
     }
   }
 
-  /* ---- 用 Google 帳號登入 ----
+  /** 重寄註冊驗證信 */
+  async function resendConfirm(email, redirectTo) {
+    await ready;
+    if (!configured) return notReady;
+    try {
+      await call(withRedirect('/auth/v1/resend', redirectTo), {
+        method: 'POST', body: { type: 'signup', email },
+      });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: explain(e) };
+    }
+  }
+
+  /** 忘記密碼：寄一封「重設密碼」的信。不管這個 Email 有沒有註冊，回覆都一樣（不洩漏誰有帳號） */
+  async function resetPassword(email, redirectTo) {
+    await ready;
+    if (!configured) return notReady;
+    try {
+      await call(withRedirect('/auth/v1/recover', redirectTo), { method: 'POST', body: { email } });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: explain(e) };
+    }
+  }
+
+  /** 設新密碼（從「重設密碼」信回來之後） */
+  async function updatePassword(password) {
+    await ready;
+    if (!configured) return notReady;
+    try {
+      await call('/auth/v1/user', { method: 'PUT', auth: true, body: { password } });
+      setState({ recovery: false });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: explain(e) };
+    }
+  }
+
+  /**
+   * 驗證信、重設密碼信的連結會回到網頁版，網址後面帶著 #access_token=…&type=…
+   * 這裡把它變成登入。hash 是 location.hash 去掉開頭的 #。
+   * 回傳 null（不是我們的連結）或 { ok, type, error?, ...同步結果 }
+   */
+  async function adoptFromUrl(hash) {
+    await ready;
+    const q = new URLSearchParams(hash || '');
+    if (q.get('error') || q.get('error_code')) {
+      const e = Object.assign(new Error(q.get('error_description') || q.get('error')),
+        { code: q.get('error_code') || '' });
+      return { ok: false, type: q.get('type') || '', error: explain(e) };
+    }
+    if (!q.get('access_token') || !configured) return null;
+    const type = q.get('type') || '';
+    try {
+      const token = q.get('access_token');
+      let res;
+      try {
+        res = await fetch(base + '/auth/v1/user', {
+          headers: { apikey: config.key, Authorization: 'Bearer ' + token },
+        });
+      } catch {
+        throw Object.assign(new Error('offline'), { offline: true });
+      }
+      if (!res.ok) throw Object.assign(new Error('link'), { code: 'otp_expired' });
+      const user = await res.json();
+      const r = await afterSignIn(toSession({
+        access_token: token,
+        refresh_token: q.get('refresh_token'),
+        expires_at: Number(q.get('expires_at')) || 0,
+        expires_in: Number(q.get('expires_in')) || 3600,
+        user,
+      }));
+      if (type === 'recovery') setState({ recovery: true });
+      return { ...r, type };
+    } catch (e) {
+      return { ok: false, type, error: explain(e) };
+    }
+  }
+
+  /* ---- 社群登入（Google、LINE、Facebook…）----
      走 OAuth 的 PKCE 流程：出發前先產生一組只有這裡知道的密語（verifier），
-     Google 登入完回來只會帶一個 code；拿 code 加上密語才換得到登入。
+     登入完回來只會帶一個 code；拿 code 加上密語才換得到登入。
      就算 code 在網址上被別人看到，沒有密語也沒用。 */
 
   const GPN_PKCE_KEY = 'gpn_pkce_v1';
@@ -346,27 +459,31 @@ function gpnCreateSync(o) {
     return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
 
-  /** 產生「去 Google 登入」的網址。redirectTo＝登入完要回到哪個網址（要在 Supabase 的允許清單裡） */
-  async function googleUrl(redirectTo) {
+  /**
+   * 產生「去某家登入」的網址。
+   * provider：'google'、'facebook'、'apple'、'custom:line'（LINE 是自訂的 OIDC 登入）
+   * redirectTo：登入完要回到哪個網址（要在 Supabase 的 Redirect URLs 允許清單裡）
+   */
+  async function oauthUrl(provider, redirectTo) {
     await ready;
     const verifier = b64url(crypto.getRandomValues(new Uint8Array(48)));
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
     await kv.set(GPN_PKCE_KEY, { verifier, at: Date.now() });
     return `${base}/auth/v1/authorize?` + new URLSearchParams({
-      provider: 'google',
+      provider,
       redirect_to: redirectTo,
       code_challenge: b64url(new Uint8Array(digest)),
       code_challenge_method: 's256',
     });
   }
 
-  /** Google 登入完回來，拿網址上的 code 換成登入 */
-  async function finishGoogle(code) {
+  /** 社群登入完回來，拿網址上的 code 換成登入 */
+  async function finishOAuth(code) {
     await ready;
     const p = await kv.get(GPN_PKCE_KEY);
     await kv.remove(GPN_PKCE_KEY);          // 一次性，用過就丟
     if (!p?.verifier || Date.now() - p.at > 15 * 60_000) {
-      return { ok: false, error: '登入逾時了，請再按一次「用 Google 帳號登入」' };
+      return { ok: false, error: '登入逾時了，請回到登入畫面再按一次' };
     }
     try {
       const r = await call('/auth/v1/token?grant_type=pkce', {
@@ -389,13 +506,41 @@ function gpnCreateSync(o) {
       try { await call('/auth/v1/logout', { method: 'POST', auth: true }); } catch { /* 離線也照樣登出 */ }
     }
     clearTimeout(timer);
-    await saveSession(null);
-    if (wipe) {
-      await writeRemote(gpnDefaultData());
+    await switchUser(async () => {
+      await saveSession(null);
+      if (wipe) {
+        await writeRemote(gpnDefaultData());
+        meta = { ...EMPTY_META };
+        await saveMeta();
+      }
+    });
+    setState({
+      signedIn: false, email: '', provider: '', phase: 'idle', pending: false, recovery: false, message: '',
+    });
+    return { ok: true };
+  }
+
+  /**
+   * 刪除我的帳號：帳號和雲端上的提示詞永久刪除（見 schema.sql 的 gpn_delete_my_account）。
+   * 這台電腦上的提示詞留著，變回「沒登入」的狀態，之後想再註冊也可以。
+   */
+  async function deleteAccount() {
+    await ready;
+    if (!configured || !session) return notReady;
+    try {
+      await call('/rest/v1/rpc/gpn_delete_my_account', { method: 'POST', auth: true, body: {} });
+    } catch (e) {
+      return { ok: false, error: explain(e) };
+    }
+    clearTimeout(timer);
+    await switchUser(async () => {
+      await saveSession(null);
       meta = { ...EMPTY_META };
       await saveMeta();
-    }
-    setState({ signedIn: false, email: '', phase: 'idle', pending: false, message: '' });
+    });
+    setState({
+      signedIn: false, email: '', provider: '', phase: 'idle', pending: false, recovery: false, message: '',
+    });
     return { ok: true };
   }
 
@@ -404,5 +549,9 @@ function gpnCreateSync(o) {
     return { ...state };
   }
 
-  return { getState, signIn, signUp, signOut, syncNow, markDirty, googleUrl, finishGoogle };
+  return {
+    getState, signIn, signUp, signOut, syncNow, markDirty,
+    resendConfirm, resetPassword, updatePassword, adoptFromUrl, deleteAccount,
+    oauthUrl, finishOAuth,
+  };
 }
