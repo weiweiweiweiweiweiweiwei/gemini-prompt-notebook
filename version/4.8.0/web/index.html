@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="特務P：把你常用的 AI 指令存起來，點一下就複製。不用安裝、不用註冊。">
+<title>特務P</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><text y='19' font-size='20'>📋</text></svg>">
+<link rel="stylesheet" href="page.css">
+</head>
+<body>
+<!--
+  畫面就是外掛在 Gemini 裡點開的那個面板，整個面板由 app.js 畫出來。
+  panel.js / styles.css / share.js 和外掛是同一份（tools/checksync.py 會檢查）。
+-->
+<noscript><p class="nojs">這個網頁需要開啟 JavaScript 才能使用。</p></noscript>
+
+<script src="store.js"></script>
+<script src="share.js"></script>
+<script src="cloud-config.js"></script>
+<script src="sync.js"></script>
+<script src="panel.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

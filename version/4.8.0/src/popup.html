@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<style>
+  /* Chrome 的小視窗最大 800 x 600，面板在裡面置中。
+     面板是毛玻璃，背後放和網頁版一樣的柔和色塊，玻璃感才出得來。 */
+  html, body { margin: 0; width: 780px; height: 600px; overflow: hidden; }
+  body {
+    background:
+      radial-gradient(420px 420px at 8% 10%, rgba(255, 190, 110, .42), transparent 62%),
+      radial-gradient(460px 460px at 94% 16%, rgba(110, 160, 255, .38), transparent 62%),
+      radial-gradient(500px 500px at 70% 100%, rgba(100, 200, 170, .34), transparent 62%),
+      #eef1f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    body {
+      background:
+        radial-gradient(420px 420px at 8% 10%, rgba(240, 183, 87, .16), transparent 62%),
+        radial-gradient(460px 460px at 94% 16%, rgba(110, 168, 254, .18), transparent 62%),
+        radial-gradient(500px 500px at 70% 100%, rgba(79, 201, 194, .14), transparent 62%),
+        #131314;
+    }
+  }
+</style>
+</head>
+<body>
+  <!-- 整個面板由 popup.js 畫出來，和 AI 網站裡、網頁版的是同一份（panel.js） -->
+  <script src="store.js"></script>
+  <script src="share.js"></script>
+  <script src="cloud-config.js"></script>
+  <script src="cloud-ext.js"></script>
+  <script src="panel.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
