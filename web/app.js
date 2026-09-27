@@ -20,6 +20,11 @@
   host.className = 'gpn-modal-host gpn-standalone';
   // 樣式表載完之前先藏起來，否則會先閃一下沒有樣式的畫面
   host.style.visibility = 'hidden';
+  // 網頁版整個放大 140%：使用者原本都要自己把瀏覽器放大到 125%～140% 才看得舒服。
+  // 想調大小改這個數字就好；styles.css 會用 --gpn-zoom 把「跟視窗大小有關的上限」除回去，放大後才不會超出視窗
+  const GPN_WEB_ZOOM = 1.4;
+  host.style.zoom = String(GPN_WEB_ZOOM);
+  host.style.setProperty('--gpn-zoom', String(GPN_WEB_ZOOM));
   const root = host.attachShadow({ mode: 'open' });
 
   // 外掛是用 fetch 讀樣式表再塞進 Shadow DOM；但網頁版常常是直接雙擊 index.html

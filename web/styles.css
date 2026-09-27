@@ -109,6 +109,7 @@ button { cursor: pointer; }
   --error:             #d93025;
   --error-container:   #fce8e6;
   --hover:             rgba(0, 0, 0, .06);
+  --folder-on:         rgba(0, 0, 0, .10);   /* 選中的資料夾：比滑過再深一點的灰 */
   --scrim:             rgba(0, 0, 0, .18);
   --shadow-lg: 0 8px 12px 6px rgba(0,0,0,.09), 0 4px 4px rgba(0,0,0,.12);
   --shadow-md: 0 2px 6px 2px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.1);
@@ -167,6 +168,7 @@ button { cursor: pointer; }
   --error:             #f2b8b5;
   --error-container:   #5c1d1a;
   --hover:             rgba(255, 255, 255, .09);
+  --folder-on:         rgba(255, 255, 255, .14);
   --scrim:             rgba(0, 0, 0, .3);
   --shadow-lg: 0 8px 12px 6px rgba(0,0,0,.3), 0 4px 4px rgba(0,0,0,.4);
   --shadow-md: 0 2px 6px 2px rgba(0,0,0,.28), 0 1px 2px rgba(0,0,0,.34);
@@ -249,8 +251,10 @@ button { cursor: pointer; }
   height: 680px;
   /* 讓裡面可以依「面板本身」的寬度切換排版（見最下面的 @container） */
   container: gpn-book / inline-size;
-  max-width: calc(100vw - 48px);
-  max-height: calc(100vh - 48px);
+  /* --gpn-zoom：網頁版整個面板放大（見 web/app.js）。Chrome 的 zoom 會連 vw／vh 一起放大，
+     不除回去的話，放大後的筆記本會超出視窗 */
+  max-width: calc((100vw - 48px) / var(--gpn-zoom, 1));
+  max-height: calc((100vh - 48px) / var(--gpn-zoom, 1));
   display: flex;
   flex-direction: column;
   animation: gpn-rise .22s cubic-bezier(.2, 0, 0, 1);
@@ -369,13 +373,11 @@ button { cursor: pointer; }
 /* 「我的最愛」「最近使用」固定靠最右邊，和自己的書籤之間空出來 */
 .gpn-tab--push { margin-left: auto; }
 .gpn-tab[data-color="fav"] .gpn-tab-icon { color: var(--c-fav-accent); }
-/* 固定書籤左右留白小一點，「★ 我的最愛」才能多撐幾個書籤不縮成只剩圖示 */
-.gpn-tab.is-fixed .gpn-tab-main { padding-left: 8px; padding-right: 8px; }
-/* 擠不下文字時只留圖示（見 panel.js 的 fitFixedTabs） */
-.gpn-tab.is-compact .gpn-tab-main { padding-left: 4px; padding-right: 4px; }
-.gpn-tab.is-compact .gpn-tab-label { display: none; }
-.gpn-tab.is-compact .gpn-tab-icon { margin-right: 0; }
-.gpn-tab.is-compact .gpn-tab-icon svg { width: 20px; height: 20px; }
+/* 「我的最愛」「最近使用」只有圖示，固定窄寬（要和 panel.js 的 GPN_TAB_FIXED_W 一致） */
+.gpn-tab.is-fixed { width: 58px; min-width: 0; }
+.gpn-tab.is-fixed .gpn-tab-main { padding-left: 0; padding-right: 0; }
+.gpn-tab.is-fixed .gpn-tab-icon { margin-right: 0; }
+.gpn-tab.is-fixed .gpn-tab-icon svg { width: 21px; height: 21px; }
 
 /* 新增書籤 */
 .gpn-tab-add {
@@ -424,30 +426,6 @@ button { cursor: pointer; }
   /* 換書籤時紙張顏色跟著書籤一起淡入淡出（配合放慢後的書籤動畫） */
   transition: background-color .5s ease, border-color .5s ease;
 }
-.gpn-paper-head {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 12px 9px 20px;
-  font-size: 13.5px;
-  color: var(--text-mute);
-  border-bottom: 1px solid var(--glass-line);
-}
-.gpn-hint-text { flex: 1; min-width: 0; opacity: .9; }
-
-/* 左邊這格和下方資料夾欄等寬，當作那一欄的標題 */
-.gpn-head-folders {
-  flex: none;
-  width: calc(var(--folders-w) - 20px);
-  margin-right: 6px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
-}
-.gpn-head-folders svg { width: 16px; height: 16px; display: block; fill: currentColor; opacity: .8; }
-
 /* 網頁版在不能存檔的瀏覽器裡打開時的警告 */
 .gpn-notice {
   flex: none;
@@ -467,8 +445,7 @@ button { cursor: pointer; }
   display: flex;
 }
 
-/* 沒開資料夾的書籤：資料夾欄和它的標題整個不顯示 */
-.gpn-book:not(.has-folders) .gpn-head-folders,
+/* 沒開資料夾的書籤：資料夾欄整個不顯示 */
 .gpn-book:not(.has-folders) .gpn-folders { display: none; }
 
 /* ---------- 第二層：資料夾欄 ---------- */
@@ -503,11 +480,8 @@ button { cursor: pointer; }
   transition: background-color .16s ease;
 }
 .gpn-folder:hover { background: var(--hover); }
-/* 選中的資料夾：左側一條書籤識別色 + 極淡暈染，和書籤的表現方式一致 */
-.gpn-folder.is-active {
-  background: color-mix(in srgb, var(--accent) 16%, var(--glass-card));
-  box-shadow: inset 3px 0 0 var(--accent), inset 0 1px 0 var(--glass-hi);
-}
+/* 選中的資料夾：簡單的灰底就好。資料夾只是分類，不需要搶眼的顏色（書籤本身已經有顏色了） */
+.gpn-folder.is-active { background: var(--folder-on); }
 .gpn-folder-main {
   flex: 1;
   min-width: 0;
@@ -576,7 +550,7 @@ button { cursor: pointer; }
   color: var(--text-mute);
   transition: background-color .14s ease, color .14s ease;
 }
-.gpn-folder-edit:hover { background: var(--hover); color: var(--primary); }
+.gpn-folder-edit:hover { background: var(--hover); color: var(--text); }
 .gpn-folder-edit:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
 .gpn-folder-edit svg { width: 17px; height: 17px; display: block; fill: currentColor; }
 
@@ -595,47 +569,31 @@ button { cursor: pointer; }
 .gpn-folder-add:hover { background: var(--hover); border-color: var(--primary); color: var(--primary); }
 .gpn-folder-add:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 
-/* 雲端同步狀態：沒登入時是「登入同步」邀請，登入後顯示同步到哪。點了打開帳號頁。 */
-.gpn-cloud-btn {
+/* 底部「新增提示詞」右邊的小圖示：雲端同步狀態、設定。和「新增提示詞」一樣高的圓鈕 */
+.gpn-tools { flex: none; display: flex; gap: 8px; margin-left: auto; }
+.gpn-tool {
   flex: none;
+  width: 50px;
+  height: 50px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px 0 9px;
-  border-radius: 16px;
-  font-size: 13.5px;
-  font-weight: 600;
-  white-space: nowrap;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--outline);
   color: var(--text-mute);
-  transition: background-color .14s ease, color .14s ease;
+  transition: background-color .14s ease, color .14s ease, border-color .14s ease;
 }
-.gpn-cloud-btn:hover { background: var(--hover); color: var(--text); }
-.gpn-cloud-btn:focus-visible { outline: 2px solid var(--primary); }
-.gpn-cloud-btn[data-kind="invite"] { color: var(--primary); border: 1px solid color-mix(in srgb, var(--primary) 45%, transparent); }
-.gpn-cloud-btn[data-kind="ok"] { color: var(--c-green-accent); }
+.gpn-tool:hover { background: var(--hover); color: var(--text); border-color: var(--outline-strong); }
+.gpn-tool:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.gpn-tool > svg { width: 22px; height: 22px; display: block; fill: currentColor; }
+/* 雲端狀態平常都是灰色，只有出問題才上色（沒連上：黃；同步失敗：紅） */
 .gpn-cloud-btn[data-kind="warn"] { color: var(--c-amber-accent); }
-.gpn-cloud-btn[data-kind="bad"] { color: var(--error); }
+.gpn-cloud-btn[data-kind="bad"] { color: var(--error); border-color: var(--error); }
+.gpn-cloud-btn .gpn-cloud-icon svg { width: 22px; height: 22px; }
 .gpn-cloud-icon { display: inline-flex; }
 .gpn-cloud-icon svg { width: 18px; height: 18px; display: block; fill: currentColor; }
 [data-kind="busy"] .gpn-cloud-icon svg { animation: gpn-spin 1.1s linear infinite; }
 @keyframes gpn-spin { to { transform: rotate(-360deg) } }
-
-/* 書籤的編輯鈕改放這裡：不佔書籤空間，書籤上的字才能置中 */
-.gpn-tab-edit {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px; height: 30px;
-  border-radius: 50%;
-  color: var(--text-mute);
-  opacity: .75;
-  transition: opacity .14s ease, background-color .14s ease;
-}
-.gpn-tab-edit:hover { opacity: 1; background: var(--hover); }
-.gpn-tab-edit:focus-visible { outline: 2px solid var(--primary); opacity: 1; }
-.gpn-tab-edit svg { width: 16px; height: 16px; display: block; fill: currentColor; }
 
 /* ---------- 卡片列表：只有這裡捲動 ---------- */
 .gpn-list {
@@ -868,8 +826,8 @@ button { cursor: pointer; }
 .gpn-edit-layer.is-open { display: flex; animation: gpn-fade .16s ease; }
 .gpn-dialog {
   width: 560px;
-  max-width: calc(100vw - 48px);
-  max-height: calc(100vh - 48px);
+  max-width: calc((100vw - 48px) / var(--gpn-zoom, 1));
+  max-height: calc((100vh - 48px) / var(--gpn-zoom, 1));
   display: flex;
   flex-direction: column;
   background: var(--glass);
@@ -1343,47 +1301,31 @@ button { cursor: pointer; }
 
 .gpn-all-link {
   position: absolute;
-  right: calc(100% + 20px);
-  bottom: 12px;
-  width: 76px;
-  padding: 12px 4px 10px;
+  right: calc(100% + 14px);
+  bottom: 17px;                    /* 和「新增提示詞」的上下緣對齊（紙張邊框 1px＋.gpn-foot 下方留白 16px；按鈕高 50px） */
+  width: 50px;
+  height: 50px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 6px;
-  border-radius: 20px;
+  justify-content: center;
+  border-radius: 50%;
   background: var(--glass);
   backdrop-filter: var(--glass-filter);
   -webkit-backdrop-filter: var(--glass-filter);
   border: 1px solid var(--glass-line);
   box-shadow: var(--shadow-md), inset 0 1px 0 var(--glass-hi);
-  color: var(--text);
-  font-size: 13.5px;
-  font-weight: 600;
-  line-height: 1.3;
-  text-align: center;
-  text-decoration: none;
-  transition: transform .16s cubic-bezier(.2, 0, 0, 1), border-color .16s ease, color .16s ease;
+  color: var(--text-mute);
+  transition: color .14s ease, border-color .14s ease;
 }
-.gpn-all-link:hover { transform: translateY(-2px); border-color: var(--primary); color: var(--primary); }
+.gpn-all-link:hover { color: var(--text); border-color: var(--outline-strong); }
 .gpn-all-link:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
-.gpn-all-link-icon svg { width: 26px; height: 26px; display: block; fill: currentColor; }
-.gpn-all-link-text > span { display: block; }   /* 「全部／提示詞」兩行，不要斷在奇怪的地方 */
+.gpn-all-link > svg { width: 22px; height: 22px; display: block; fill: currentColor; }
 
-@media (max-width: 940px) {
-  .gpn-all-link {
-    position: static;
-    flex: none;
-    width: auto;
-    flex-direction: row;
-    justify-content: center;
-    gap: 8px;
-    margin-top: 10px;
-    padding: 10px;
-    font-size: 15px;
-  }
-  .gpn-all-link-icon svg { width: 20px; height: 20px; }
-  .gpn-all-link-text > span { display: inline; }
+/* 畫面太窄、筆記本左邊放不下時，改成筆記本下面的一條。
+   用 container 量「遮罩」的寬度，而不是 @media 量視窗：網頁版放大 140% 時，這樣算出來才對 */
+.gpn-overlay { container: gpn-overlay / inline-size; }
+@container gpn-overlay (max-width: 900px) {
+  .gpn-all-link { position: static; flex: none; width: auto; height: 42px; margin-top: 10px; border-radius: 21px; }
 }
 
 /* ============================================================================
@@ -1397,7 +1339,7 @@ button { cursor: pointer; }
   z-index: 3;
   display: flex;
   align-items: center;
-  max-width: 88vw;
+  max-width: calc(88vw / var(--gpn-zoom, 1));
   padding: 14px 24px;
   border-radius: 26px;
   background: var(--text);
@@ -1418,9 +1360,9 @@ button { cursor: pointer; }
    ========================================================================== */
 :host(.gpn-popup-host) .gpn-overlay { padding: 12px; }
 :host(.gpn-popup-host) .gpn-book {
-  max-width: calc(100vw - 24px);
-  max-height: calc(100vh - 24px);
-  height: calc(100vh - 24px);
+  max-width: calc((100vw - 24px) / var(--gpn-zoom, 1));
+  max-height: calc((100vh - 24px) / var(--gpn-zoom, 1));
+  height: calc((100vh - 24px) / var(--gpn-zoom, 1));
 }
 
 /* ============================================================================
@@ -1459,13 +1401,9 @@ button { cursor: pointer; }
 }
 
 /* ---------- 小螢幕 / 側邊欄 ---------- */
-@media (max-height: 728px) { .gpn-book { height: calc(100vh - 48px); } }
 
 /* 面板被擠窄（手機、很窄的視窗）時，資料夾從左邊直排改成上面一排可左右捲 */
 @container gpn-book (max-width: 600px) {
-  .gpn-head-folders { display: none; }
-  .gpn-cloud-text { display: none; }
-  .gpn-cloud-btn { padding: 0 8px; }
   .gpn-body { flex-direction: column; }
   .gpn-folders { width: auto; border-right: 0; border-bottom: 1px solid var(--glass-line); }
   .gpn-folder-list {

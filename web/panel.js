@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.7.0';
+const GPN_APP_VERSION = '4.8.0';
 
 /**
  * @param {object}   opts
@@ -206,26 +206,22 @@ function gpnCreatePanel(opts) {
     ui.list = el('div', { class: 'gpn-list', role: 'list' });
     ui.tabs = el('div', { class: 'gpn-tabs', role: 'tablist' });
     ui.tabEls = new Map();        // id → 書籤元素（切換時要重複使用才有動畫）
-    // 面板打開、視窗縮放時，重新判斷固定書籤要不要只留圖示
-    if (typeof ResizeObserver === 'function') new ResizeObserver(() => fitFixedTabs()).observe(ui.tabs);
-    ui.hintText = el('span', { class: 'gpn-hint-text' });
+
+    /* ---- 底部右邊的小圖示：雲端同步狀態、設定 ----
+       以前紙張最上面有一條「資料夾｜幾則｜點標題複製…」的說明列，資訊不重要又佔空間，拿掉了；
+       真正要用的只有設定（齒輪），和雲端狀態一起搬到底部「新增提示詞」的右邊。 */
     ui.gear = el('button', {
-      class: 'gpn-tab-edit', type: 'button', title: '設定（名稱、顏色、資料夾、雲端同步、備份）',
-      html: ICON_GEAR,
+      class: 'gpn-tool', type: 'button', title: '設定（名稱、顏色、資料夾、雲端同步、備份）',
+      'aria-label': '設定', html: ICON_GEAR,
       onclick: () => openSettings(data.activeId),
     });
-    // 雲端狀態：沒連結時顯示「雲端同步」邀請；連結後顯示同步到哪。點了打開雲端同步頁。
+    // 雲端狀態：平常是不起眼的灰色雲朵，只有「沒連上」「同步失敗」才會變色。點了打開雲端同步頁。
     ui.cloudIcon = el('span', { class: 'gpn-cloud-icon' });
-    ui.cloudText = el('span', { class: 'gpn-cloud-text' });
     ui.cloudBtn = el('button', {
-      class: 'gpn-cloud-btn', type: 'button',
+      class: 'gpn-tool gpn-cloud-btn', type: 'button',
       onclick: () => openSettings(data.activeId, 'account'),
-    }, ui.cloudIcon, ui.cloudText);
+    }, ui.cloudIcon);
     ui.cloudBtn.hidden = true;
-    ui.hint = el('div', { class: 'gpn-paper-head' },
-      // 左邊這格剛好對齊下方的資料夾欄，當作那一欄的標題（沒開資料夾時隱藏）
-      el('span', { class: 'gpn-head-folders', html: ICON_FOLDER + '<span>資料夾</span>' }),
-      ui.hintText, ui.cloudBtn, ui.gear);
 
     /* ---- 資料夾欄（寬的時候在左邊直排，窄的時候變成上面一排） ---- */
     ui.folderList = el('div', {
@@ -241,12 +237,11 @@ function gpnCreatePanel(opts) {
     ui.book = el('div', { class: 'gpn-book' },
       ui.tabs,
       el('div', { class: 'gpn-paper' },
-        ui.hint,
         notice ? el('div', { class: 'gpn-notice', role: 'alert', text: notice }) : null,
         el('div', { class: 'gpn-body' },
           el('nav', { class: 'gpn-folders' }, ui.folderList),
           ui.list),
-        ui.foot = el('div', { class: 'gpn-foot' },
+        el('div', { class: 'gpn-foot' },
           ui.addBtn = el('button', {
             class: 'gpn-add', type: 'button',
             onclick: () => openEditor(data.activeId, activeFolder()?.id ?? null, null),
@@ -255,17 +250,20 @@ function gpnCreatePanel(opts) {
           ui.clearRecentBtn = el('button', {
             class: 'gpn-add gpn-add--quiet', type: 'button', hidden: '',
             onclick: onClearRecent,
-          }, '清除全部使用記錄')
+          }, '清除全部使用記錄'),
+          el('div', { class: 'gpn-tools' }, ui.cloudBtn, ui.gear)
         )
       )
     );
 
-    // 筆記本左下角外面：「全部提示詞」。是一般連結，按了整頁換到純文字的清單頁（網頁版的 all.html）
+    // 筆記本左下角外面、和「新增提示詞」同高的小圖示：「全部提示詞」。
+    // 是一般連結，按了整頁換到純文字的清單頁（網頁版的 all.html）
     if (allPageUrl) {
       ui.book.append(el('a', {
-        class: 'gpn-all-link', href: allPageUrl,
-        title: '換到「全部提示詞」頁：所有書籤的提示詞，完整內容用純文字列在同一頁（方便「問問 Gemini」讀）',
-      }, el('span', { class: 'gpn-all-link-icon', html: ICON_LIST }), el('span', { class: 'gpn-all-link-text' }, el('span', { text: '全部' }), el('span', { text: '提示詞' }))));
+        class: 'gpn-all-link', href: allPageUrl, 'aria-label': '全部提示詞',
+        title: '全部提示詞：所有書籤的提示詞，完整內容用純文字列在同一頁（方便「問問 Gemini」讀）',
+        html: ICON_LIST,
+      }));
     }
 
     ui.overlay = el('div', {
@@ -298,21 +296,26 @@ function gpnCreatePanel(opts) {
   }
 
   /* ---- 書籤寬度規則 ----
-     書籤數量越少就讓它們佔越寬，不要在右邊留一大片空白。
-     注意：所有書籤「等寬」，作用中與否不影響寬度——
-     改用高度來表現選取狀態，按起來才不會一直位移。 */
-  const GPN_TAB_SHARE = { 1: 0.40, 2: 0.60, 3: 0.75, 4: 0.86, 5: 0.90, 6: 0.93, 7: 0.95, 8: 0.96, 9: 0.97 };
+     自己的書籤數量越少就讓它們佔越寬，不要在中間留一大片空白。
+     注意：自己的書籤「等寬」，作用中與否不影響寬度——
+     改用高度來表現選取狀態，按起來才不會一直位移。
+     最右邊的「我的最愛」「最近使用」只有圖示，寬度固定（見 styles.css 的 .gpn-tab.is-fixed）。 */
+  const GPN_TAB_SHARE = { 1: 0.40, 2: 0.60, 3: 0.75, 4: 0.86, 5: 0.90, 6: 0.93, 7: 0.95, 8: 0.96 };
   const GPN_TAB_GAP = 4;          // .gpn-tabs 的 gap
   const GPN_TAB_ADD_W = 44;       // 「＋」按鈕的寬度＋左邊距
+  const GPN_TAB_FIXED_W = 58;     // 一個固定書籤的寬度（要和 styles.css 的 .gpn-tab.is-fixed 一致）
 
   function layoutTabs() {
-    const n = ui.tabEls.size;              // 含最右邊的「我的最愛」「最近使用」
+    const n = data.tabs.length;
     if (!n) return;
-    // 先扣掉書籤之間的空隙和「＋」按鈕，書籤再照比例分剩下的寬度，才不會擠出紙張外
-    const reserve = GPN_TAB_GAP * (n - (ui.addTabBtn ? 0 : 1)) + (ui.addTabBtn ? GPN_TAB_ADD_W : 0);
-    const share = (GPN_TAB_SHARE[n] ?? 0.97) / n;
-    for (const [, node] of ui.tabEls) node.style.width = `calc((100% - ${reserve}px) * ${share.toFixed(4)})`;
-    fitFixedTabs();
+    // 先扣掉空隙、「＋」按鈕和兩個固定書籤，自己的書籤再照比例分剩下的寬度，才不會擠出紙張外
+    const items = n + 2 + (ui.addTabBtn ? 1 : 0);
+    const reserve = GPN_TAB_GAP * (items - 1) + (ui.addTabBtn ? GPN_TAB_ADD_W : 0) + GPN_TAB_FIXED_W * 2;
+    const share = (GPN_TAB_SHARE[n] ?? 0.96) / n;
+    for (const t of data.tabs) {
+      const node = ui.tabEls.get(t.id);
+      if (node) node.style.width = `calc((100% - ${reserve}px) * ${share.toFixed(4)})`;
+    }
   }
 
   /**
@@ -415,6 +418,7 @@ function gpnCreatePanel(opts) {
     layoutTabs();
   }
 
+  /** 固定書籤（我的最愛、最近使用）：只有圖示，名稱放在滑鼠提示和讀螢幕軟體用的 aria-label */
   function fixedTabNode(id, color, label, icon, title, extraClass = '') {
     const on = activeTab().id === id;
     const node = el('div', {
@@ -425,23 +429,9 @@ function gpnCreatePanel(opts) {
       class: 'gpn-tab-main', type: 'button', role: 'tab', 'aria-selected': String(on),
       'aria-label': label, title,
       onclick: () => { if (data.activeId !== id) switchTab(id); },
-    }, el('span', { class: 'gpn-tab-icon', html: icon }), el('span', { class: 'gpn-tab-label', text: label })));
+    }, el('span', { class: 'gpn-tab-icon', html: icon })));
     ui.tabEls.set(id, node);
     return node;
-  }
-
-  /**
-   * 書籤很多（或面板很窄）時，固定書籤擠不下「圖示＋文字」：只留圖示，不要變成「★ …」。
-   * 滑鼠移上去還是看得到名稱（title）。
-   */
-  function fitFixedTabs() {
-    for (const id of [GPN_FAV_ID, GPN_RECENT_ID]) {
-      const node = ui.tabEls.get(id);
-      if (!node) continue;
-      node.classList.remove('is-compact');
-      const main = node.firstElementChild;
-      node.classList.toggle('is-compact', main.scrollWidth > main.clientWidth + 1);
-    }
   }
 
   /* ==========================================================================
@@ -519,9 +509,9 @@ function gpnCreatePanel(opts) {
     const tab = activeTab();
     if (!tab) return;
     // 底部按鈕：一般書籤是「新增提示詞」，「最近使用」換成「清除全部使用記錄」，「我的最愛」都沒有
+    // （右邊的雲端、設定圖示一直都在）
     ui.addBtn.hidden = !!tab.fixed;
     ui.clearRecentBtn.hidden = !tab.recent;
-    ui.foot.hidden = !!tab.fav;
     disarmClearRecent();
     if (tab.recent) { renderRecent(); return; }
     if (tab.fav) { renderFavs(); return; }
@@ -530,10 +520,6 @@ function gpnCreatePanel(opts) {
     const list = folder || tab;
 
     const n = list.items.length;
-    ui.hintText.textContent = n
-      ? `${n} 則　•　` + (standalone ? '點標題複製，再貼到 AI' : '點標題填入輸入框並複製') +
-        '　•　拖曳左側可排序'
-      : folder ? '這個資料夾還沒有提示詞' : '這個書籤還沒有提示詞';
     ui.gear.setAttribute('aria-label', `「${tab.label}」的設定`);
 
     ui.list.replaceChildren();
@@ -618,10 +604,6 @@ function gpnCreatePanel(opts) {
     const where = indexItems();
     const favs = (data.favs || []).map((id) => where.get(id)).filter(Boolean);
     const n = favs.length;
-    ui.hintText.textContent = n
-      ? `${n} 則　•　` + (standalone ? '點標題複製，再貼到 AI' : '點標題填入輸入框並複製') +
-        '　•　拖曳左側可排序'
-      : '還沒有我的最愛';
     ui.gear.setAttribute('aria-label', '設定');
 
     ui.list.replaceChildren();
@@ -682,9 +664,6 @@ function gpnCreatePanel(opts) {
   function renderRecent() {
     const recent = data.recent || [];
     const n = recent.length;
-    ui.hintText.textContent = n
-      ? `最近用過的 ${n} 則（最多 ${GPN_RECENT_MAX} 則）　•　最新的在最上面`
-      : '還沒有使用記錄';
     ui.gear.setAttribute('aria-label', '設定');
 
     ui.list.replaceChildren();
@@ -1868,7 +1847,7 @@ function gpnCreatePanel(opts) {
     ui.cloudBtn.hidden = !cloud || !st.configured;
     ui.cloudBtn.setAttribute('data-kind', d.kind);
     ui.cloudIcon.innerHTML = d.icon;
-    ui.cloudText.textContent = d.short;
+    ui.cloudBtn.setAttribute('aria-label', st.signedIn ? `雲端同步：${d.short}` : '雲端同步（還沒連結）');
     ui.cloudBtn.title = st.signedIn
       ? `${st.email || 'Google 雲端硬碟'}　${d.long || d.short}（點一下看雲端同步）`
       : '連結 Google 雲端硬碟，每台電腦的提示詞就會自動同步';
