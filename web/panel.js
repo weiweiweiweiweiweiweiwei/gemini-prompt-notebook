@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.11.0';
+const GPN_APP_VERSION = '4.12.0';
 
 /**
  * @param {object}   opts
@@ -2135,42 +2135,116 @@ function gpnCreatePanel(opts) {
   }
 
   /* ---- 背景（只有網頁版、工具列小視窗）----
-     換成自己的桌布：筆記本是霧面玻璃，背後的圖會模糊地透出來。
-     圖片先縮小（最長邊 1920px、存成 JPG）再存在這台電腦（prefs），不會同步、也不放進備份。 */
+     筆記本是霧面玻璃，背後的圖會模糊地透出來。可以選：
+       預設光暈（網頁本身的 page.css）、內建的幾張（backgrounds.js 用 canvas 畫的）、自己上傳的桌布。
+     記在這台電腦（prefs），不會同步、也不放進備份：
+       gpn_bg         選了哪一張（'default'、內建的 id、'custom'）
+       gpn_wallpaper  上傳的圖（先縮成最長邊 1920px 的 JPG） */
+  const GPN_BG_KEY = 'gpn_bg';
   const GPN_WALLPAPER_KEY = 'gpn_wallpaper';
-  let wallpaperUrl = '';     // 目前套用中的 blob: 網址
+  const bgPresets = typeof GPN_BACKGROUNDS !== 'undefined' ? GPN_BACKGROUNDS : [];
+  let bgChoice = 'default';
+  let bgUrl = '';            // 目前套用中的圖（blob: 網址）
+  let hasCustomBg = false;
 
   function buildLookSection() {
-    ui.lPreviewText = el('span');
-    ui.lPreview = el('div', { class: 'gpn-wall-preview is-default' }, ui.lPreviewText);
     ui.lFile = el('input', { type: 'file', accept: 'image/*', class: 'gpn-file', onchange: onPickWallpaper });
-    ui.lReset = el('button', { class: 'gpn-btn2', type: 'button', hidden: '', onclick: onResetWallpaper }, '恢復預設');
+    ui.lGrid = el('div', { class: 'gpn-bg-grid', role: 'radiogroup', 'aria-label': '背景' });
     return el('section', { class: 'gpn-section', 'data-section': 'look' },
       el('h3', { text: '背景' }),
-      ui.lPreview,
-      el('div', { class: 'gpn-brow' },
-        el('button', { class: 'gpn-btn2 gpn-pick', type: 'button', onclick: () => ui.lFile.click() },
-          el('span', { class: 'gpn-btn2-icon', html: ICON_IMAGE }), '上傳圖片…'),
-        ui.lReset),
+      ui.lGrid,
       ui.lFile,
-      el('div', { class: 'gpn-note', text: '圖片只存在這台電腦，不會同步' }));
+      el('div', { class: 'gpn-note', text: '上傳的圖片只存在這台電腦，不會同步' }));
   }
 
-  async function applyWallpaper(dataUrl) {
-    if (wallpaperUrl.startsWith('blob:')) URL.revokeObjectURL(wallpaperUrl);
-    wallpaperUrl = '';
-    if (dataUrl) {
-      // 換成 blob: 短網址再交給 CSS，比直接塞一整串 base64 輕
-      try { wallpaperUrl = URL.createObjectURL(await (await fetch(dataUrl)).blob()); } catch { wallpaperUrl = dataUrl; }
+  /** 背景的縮圖格子：預設光暈、內建的幾張、自己上傳的（有的話），最後一格是「上傳圖片」 */
+  function renderBgTiles() {
+    if (!ui.lGrid) return;
+    const tile = (id, label, thumb) => el('button', {
+      class: 'gpn-bg-tile', type: 'button', role: 'radio', 'data-bg': id,
+      onclick: () => chooseBackground(id),
+    }, thumb, el('span', { class: 'gpn-bg-name', text: label }));
+
+    const tiles = [tile('default', '預設光暈', el('span', { class: 'gpn-bg-thumb gpn-bg-thumb--default' }))];
+    for (const b of bgPresets) {
+      const c = el('canvas', { width: '240', height: '150' });   // 縮圖用同一個函式畫，長相和大圖一樣
+      gpnPaintBackground(c, b.id);
+      tiles.push(tile(b.id, b.label, el('span', { class: 'gpn-bg-thumb' }, c)));
     }
-    const bg = wallpaperUrl ? `url("${wallpaperUrl}")` : '';
-    ui.overlay.style.backgroundImage = bg;
-    ui.overlay.classList.toggle('has-wallpaper', !!wallpaperUrl);
-    if (!ui.lPreview) return;
-    ui.lPreview.style.backgroundImage = bg;
-    ui.lPreview.classList.toggle('is-default', !wallpaperUrl);
-    ui.lPreviewText.textContent = wallpaperUrl ? '' : '預設：彩色光暈';
-    ui.lReset.hidden = !wallpaperUrl;
+    if (hasCustomBg) {
+      const thumb = el('span', { class: 'gpn-bg-thumb' });
+      prefs.get(GPN_WALLPAPER_KEY).then((u) => { if (u) thumb.style.backgroundImage = `url("${u}")`; });
+      tiles.push(tile('custom', '我的圖片', thumb));
+    }
+    tiles.push(el('button', {
+      class: 'gpn-bg-tile', type: 'button', title: '用自己的圖片當背景', onclick: () => ui.lFile.click(),
+    }, el('span', { class: 'gpn-bg-thumb gpn-bg-thumb--add', html: ICON_IMAGE }),
+      el('span', { class: 'gpn-bg-name', text: '上傳圖片…' })));
+    ui.lGrid.replaceChildren(...tiles);
+    markBgTiles();
+  }
+
+  function markBgTiles() {
+    for (const t of ui.lGrid?.querySelectorAll('[data-bg]') || []) {
+      t.setAttribute('aria-checked', String(t.getAttribute('data-bg') === bgChoice));
+    }
+  }
+
+  /** 整張圖偏暗、中間、偏亮（量一張 16 × 10 的縮圖的平均亮度） */
+  async function imageTone(blob) {
+    const img = await createImageBitmap(blob);
+    const c = document.createElement('canvas');
+    c.width = 16;
+    c.height = 10;
+    const x = c.getContext('2d');
+    x.drawImage(img, 0, 0, 16, 10);
+    img.close?.();
+    const d = x.getImageData(0, 0, 16, 10).data;
+    let sum = 0;
+    for (let i = 0; i < d.length; i += 4) sum += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+    const avg = sum / (d.length / 4) / 255;
+    return avg < 0.4 ? 'dark' : avg > 0.7 ? 'light' : 'mid';
+  }
+
+  /**
+   * 把背景鋪到整個畫面（遮罩層）。內建的背景當場畫一張 1920 × 1200 的圖。
+   * 同時標上圖的明暗（data-tone）：淺色主題配上偏暗的圖，styles.css 會把玻璃調得實一點。
+   */
+  async function applyBackground(id) {
+    let url = '', tone = '';
+    try {
+      if (id === 'custom') {
+        const d = await prefs.get(GPN_WALLPAPER_KEY);
+        if (d) {
+          // 換成 blob: 短網址再交給 CSS，比直接塞一整串 base64 輕
+          const blob = await (await fetch(d)).blob();
+          tone = await imageTone(blob).catch(() => 'mid');
+          url = URL.createObjectURL(blob);
+        }
+      } else if (bgPresets.some((b) => b.id === id)) {
+        tone = bgPresets.find((b) => b.id === id).tone || 'mid';
+        const c = document.createElement('canvas');
+        c.width = 1920;
+        c.height = 1200;
+        gpnPaintBackground(c, id);
+        const blob = await new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej()), 'image/jpeg', 0.92));
+        url = URL.createObjectURL(blob);
+      }
+    } catch {
+      url = '';
+    }
+    if (bgUrl) URL.revokeObjectURL(bgUrl);
+    bgUrl = url;
+    bgChoice = url ? id : 'default';
+    ui.overlay.style.backgroundImage = url ? `url("${url}")` : '';
+    ui.overlay.classList.toggle('has-wallpaper', !!url);
+    ui.overlay.setAttribute('data-tone', url ? tone : '');
+    markBgTiles();
+  }
+
+  async function chooseBackground(id) {
+    await applyBackground(id);
+    await prefs.set(GPN_BG_KEY, bgChoice);
   }
 
   /** 縮小成最長邊 1920px 的 JPG（data: 網址）；手機拍的原圖動輒好幾 MB，原樣存會塞爆儲存空間 */
@@ -2200,14 +2274,10 @@ function gpnCreatePanel(opts) {
       toast('這台電腦的儲存空間不夠，存不下這張圖', true);
       return;
     }
-    await applyWallpaper(url);
+    hasCustomBg = true;
+    await chooseBackground('custom');
+    renderBgTiles();
     toast('已換成新的背景');
-  }
-
-  async function onResetWallpaper() {
-    await prefs.remove(GPN_WALLPAPER_KEY);
-    await applyWallpaper('');
-    toast('已恢復預設背景');
   }
 
   /* ==========================================================================
@@ -2263,7 +2333,13 @@ function gpnCreatePanel(opts) {
   build();
   document.addEventListener('keydown', onKeydown, true);
   prefs.get(GPN_BOOK_W_KEY).then((w) => { if (w > 0) setBookWidth(w); });
-  if (standalone) prefs.get(GPN_WALLPAPER_KEY).then((u) => applyWallpaper(u || ''));
+  if (standalone) {
+    Promise.all([prefs.get(GPN_BG_KEY), prefs.get(GPN_WALLPAPER_KEY)]).then(([id, custom]) => {
+      hasCustomBg = !!custom;
+      renderBgTiles();
+      applyBackground(id || (custom ? 'custom' : 'default'));   // 4.11.0 只有上傳，沒有 gpn_bg
+    });
+  }
 
   // 其他分頁或雲端改了資料時同步過來；正在編輯就先別動畫面，免得打到一半的字不見
   GpnStore.onExternalChange((fresh) => {

@@ -1332,68 +1332,36 @@ button { cursor: pointer; }
 .gpn-account-avatar--google { background: #ffffff; box-shadow: var(--shadow-md); }
 
 /* ---- 設定 → 背景 ---- */
-/* 選的背景（內建或自己上傳的）：鋪滿整個畫面（網頁版、工具列小視窗），筆記本的霧面玻璃會把它模糊地透出來 */
+/* 自己的桌布：鋪滿整個畫面（網頁版、工具列小視窗），筆記本的霧面玻璃會把它模糊地透出來 */
 :host(.gpn-standalone) .gpn-overlay.has-wallpaper {
   background-color: #131314;
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
 }
-/* 淺色主題：有背景圖時玻璃調得實一點；配上偏暗的圖（例如極光、海浪）再更實，
-   不然沒選中的書籤、灰色小字、齒輪會看不清楚（data-tone 由 panel.js 依圖的亮度標上） */
-:host(:not([data-theme="dark"])) .gpn-overlay.has-wallpaper {
-  --glass: rgba(255, 255, 255, .42);
-  --glass-soft: rgba(255, 255, 255, .34);
-}
-:host(:not([data-theme="dark"])) .gpn-overlay.has-wallpaper[data-tone="dark"] {
-  --glass: rgba(255, 255, 255, .62);
-  --glass-soft: rgba(255, 255, 255, .55);
-  --glass-card: rgba(255, 255, 255, .66);
-}
-/* 縮圖格子：三欄，選中的那張外面一圈藍框 */
-.gpn-bg-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 12px; }
-.gpn-bg-tile {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  font-size: 13.5px;
-  color: var(--text-mute);
-  text-align: center;
-}
-.gpn-bg-thumb {
+.gpn-wall-preview {
+  height: 150px;
+  margin-bottom: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  aspect-ratio: 16 / 10;
-  overflow: hidden;
-  border-radius: 12px;
+  border-radius: 14px;
   border: 1px solid var(--outline);
   background-size: cover;
   background-position: center;
-  outline: 3px solid transparent;
-  outline-offset: 2px;
-  transition: outline-color .15s ease, transform .15s cubic-bezier(.2, 0, 0, 1);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
 }
-.gpn-bg-thumb canvas { display: block; width: 100%; height: 100%; }
-.gpn-bg-tile:hover .gpn-bg-thumb { transform: translateY(-2px); }
-.gpn-bg-tile[aria-checked="true"] { color: var(--text); font-weight: 600; }
-.gpn-bg-tile[aria-checked="true"] .gpn-bg-thumb { outline-color: var(--primary); }
-.gpn-bg-tile:focus-visible { outline: none; }
-.gpn-bg-tile:focus-visible .gpn-bg-thumb { outline-color: var(--primary); }
-.gpn-bg-thumb--add { border: 0; background: var(--well); color: var(--text-mute); }
-.gpn-bg-tile:hover .gpn-bg-thumb--add { background: var(--well-hover); color: var(--primary); }
-.gpn-bg-thumb--add svg { width: 28px; height: 28px; fill: currentColor; }
-/* 「預設光暈」的縮圖：和網頁版的彩色光暈（web/page.css）同一組顏色 */
-.gpn-bg-thumb--default {
+/* 預設背景的縮圖：和網頁版的彩色光暈（web/page.css）同一組顏色 */
+.gpn-wall-preview.is-default {
   background:
     radial-gradient(60% 90% at 10% 14%, rgba(255, 190, 110, .55), transparent 62%),
     radial-gradient(60% 90% at 92% 18%, rgba(110, 160, 255, .5), transparent 62%),
     radial-gradient(70% 100% at 72% 96%, rgba(100, 200, 170, .45), transparent 62%),
     #eef1f6;
 }
-:host([data-theme="dark"]) .gpn-bg-thumb--default {
+:host([data-theme="dark"]) .gpn-wall-preview.is-default {
   background:
     radial-gradient(60% 90% at 10% 14%, rgba(240, 183, 87, .22), transparent 62%),
     radial-gradient(60% 90% at 92% 18%, rgba(110, 168, 254, .24), transparent 62%),

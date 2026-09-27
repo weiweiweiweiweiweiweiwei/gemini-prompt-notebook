@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>特務P：全部提示詞</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><text y='19' font-size='20'>📋</text></svg>">
+<link rel="stylesheet" href="all.css">
+</head>
+<body>
+<!--
+  「全部提示詞」：所有書籤、資料夾的提示詞，完整內容用純文字列在同一頁，像一份記事本。
+  給瀏覽器的「問問 Gemini」讀：一般網頁、沒有 Shadow DOM、沒有收合或藏起來的字，往下捲就能看完。
+  資料和網頁版（index.html）是同一份（這個瀏覽器的 localStorage），內容由 all.js 產生。
+-->
+<header class="bar">
+  <a class="back" href="./">← 回到筆記本</a>
+  <nav id="nav" aria-label="依書籤顯示"></nav>
+</header>
+
+<main id="all">
+  <h1 id="title">特務P：全部提示詞</h1>
+  <p id="summary" class="summary">載入中…</p>
+  <div id="list"></div>
+</main>
+
+<noscript><p class="empty">這個網頁需要開啟 JavaScript 才能顯示提示詞。</p></noscript>
+
+<script src="store.js"></script>
+<script src="share.js"></script>
+<script src="cloud-config.js"></script>
+<script src="sync.js"></script>
+<script src="all.js"></script>
+</body>
+</html>
