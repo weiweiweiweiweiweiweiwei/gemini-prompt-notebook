@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.10.1';
+const GPN_APP_VERSION = '4.11.0';
 
 /**
  * @param {object}   opts
@@ -77,13 +77,20 @@ function gpnCreatePanel(opts) {
   const ICON_SYNC =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>';
 
-  /* 雲端狀態：已同步／等待同步／沒連上（都是單一 path，理由同上面的齒輪） */
+  /* 雲端狀態：已同步／沒連上（都是單一 path，理由同上面的齒輪）；同步中的雲朵在下面 ICON_CLOUD_SYNCING */
   const ICON_CLOUD_DONE =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 17l-3.5-3.5 1.41-1.41L10 14.17l5.18-5.18 1.41 1.41L10 17z"/></svg>';
-  const ICON_CLOUD_UP =
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>';
   const ICON_CLOUD_OFF =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.35 10.04A7.49 7.49 0 0 0 12 4c-1.48 0-2.85.43-4.01 1.17l1.46 1.46A5.497 5.497 0 0 1 17.5 11v.5H19c1.66 0 3 1.34 3 3 0 1.13-.64 2.11-1.56 2.62l1.45 1.45C23.16 17.16 24 15.68 24 14c0-2.64-2.05-4.78-4.65-4.96zM3 5.27l2.75 2.74C2.56 8.15 0 10.77 0 14c0 3.31 2.69 6 6 6h11.73l2 2L21 20.73 4.27 4 3 5.27zM7.73 10l8 8H6c-2.21 0-4-1.79-4-4s1.79-4 4-4h1.73z"/></svg>';
+
+  /** 同步中：雲朵本身不動，裡面的箭頭一直往上跑（動畫在 styles.css 的 .gpn-cloud-arrow） */
+  const ICON_CLOUD_SYNCING =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4s1.79-4 4-4h.71C7.37 7.69 9.48 6 12 6c3.04 0 5.5 2.46 5.5 5.5v.5H19c1.66 0 3 1.34 3 3s-1.34 3-3 3z"/>' +
+    '<path class="gpn-cloud-arrow" d="M12 8.5L8.5 12H11v4h2v-4h2.5z"/></svg>';
+
+  /** 圖片：設定裡的「背景」 */
+  const ICON_IMAGE =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>';
 
   /** 條列：「全部提示詞」頁 */
   const ICON_LIST =
@@ -195,6 +202,36 @@ function gpnCreatePanel(opts) {
   };
   const persist = () => GpnStore.save(data);
 
+  /* ---- 這台電腦自己的偏好（筆記本寬度、背景圖）：不跟著雲端同步，也不放進備份 ----
+     外掛（AI 網站裡的面板、工具列小視窗）存在 chrome.storage，網頁版存在 localStorage。
+     key 和提示詞資料（GPN_KEY）不同，store.js 監聽資料變動時不會被它們觸發。 */
+  const prefs = (() => {
+    const ext = typeof chrome !== 'undefined' && !!chrome.storage?.local;
+    return {
+      async get(k) {
+        try {
+          if (ext) return (await chrome.storage.local.get(k))[k] ?? null;
+          const v = localStorage.getItem(k);
+          return v == null ? null : JSON.parse(v);
+        } catch { return null; }
+      },
+      /** 存不下（空間不夠、無痕模式）會回傳 false */
+      async set(k, v) {
+        try {
+          if (ext) await chrome.storage.local.set({ [k]: v });
+          else localStorage.setItem(k, JSON.stringify(v));
+          return true;
+        } catch { return false; }
+      },
+      async remove(k) {
+        try {
+          if (ext) await chrome.storage.local.remove(k);
+          else localStorage.removeItem(k);
+        } catch { /* 無痕模式 */ }
+      },
+    };
+  })();
+
   /* ==========================================================================
      一、骨架
      ========================================================================== */
@@ -204,21 +241,14 @@ function gpnCreatePanel(opts) {
     ui.tabs = el('div', { class: 'gpn-tabs', role: 'tablist' });
     ui.tabEls = new Map();        // id → 書籤元素（切換時要重複使用才有動畫）
 
-    /* ---- 底部右邊的小圖示：雲端同步狀態、設定 ----
-       以前紙張最上面有一條「資料夾｜幾則｜點標題複製…」的說明列，資訊不重要又佔空間，拿掉了；
-       真正要用的只有設定（齒輪），和雲端狀態一起搬到底部「新增提示詞」的右邊。 */
+    /* ---- 底部右邊的齒輪：設定 ----
+       也兼當雲端同步的狀態燈（見 paintGear）：以前旁邊還有一顆雲朵鈕，狀態都已經整合進設定，就拿掉了。
+       有狀況（沒連上、同步失敗）時右上角會有一個點，點齒輪直接打開「雲端同步」那一頁。 */
+    ui.gearIcon = el('span', { class: 'gpn-gear-icon', html: ICON_GEAR });
     ui.gear = el('button', {
-      class: 'gpn-tool', type: 'button', title: '設定（名稱與資料夾、雲端同步、備份）',
-      'aria-label': '設定', html: ICON_GEAR,
-      onclick: () => openSettings(data.activeId),
-    });
-    // 雲端狀態：平常是不起眼的灰色雲朵，只有「沒連上」「同步失敗」才會變色。點了打開雲端同步頁。
-    ui.cloudIcon = el('span', { class: 'gpn-cloud-icon' });
-    ui.cloudBtn = el('button', {
-      class: 'gpn-tool gpn-cloud-btn', type: 'button',
-      onclick: () => openSettings(data.activeId, 'account'),
-    }, ui.cloudIcon);
-    ui.cloudBtn.hidden = true;
+      class: 'gpn-tool gpn-gear', type: 'button', title: '設定', 'aria-label': '設定',
+      onclick: () => openSettings(data.activeId, ui.gear.getAttribute('data-alert') ? 'account' : 'tab'),
+    }, ui.gearIcon, el('span', { class: 'gpn-gear-dot', 'aria-hidden': 'true' }));
 
     /* ---- 資料夾欄（寬的時候在左邊直排，窄的時候變成上面一排） ---- */
     ui.folderList = el('div', {
@@ -248,10 +278,13 @@ function gpnCreatePanel(opts) {
             class: 'gpn-add gpn-add--quiet', type: 'button', hidden: '',
             onclick: onClearRecent,
           }, '清除全部使用記錄'),
-          el('div', { class: 'gpn-tools' }, ui.cloudBtn, ui.gear)
+          el('div', { class: 'gpn-tools' }, ui.gear)
         )
       )
     );
+
+    // 左右兩邊可以拖曳調整寬度（見「筆記本寬度」）
+    ui.book.append(buildGutter('left'), buildGutter('right'));
 
     // 筆記本左下角外面、和「新增提示詞」同高的小圖示：「全部提示詞」。
     // 是一般連結，按了整頁換到純文字的清單頁（網頁版的 all.html）
@@ -276,6 +309,60 @@ function gpnCreatePanel(opts) {
     buildFolderLayer();
     buildSettingsLayer();
     root.append(ui.overlay, ui.editLayer, ui.newTabLayer, ui.folderLayer, ui.settingsLayer, ui.toast);
+  }
+
+  /* ---- 筆記本寬度 ----
+     左右兩邊的邊緣可以拖曳（像 NotebookLM 的面板分隔線），按兩下恢復預設。
+     筆記本是置中的，所以拖一邊、兩邊一起變寬，拖的那一邊會一直跟在滑鼠底下。
+     可以按的範圍（16px）比看得到的細線寬一點，比較好抓。寬度記在這台電腦（prefs）。 */
+  const GPN_BOOK_MIN_W = 480;
+  const GPN_BOOK_W_KEY = 'gpn_book_width';
+
+  function buildGutter(side) {
+    const g = el('div', {
+      class: `gpn-gutter gpn-gutter--${side}`, role: 'separator', 'aria-orientation': 'vertical',
+      'aria-label': '調整筆記本寬度', title: '拖曳調整寬度，按兩下恢復預設',
+      ondblclick: resetBookWidth,
+    });
+    g.addEventListener('pointerdown', (e) => startResize(e, side, g));
+    return g;
+  }
+
+  const setBookWidth = (w) => { ui.book.style.width = w ? `${w}px` : ''; };
+
+  function startResize(e, side, g) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    const cs = getComputedStyle(ui.book);
+    const startW = parseFloat(cs.width);
+    // 網頁版整個放大 140%：滑鼠移動的距離要換算回筆記本自己的 px
+    const scale = ui.book.getBoundingClientRect().width / startW || 1;
+    const maxW = parseFloat(cs.maxWidth) || Infinity;
+    const startX = e.clientX;
+    let w = startW;
+    try { g.setPointerCapture(e.pointerId); } catch { /* 沒抓到也能拖 */ }
+    ui.book.classList.add('is-resizing');
+
+    const move = (ev) => {
+      const dx = ((ev.clientX - startX) / scale) * (side === 'right' ? 1 : -1);
+      w = Math.round(Math.min(maxW, Math.max(GPN_BOOK_MIN_W, startW + dx * 2)));
+      setBookWidth(w);
+    };
+    const up = () => {
+      g.removeEventListener('pointermove', move);
+      g.removeEventListener('pointerup', up);
+      g.removeEventListener('pointercancel', up);
+      ui.book.classList.remove('is-resizing');
+      if (w !== startW) prefs.set(GPN_BOOK_W_KEY, w);
+    };
+    g.addEventListener('pointermove', move);
+    g.addEventListener('pointerup', up);
+    g.addEventListener('pointercancel', up);
+  }
+
+  function resetBookWidth() {
+    setBookWidth(0);
+    prefs.remove(GPN_BOOK_W_KEY);
   }
 
   /**
@@ -375,8 +462,7 @@ function gpnCreatePanel(opts) {
         onclick: () => { if (t.id !== data.activeId) switchTab(t.id); },
       }, t.label);
 
-      // 設定鈕不放在書籤上——它會佔掉空間，害書籤上的字無法置中。
-      // 改放到下方 paper-head 的右側（見 build 的 ui.gear）。
+      // 設定鈕不放在書籤上——它會佔掉空間，害書籤上的字無法置中（齒輪在底部，見 build）
       const node = el('div', {
         class: 'gpn-tab' + (isActive ? ' is-active' : ''),
         'data-color': t.color, 'data-id': t.id,
@@ -517,7 +603,6 @@ function gpnCreatePanel(opts) {
     const list = folder || tab;
 
     const n = list.items.length;
-    ui.gear.setAttribute('aria-label', `「${tab.label}」的設定`);
 
     ui.list.replaceChildren();
     if (!n) {
@@ -601,7 +686,6 @@ function gpnCreatePanel(opts) {
     const where = indexItems();
     const favs = (data.favs || []).map((id) => where.get(id)).filter(Boolean);
     const n = favs.length;
-    ui.gear.setAttribute('aria-label', '設定');
 
     ui.list.replaceChildren();
     if (!n) {
@@ -661,7 +745,6 @@ function gpnCreatePanel(opts) {
   function renderRecent() {
     const recent = data.recent || [];
     const n = recent.length;
-    ui.gear.setAttribute('aria-label', '設定');
 
     ui.list.replaceChildren();
     if (!n) {
@@ -1423,6 +1506,8 @@ function gpnCreatePanel(opts) {
       // 沒有雲端功能的地方（例如測試）就不出現這一項
       cloud ? navItem('account', ICON_CLOUD_DONE, '雲端同步') : null,
       navItem('backup', ICON_SYNC, '備份'),
+      // 背景圖只鋪在「面板就是整個畫面」的地方（網頁版、工具列小視窗）；AI 網站裡的面板背後是網站本身
+      standalone ? navItem('look', ICON_IMAGE, '背景') : null,
     ].filter(Boolean);
     const [navTab, ...navAll] = ui.sNavItems;
     const nav = el('nav', { class: 'gpn-settings-nav', role: 'tablist', 'aria-orientation': 'vertical' },
@@ -1480,7 +1565,10 @@ function gpnCreatePanel(opts) {
     /* ---- 備份 ---- */
     const secBackup = buildBackupSection();
 
-    ui.sSections = [secTab, secAccount, secBackup].filter(Boolean);
+    /* ---- 背景 ---- */
+    const secLook = standalone ? buildLookSection() : null;
+
+    ui.sSections = [secTab, secAccount, secBackup, secLook].filter(Boolean);
     ui.sBody = el('div', { class: 'gpn-settings-body' }, ...ui.sSections);
 
     ui.settings = el('div', { class: 'gpn-dialog gpn-settings', onmousedown: stop },
@@ -1815,7 +1903,7 @@ function gpnCreatePanel(opts) {
       return { icon: ICON_CLOUD_OFF, short: '雲端同步', long: '', kind: 'invite' };
     }
     if (s.phase === 'syncing') {
-      return { icon: ICON_SYNC, short: '同步中', long: '同步中…', kind: 'busy' };
+      return { icon: ICON_CLOUD_SYNCING, short: '同步中', long: '同步中…', kind: 'busy' };
     }
     if (s.phase === 'offline') {
       return { icon: ICON_CLOUD_OFF, short: '未連線', long: s.message || '連不上網路，恢復連線後會自動同步', kind: 'warn' };
@@ -1824,7 +1912,7 @@ function gpnCreatePanel(opts) {
       return { icon: ICON_CLOUD_OFF, short: '同步失敗', long: s.message || '同步失敗', kind: 'bad' };
     }
     if (s.pending) {
-      return { icon: ICON_CLOUD_UP, short: '待同步', long: '有修改還沒同步，馬上就會送出', kind: 'busy' };
+      return { icon: ICON_CLOUD_SYNCING, short: '待同步', long: '有修改還沒同步，馬上就會送出', kind: 'busy' };
     }
     const when = ago(s.lastSyncAt);
     return { icon: ICON_CLOUD_DONE, short: '已同步', long: '已同步' + (when ? `（${when}）` : ''), kind: 'ok' };
@@ -1832,19 +1920,47 @@ function gpnCreatePanel(opts) {
 
   function refreshCloud(s) {
     if (s) cloudState = s;
-    const st = cloudState;
-    const d = describeCloud(st);
-
-    // 主畫面的小按鈕
-    ui.cloudBtn.hidden = !cloud || !st.configured;
-    ui.cloudBtn.setAttribute('data-kind', d.kind);
-    ui.cloudIcon.innerHTML = d.icon;
-    ui.cloudBtn.setAttribute('aria-label', st.signedIn ? `雲端同步：${d.short}` : '雲端同步（還沒連結）');
-    ui.cloudBtn.title = st.signedIn
-      ? `${st.email || 'Google 雲端硬碟'}　${d.long || d.short}（點一下看雲端同步）`
-      : '連結 Google 雲端硬碟，每台電腦的提示詞就會自動同步';
-
+    paintGear(cloudState);
     refreshAccount();
+  }
+
+  /**
+   * 齒輪兼當雲端同步的狀態燈：
+   *   這台剛改過、正在送上雲端 → 齒輪變成綠色雲朵，雲朵不動、裡面的箭頭往上跑
+   *   送完                     → 打勾的綠色雲朵停一下，再變回齒輪
+   *   沒連上網路／同步失敗      → 齒輪右上角一個黃點／紅點
+   * 只有「自己改了東西」才會變：每次打開面板順便跟雲端對一下，不會讓齒輪一直閃。
+   */
+  let gearMode = '', gearTimer = 0;
+
+  function setGearMode(mode) {
+    if (mode === gearMode) return;       // 同一個狀態不重畫，箭頭動畫才不會一直重來
+    gearMode = mode;
+    ui.gear.setAttribute('data-sync', mode);
+    ui.gearIcon.innerHTML = mode === 'up' ? ICON_CLOUD_SYNCING : mode === 'done' ? ICON_CLOUD_DONE : ICON_GEAR;
+  }
+
+  function paintGear(st) {
+    const on = !!cloud && !!st.configured && !!st.signedIn;
+    const alert = !on ? '' : st.phase === 'offline' ? 'warn' : st.phase === 'error' ? 'bad' : '';
+    const uploading = on && !!st.pending && !alert;
+    if (uploading) {
+      clearTimeout(gearTimer);
+      setGearMode('up');
+    } else if (gearMode === 'up') {
+      if (alert) {
+        setGearMode('');
+      } else {
+        setGearMode('done');
+        gearTimer = setTimeout(() => setGearMode(''), 1500);
+      }
+    }
+    ui.gear.setAttribute('data-alert', alert);
+    const d = describeCloud(st);
+    const label = uploading ? '設定（正在同步到 Google 雲端硬碟）'
+      : alert ? `設定（雲端同步：${d.short}）` : '設定';
+    ui.gear.setAttribute('aria-label', label);
+    ui.gear.title = alert ? `${d.long}（點一下看雲端同步）` : label;
   }
 
   function refreshAccount() {
@@ -2018,6 +2134,82 @@ function gpnCreatePanel(opts) {
     setBackupMode('merge');          // 每次都從最安全的選項開始
   }
 
+  /* ---- 背景（只有網頁版、工具列小視窗）----
+     換成自己的桌布：筆記本是霧面玻璃，背後的圖會模糊地透出來。
+     圖片先縮小（最長邊 1920px、存成 JPG）再存在這台電腦（prefs），不會同步、也不放進備份。 */
+  const GPN_WALLPAPER_KEY = 'gpn_wallpaper';
+  let wallpaperUrl = '';     // 目前套用中的 blob: 網址
+
+  function buildLookSection() {
+    ui.lPreviewText = el('span');
+    ui.lPreview = el('div', { class: 'gpn-wall-preview is-default' }, ui.lPreviewText);
+    ui.lFile = el('input', { type: 'file', accept: 'image/*', class: 'gpn-file', onchange: onPickWallpaper });
+    ui.lReset = el('button', { class: 'gpn-btn2', type: 'button', hidden: '', onclick: onResetWallpaper }, '恢復預設');
+    return el('section', { class: 'gpn-section', 'data-section': 'look' },
+      el('h3', { text: '背景' }),
+      ui.lPreview,
+      el('div', { class: 'gpn-brow' },
+        el('button', { class: 'gpn-btn2 gpn-pick', type: 'button', onclick: () => ui.lFile.click() },
+          el('span', { class: 'gpn-btn2-icon', html: ICON_IMAGE }), '上傳圖片…'),
+        ui.lReset),
+      ui.lFile,
+      el('div', { class: 'gpn-note', text: '圖片只存在這台電腦，不會同步' }));
+  }
+
+  async function applyWallpaper(dataUrl) {
+    if (wallpaperUrl.startsWith('blob:')) URL.revokeObjectURL(wallpaperUrl);
+    wallpaperUrl = '';
+    if (dataUrl) {
+      // 換成 blob: 短網址再交給 CSS，比直接塞一整串 base64 輕
+      try { wallpaperUrl = URL.createObjectURL(await (await fetch(dataUrl)).blob()); } catch { wallpaperUrl = dataUrl; }
+    }
+    const bg = wallpaperUrl ? `url("${wallpaperUrl}")` : '';
+    ui.overlay.style.backgroundImage = bg;
+    ui.overlay.classList.toggle('has-wallpaper', !!wallpaperUrl);
+    if (!ui.lPreview) return;
+    ui.lPreview.style.backgroundImage = bg;
+    ui.lPreview.classList.toggle('is-default', !wallpaperUrl);
+    ui.lPreviewText.textContent = wallpaperUrl ? '' : '預設：彩色光暈';
+    ui.lReset.hidden = !wallpaperUrl;
+  }
+
+  /** 縮小成最長邊 1920px 的 JPG（data: 網址）；手機拍的原圖動輒好幾 MB，原樣存會塞爆儲存空間 */
+  async function shrinkImage(file) {
+    const img = await createImageBitmap(file);
+    const k = Math.min(1, 1920 / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(img.width * k));
+    c.height = Math.max(1, Math.round(img.height * k));
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    img.close?.();
+    return c.toDataURL('image/jpeg', 0.85);
+  }
+
+  async function onPickWallpaper(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';                 // 選同一張兩次也要觸發
+    if (!file) return;
+    let url;
+    try {
+      url = await shrinkImage(file);
+    } catch {
+      toast('這張圖片讀不起來，請換一張（JPG、PNG 都可以）', true);
+      return;
+    }
+    if (!(await prefs.set(GPN_WALLPAPER_KEY, url))) {
+      toast('這台電腦的儲存空間不夠，存不下這張圖', true);
+      return;
+    }
+    await applyWallpaper(url);
+    toast('已換成新的背景');
+  }
+
+  async function onResetWallpaper() {
+    await prefs.remove(GPN_WALLPAPER_KEY);
+    await applyWallpaper('');
+    toast('已恢復預設背景');
+  }
+
   /* ==========================================================================
      九、開關與鍵盤
      ========================================================================== */
@@ -2070,6 +2262,8 @@ function gpnCreatePanel(opts) {
 
   build();
   document.addEventListener('keydown', onKeydown, true);
+  prefs.get(GPN_BOOK_W_KEY).then((w) => { if (w > 0) setBookWidth(w); });
+  if (standalone) prefs.get(GPN_WALLPAPER_KEY).then((u) => applyWallpaper(u || ''));
 
   // 其他分頁或雲端改了資料時同步過來；正在編輯就先別動畫面，免得打到一半的字不見
   GpnStore.onExternalChange((fresh) => {

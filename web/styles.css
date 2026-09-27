@@ -110,6 +110,8 @@ button { cursor: pointer; }
   --error-container:   #fce8e6;
   --hover:             rgba(0, 0, 0, .06);
   --folder-on:         rgba(0, 0, 0, .10);   /* 選中的資料夾：比滑過再深一點的灰 */
+  --well:              rgba(0, 0, 0, .06);   /* 比周圍深一點的底（新增資料夾） */
+  --well-hover:        rgba(0, 0, 0, .10);
   --scrim:             rgba(0, 0, 0, .18);
   --shadow-lg: 0 8px 12px 6px rgba(0,0,0,.09), 0 4px 4px rgba(0,0,0,.12);
   --shadow-md: 0 2px 6px 2px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.1);
@@ -169,6 +171,8 @@ button { cursor: pointer; }
   --error-container:   #5c1d1a;
   --hover:             rgba(255, 255, 255, .09);
   --folder-on:         rgba(255, 255, 255, .14);
+  --well:              rgba(0, 0, 0, .24);
+  --well-hover:        rgba(0, 0, 0, .34);
   --scrim:             rgba(0, 0, 0, .3);
   --shadow-lg: 0 8px 12px 6px rgba(0,0,0,.3), 0 4px 4px rgba(0,0,0,.4);
   --shadow-md: 0 2px 6px 2px rgba(0,0,0,.28), 0 1px 2px rgba(0,0,0,.34);
@@ -378,6 +382,7 @@ button { cursor: pointer; }
 .gpn-tab.is-fixed .gpn-tab-main { padding-left: 0; padding-right: 0; }
 .gpn-tab.is-fixed .gpn-tab-icon { margin-right: 0; }
 .gpn-tab.is-fixed .gpn-tab-icon svg { width: 21px; height: 21px; }
+.gpn-tab.is-fixed:not(.is-active) .gpn-tab-main { padding-bottom: 0; }
 
 /* 新增書籤 */
 .gpn-tab-add {
@@ -559,17 +564,17 @@ button { cursor: pointer; }
   margin-top: 6px;
   height: 42px;
   border-radius: 12px;
-  border: 1px dashed var(--outline-strong);
+  background: var(--well);
   color: var(--text-mute);
   font-size: 14.5px;
   font-weight: 600;
   white-space: nowrap;
-  transition: background-color .16s ease, border-color .16s ease, color .16s ease;
+  transition: background-color .16s ease, color .16s ease;
 }
-.gpn-folder-add:hover { background: var(--hover); border-color: var(--primary); color: var(--primary); }
+.gpn-folder-add:hover { background: var(--well-hover); color: var(--primary); }
 .gpn-folder-add:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 
-/* 底部「新增提示詞」右邊的小圖示：雲端同步狀態、設定。和「新增提示詞」一樣高的圓鈕 */
+/* 底部「新增提示詞」右邊的齒輪（設定），和「新增提示詞」一樣高的圓鈕 */
 .gpn-tools { flex: none; display: flex; gap: 8px; margin-left: auto; }
 .gpn-tool {
   flex: none;
@@ -585,15 +590,42 @@ button { cursor: pointer; }
 }
 .gpn-tool:hover { background: var(--hover); color: var(--text); border-color: var(--outline-strong); }
 .gpn-tool:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
-.gpn-tool > svg { width: 22px; height: 22px; display: block; fill: currentColor; }
-/* 雲端狀態平常都是灰色，只有出問題才上色（沒連上：黃；同步失敗：紅） */
-.gpn-cloud-btn[data-kind="warn"] { color: var(--c-amber-accent); }
-.gpn-cloud-btn[data-kind="bad"] { color: var(--error); border-color: var(--error); }
-.gpn-cloud-btn .gpn-cloud-icon svg { width: 22px; height: 22px; }
+.gpn-tool svg { width: 22px; height: 22px; display: block; fill: currentColor; }
+
+/* 齒輪兼雲端同步的狀態燈（panel.js 的 paintGear）：
+   正在把這台的修改送上雲端 → 換成綠色雲朵（雲朵不轉，裡面的箭頭往上跑）→ 打勾 → 變回齒輪 */
+.gpn-gear { position: relative; }
+.gpn-gear-icon { display: flex; }
+.gpn-gear-icon > svg { animation: gpn-gear-swap .22s cubic-bezier(.2, 0, 0, 1); }
+@keyframes gpn-gear-swap { from { transform: scale(.6); opacity: 0 } to { transform: none; opacity: 1 } }
+.gpn-gear[data-sync="up"], .gpn-gear[data-sync="done"] {
+  color: var(--c-green-accent);
+  border-color: color-mix(in srgb, var(--c-green-accent) 55%, transparent);
+}
+/* 沒連上網路（黃）、同步失敗（紅）：齒輪右上角一個小點 */
+.gpn-gear-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  display: none;
+}
+.gpn-gear[data-alert="warn"] .gpn-gear-dot { display: block; background: var(--c-amber-accent); }
+.gpn-gear[data-alert="bad"] .gpn-gear-dot { display: block; background: var(--error); }
+
+/* 雲端同步頁裡的狀態圖示 */
 .gpn-cloud-icon { display: inline-flex; }
 .gpn-cloud-icon svg { width: 18px; height: 18px; display: block; fill: currentColor; }
-[data-kind="busy"] .gpn-cloud-icon svg { animation: gpn-spin 1.1s linear infinite; }
-@keyframes gpn-spin { to { transform: rotate(-360deg) } }
+/* 同步中：雲朵本身不動，只有裡面的箭頭往上跑、淡出，再從下面出來 */
+.gpn-cloud-arrow { animation: gpn-cloud-up 1.2s ease-in-out infinite; }
+@keyframes gpn-cloud-up {
+  0%   { transform: translateY(3px);  opacity: 0 }
+  35%  { opacity: 1 }
+  65%  { opacity: 1 }
+  100% { transform: translateY(-3px); opacity: 0 }
+}
 
 /* ---------- 卡片列表：只有這裡捲動 ---------- */
 .gpn-list {
@@ -972,6 +1004,8 @@ button { cursor: pointer; }
 /* 「選擇備份檔…」：選好之後按鈕上直接顯示檔名 */
 .gpn-pick { display: flex; align-items: center; justify-content: center; gap: 10px; }
 .gpn-pick-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.gpn-btn2-icon { display: flex; }
+.gpn-btn2-icon svg { width: 20px; height: 20px; fill: currentColor; }
 
 /* 合併 ／ 完全取代：做成大塊分段按鈕，比 radio 好按也看得清楚 */
 .gpn-seg-row { display: flex; gap: 8px; margin-top: 16px; }
@@ -1297,6 +1331,78 @@ button { cursor: pointer; }
    ========================================================================== */
 .gpn-account-avatar--google { background: #ffffff; box-shadow: var(--shadow-md); }
 
+/* ---- 設定 → 背景 ---- */
+/* 自己的桌布：鋪滿整個畫面（網頁版、工具列小視窗），筆記本的霧面玻璃會把它模糊地透出來 */
+:host(.gpn-standalone) .gpn-overlay.has-wallpaper {
+  background-color: #131314;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.gpn-wall-preview {
+  height: 150px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  border: 1px solid var(--outline);
+  background-size: cover;
+  background-position: center;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+/* 預設背景的縮圖：和網頁版的彩色光暈（web/page.css）同一組顏色 */
+.gpn-wall-preview.is-default {
+  background:
+    radial-gradient(60% 90% at 10% 14%, rgba(255, 190, 110, .55), transparent 62%),
+    radial-gradient(60% 90% at 92% 18%, rgba(110, 160, 255, .5), transparent 62%),
+    radial-gradient(70% 100% at 72% 96%, rgba(100, 200, 170, .45), transparent 62%),
+    #eef1f6;
+}
+:host([data-theme="dark"]) .gpn-wall-preview.is-default {
+  background:
+    radial-gradient(60% 90% at 10% 14%, rgba(240, 183, 87, .22), transparent 62%),
+    radial-gradient(60% 90% at 92% 18%, rgba(110, 168, 254, .24), transparent 62%),
+    radial-gradient(70% 100% at 72% 96%, rgba(79, 201, 194, .2), transparent 62%),
+    #131314;
+}
+
+/* ============================================================================
+   筆記本左右兩邊的拖曳邊：拖曳調整寬度，按兩下恢復預設（panel.js 的 startResize）
+   平常看不到，滑過才出現一條細線；可以按的範圍（16px）比細線寬一點，比較好抓。
+   從紙張的高度開始，不蓋到書籤。
+   ========================================================================== */
+.gpn-gutter {
+  position: absolute;
+  top: var(--tab-h-active);
+  bottom: 0;
+  z-index: 5;
+  width: 16px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.gpn-gutter--left { left: -8px; }
+.gpn-gutter--right { right: -8px; }
+.gpn-gutter::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 6px;
+  width: 4px;
+  height: 56px;
+  margin-top: -28px;
+  border-radius: 2px;
+  background: var(--text-mute);
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+.gpn-gutter:hover::after, .gpn-book.is-resizing .gpn-gutter::after { opacity: .75; }
+.gpn-book.is-resizing, .gpn-book.is-resizing * { cursor: ew-resize !important; user-select: none; }
+/* 工具列小視窗本來就是固定大小，不需要拖 */
+:host(.gpn-popup-host) .gpn-gutter { display: none; }
+
 .gpn-all-link {
   position: absolute;
   right: calc(100% + 14px);
@@ -1422,5 +1528,5 @@ button { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .gpn-book, .gpn-dialog, .gpn-overlay, .gpn-toast, .gpn-copied,
   .gpn-tab, .gpn-card, .gpn-folder, .gpn-switch, .gpn-switch::after,
-  .gpn-empty-arrow, .gpn-cloud-icon svg, .gpn-social-btn { animation: none !important; transition: none !important; }
+  .gpn-empty-arrow, .gpn-cloud-arrow, .gpn-gear-icon > svg, .gpn-social-btn { animation: none !important; transition: none !important; }
 }
