@@ -19,13 +19,20 @@
  *      它只轉交 token，不碰雲端硬碟、也不保存任何東西。
  *   access token 一小時就過期，用 refresh token 換新的（一樣經過中繼），使用者不會感覺到。
  *
- * 同步規則（和之前用 Supabase 時一樣）：
+ * 資料一律先存在這台（外掛：chrome.storage；網頁版：localStorage），存好了才慢慢送上雲端。
+ * 所以送出前關掉網頁也不會不見，下次打開會接著送。
+ *
+ * 同步規則：
  *   - 平常：這台改了就推上去；雲端比較新就拉下來蓋掉這台。
- *   - 兩邊都改過（例如一台離線時改了）：以雲端為底，把這台多出來的提示詞加進去，
- *     和「備份 → 合併」同一套規則，寧可多、不會少。
+ *   - 兩邊都改過（例如一台離線時改了、關掉網頁時還沒送出、外掛和網頁版都有改）：三方合併（gpnMerge3）。
+ *     拿「上次同步好的內容」（GPN_BASE_KEY）當共同的起點，比出兩邊各自做了什麼——
+ *     新增、刪除、修改、搬移、排序都保留，刪掉的不會再跑回來；同一則兩邊都改了，以這台為主。
+ *   - 同步要花一兩秒，這段時間使用者又改了東西：寫進這台之前再看一次，把他新做的合併進去，
+ *     不會被同步到一半的舊內容蓋掉；同步完馬上再送一次。
  *   - 這台電腦第一次連結：
  *       這台的資料從沒屬於過任何帳號 → 和雲端合併（第一次用雲端時，原本的提示詞不會不見）
  *       這台的資料屬於另一個帳號   → 不合併，直接換成這個帳號的雲端資料（不會把別人的資料帶過去）
+ *     第一次沒有共同的起點，所以用「備份 → 合併」那一套（gpnMergeData）：以雲端為底，把這台多的加進去。
  *   雲端硬碟沒有「版本對了才准寫」這種保護，所以寫入前先看一次版本號；
  *   兩台在同一瞬間存檔才可能互蓋，而且雲端硬碟本身會留舊版本，救得回來。
  *
@@ -37,6 +44,7 @@
 const GPN_SESSION_KEY = 'gpn_gdrive_session_v1';   // 登入狀態（token、Email）
 const GPN_SYNC_KEY = 'gpn_gdrive_sync_v1';         // 同步進度（雲端檔案、版本、上次同步的內容指紋）
 const GPN_PKCE_KEY = 'gpn_gdrive_pkce_v1';         // 登入途中的密語
+const GPN_BASE_KEY = 'gpn_gdrive_base_v1';         // 上次同步好的內容（三方合併的共同起點）
 /** 改用 Google 雲端硬碟之前（Supabase 時代）留下的登入資料，用不到了，啟動時清掉 */
 const GPN_OLD_KEYS = ['gpn_session_v1', 'gpn_sync_v1', 'gpn_pkce_v1'];
 
@@ -76,6 +84,9 @@ function gpnCreateSync(o) {
   let running = null;
   let switching = null;   // 正在換帳號（連結、中斷）
   let timer = 0;
+  let dirtyGen = 0;       // 這台改了幾次（同步途中又改了，同步完要再送一次）
+  let again = false;      // 這一輪寫進這台時，合併了使用者途中新做的（還沒送上雲端）
+  let synced = null;      // 這一輪同步好的內容（雲端和這台一樣的那份）
 
   function setState(patch) {
     state = { ...state, ...patch };
@@ -319,12 +330,28 @@ function gpnCreateSync(o) {
     return doc;
   }
 
+  /**
+   * 把雲端（或合併好）的內容寫進這台。
+   * snapshot 是這一輪開始時讀到的這台資料。同步要花一兩秒，這段時間使用者可能又刪了、改了東西，
+   * 直接蓋掉的話，剛刪的會跑回來。所以寫之前再讀一次：有變就把他新做的合併進去，同步完再送一次。
+   */
+  async function writeLocal(doc, snapshot) {
+    const now = gpnNormalize(await readLocal());
+    let out = doc;
+    if (hashDoc(now) !== hashDoc(snapshot)) {
+      out = gpnMerge3(snapshot, now, doc);
+      again = true;
+    }
+    await writeRemote(keepActive(out, now));
+  }
+
   /** 把雲端版本寫進這台 */
   async function apply(doc, version, local) {
     const d = keepActive(gpnNormalize(doc), local);
-    await writeRemote(d);
+    await writeLocal(d, local);
     meta.base = version;
     meta.hash = hashDoc(d);
+    synced = d;
     return d;
   }
 
@@ -332,6 +359,15 @@ function gpnCreateSync(o) {
     const f = await writeFile(meta.fileId, doc);
     meta.base = f.version;
     meta.hash = hashDoc(doc);
+    synced = doc;
+  }
+
+  /** 上次同步好的內容。和 meta.hash 對不上（舊版沒存過、存失敗）就當作沒有 */
+  async function loadBase(local) {
+    if (meta.hash == null) return null;
+    const b = await kv.get(GPN_BASE_KEY);
+    if (b && hashDoc(b) === meta.hash) return gpnNormalize(b);
+    return hashDoc(local) === meta.hash ? local : null;   // 這台從上次同步後沒改過：這台就是起點
   }
 
   async function syncOnce() {
@@ -348,9 +384,11 @@ function gpnCreateSync(o) {
     const adopt = meta.adopt;              // 'merge' | 'replace'（只在剛連結時有）
     delete meta.adopt;
     const note = {};
+    synced = null;
     const file = await findFile();
     if (file && file.id !== meta.fileId) meta.base = null;
     const firstHere = !meta.base;          // 這個帳號的這個檔案，在這台電腦還沒同步過
+    const base = firstHere ? null : await loadBase(local);
 
     if (!file) {
       // 雲端硬碟上還沒有筆記本（第一次用，或使用者把檔案刪了）
@@ -364,34 +402,43 @@ function gpnCreateSync(o) {
       meta.fileId = f.id;
       meta.base = f.version;
       meta.hash = hashDoc(local);
+      synced = local;
       note.uploaded = gpnCountItems(local);
     } else {
       meta.fileId = file.id;
+      let cloud = null;                    // 雲端改過才會有
       if (file.version !== meta.base) {
-        const cloud = await readFile(file.id);
+        cloud = await readFile(file.id);
         if (!cloud) {
           // 檔案被改壞了：用這台的蓋回去（雲端硬碟會留著壞掉的那一版）
           meta.base = file.version;
           await push(local);
           note.uploaded = gpnCountItems(local);
-        } else if (firstHere) {
-          if (adopt === 'replace' || !gpnCountItems(local)) {
-            await apply(cloud, file.version, local);
-            note.pulled = gpnCountItems(cloud);
-          } else {
-            const m = gpnMergeData(cloud, local);
-            const merged = await apply(m.data, file.version, local);
-            if (m.added || hashDoc(merged) !== hashDoc(cloud)) await push(merged);
-            note.pulled = gpnCountItems(cloud);
-            note.merged = m.added;
-          }
-        } else if (hashDoc(local) === meta.hash) {
-          await apply(cloud, file.version, local);            // 只有雲端改過
+        } else if (!firstHere && hashDoc(cloud) === meta.hash) {
+          // 版本號變了，內容卻和上次同步好的一樣（雲端硬碟自己動了檔案）：當作雲端沒改
+          meta.base = file.version;
+          cloud = null;
+        }
+      }
+      if (cloud && firstHere) {
+        if (adopt === 'replace' || !gpnCountItems(local)) {
+          await apply(cloud, file.version, local);
+          note.pulled = gpnCountItems(cloud);
         } else {
-          // 兩邊都改過：以雲端為底，把這台多的加進去
           const m = gpnMergeData(cloud, local);
           const merged = await apply(m.data, file.version, local);
-          await push(merged);
+          if (m.added || hashDoc(merged) !== hashDoc(cloud)) await push(merged);
+          note.pulled = gpnCountItems(cloud);
+          note.merged = m.added;
+        }
+      } else if (cloud) {
+        if (hashDoc(local) === meta.hash) {
+          await apply(cloud, file.version, local);            // 只有雲端改過
+        } else {
+          // 兩邊都改過：三方合併。舊版升上來第一次還沒有共同起點，才退回「以雲端為底，加上這台多的」
+          const doc = base ? gpnMerge3(base, local, cloud) : gpnMergeData(cloud, local).data;
+          const merged = await apply(doc, file.version, local);
+          if (hashDoc(merged) !== hashDoc(cloud)) await push(merged);
         }
       } else if (hashDoc(local) !== meta.hash) {
         await push(local);                                    // 只有這台改過
@@ -400,6 +447,9 @@ function gpnCreateSync(o) {
 
     meta.lastSyncAt = Date.now();
     await saveMeta();
+    // 記下這次同步好的內容，下次兩邊都改過時拿來當共同的起點
+    if (synced) await kv.set(GPN_BASE_KEY, synced);
+    else if (!base && hashDoc(local) === meta.hash) await kv.set(GPN_BASE_KEY, local);
     return note;
   }
 
@@ -410,10 +460,18 @@ function gpnCreateSync(o) {
       await ready;
       while (switching) await switching.catch(() => {});   // 正在換帳號：換好再同步
       if (!configured) return {};
+      const gen = dirtyGen;
+      again = false;
       setState({ phase: 'syncing' });
       try {
         const note = await lock('gpn-sync', syncOnce);
-        setState({ phase: 'idle', pending: false, lastSyncAt: meta.lastSyncAt, fileId: meta.fileId || '', message: '' });
+        // 同步途中又改了東西：馬上再送一次，不用等下一次改動
+        const more = !!session && (again || dirtyGen !== gen);
+        setState({ phase: 'idle', pending: more, lastSyncAt: meta.lastSyncAt, fileId: meta.fileId || '', message: '' });
+        if (more) {
+          clearTimeout(timer);
+          timer = setTimeout(syncNow, 300);
+        }
         return note;
       } catch (e) {
         if (e.auth) return { error: '和 Google 雲端硬碟的連結已經失效，請重新連結' };
@@ -426,12 +484,24 @@ function gpnCreateSync(o) {
     return running;
   }
 
-  /** 這台的資料剛改過：等 0.8 秒沒再改，就推上雲端（連續打字時不要每個字都送） */
-  function markDirty() {
+  /**
+   * 這台的資料剛改過：等 0.8 秒沒再改，就推上雲端（連續打字時不要每個字都送）。
+   * doc 是改好的資料：內容和上次同步好的一樣（例如只是切換書籤），就不用同步。
+   */
+  function markDirty(doc) {
     if (!configured) return;
+    if (doc && !running && meta.hash != null && hashDoc(gpnNormalize(doc)) === meta.hash) return;
+    dirtyGen++;
     if (state.signedIn) setState({ pending: true });
     clearTimeout(timer);
     timer = setTimeout(syncNow, 800);   // 沒連結的話 syncNow 會自己什麼都不做
+  }
+
+  /** 還沒送出的馬上送（網頁版切到別的分頁、要關掉時用，不等那 0.8 秒） */
+  function flush() {
+    if (!state.pending) return Promise.resolve({});
+    clearTimeout(timer);
+    return syncNow();
   }
 
   /* ========== 連結／中斷 ========== */
@@ -515,6 +585,7 @@ function gpnCreateSync(o) {
         // meta.userId 是空的 = 這台的資料從來沒屬於過任何帳號 → 和雲端合併
         meta = { ...EMPTY_META, userId: s.sub, adopt: meta.userId ? 'replace' : 'merge' };
         await saveMeta();
+        await kv.remove(GPN_BASE_KEY);
       }
     });
     setState({ signedIn: true, email: s.email, message: '' });
@@ -537,6 +608,7 @@ function gpnCreateSync(o) {
         await writeRemote(gpnDefaultData());
         meta = { ...EMPTY_META };
         await saveMeta();
+        await kv.remove(GPN_BASE_KEY);
       }
     });
     setState({ signedIn: false, email: '', phase: 'idle', pending: false, message: '' });
@@ -548,5 +620,188 @@ function gpnCreateSync(o) {
     return { ...state };
   }
 
-  return { getState, syncNow, markDirty, authUrl, finishAuth, signOut };
+  return { getState, syncNow, markDirty, flush, authUrl, finishAuth, signOut };
+}
+
+/* ========== 三方合併 ==========================================================
+   兩邊（這台、雲端）都改過時用。base 是兩邊上次同步好的內容，比出兩邊各自做了什麼再合在一起：
+     一邊新增的      → 留下
+     一邊刪掉的      → 刪掉（另一邊剛好改了它的標題或內容，就留下改過的：寧可多、不會少）
+     一邊改的欄位    → 用改過的；兩邊都改了同一個欄位 → 以這台為主
+     一邊搬的、排的  → 照搬過、排過的
+     書籤、資料夾被一邊刪了，另一邊卻在裡面新增了提示詞 → 書籤、資料夾留著，提示詞才有地方放
+   ============================================================================ */
+
+/** 把一份資料攤平：書籤、資料夾、提示詞各自用 id 找得到，再加上各自的順序（gpnNormalize 保證 id 不重複） */
+function gpnFlatten(d) {
+  const tabs = new Map(), folders = new Map(), items = new Map(), lists = new Map();
+  for (const t of d.tabs) {
+    tabs.set(t.id, { label: t.label, color: t.color, folders: !!t.folders, order: t.folders ? t.folders.map((f) => f.id) : [] });
+    for (const l of gpnListsOf(t)) {
+      const fid = l === t ? '' : l.id;
+      if (fid) folders.set(fid, { tab: t.id, label: l.label });
+      lists.set(t.id + '\u0000' + fid, l.items.map((i) => i.id));
+      // at：放在哪裡（書籤＋資料夾當成一個欄位比，搬家才不會一半用這台、一半用雲端的）
+      for (const it of l.items) items.set(it.id, { title: it.title, content: it.content, at: t.id + '\u0000' + fid });
+    }
+  }
+  return { tabOrder: d.tabs.map((t) => t.id), tabs, folders, items, lists, favs: d.favs || [], recent: d.recent || [] };
+}
+
+/**
+ * 合併兩邊的排列順序。誰動過順序（和 base 比）就以誰為主，另一邊多出來的插在它原本前一個的後面；
+ * 兩邊都動過以這台為主。回傳的可能含已經刪掉的 id，由呼叫的人過濾。
+ */
+function gpnMergeOrder(base, local, cloud) {
+  const keepIn = (a, b) => { const s = new Set(b); return a.filter((x) => s.has(x)); };
+  const moved = keepIn(local, base).join('\u0000') !== keepIn(base, local).join('\u0000');
+  const [main, other] = moved ? [local, cloud] : [cloud, local];
+  const out = [...main];
+  const has = new Set(out);
+  other.forEach((id, i) => {
+    if (has.has(id)) return;
+    let j = i - 1;
+    while (j >= 0 && !has.has(other[j])) j--;
+    out.splice(j < 0 ? 0 : out.indexOf(other[j]) + 1, 0, id);
+    has.add(id);
+  });
+  return out;
+}
+
+/** 合併同一種東西（書籤、資料夾、提示詞）。keys 是要比的欄位；keepIfEdited 是「被刪了但另一邊改過就留下」看的欄位 */
+function gpnMergeMap(B, L, C, keys, keepIfEdited = []) {
+  const out = new Map();
+  for (const id of new Set([...L.keys(), ...C.keys()])) {
+    const b = B.get(id), l = L.get(id), c = C.get(id);
+    if (l && c) {
+      if (!b) { out.set(id, { ...l }); continue; }           // 兩邊都新增了同一個（例如同時開啟資料夾）
+      const v = {};
+      for (const k of keys) v[k] = l[k] !== b[k] ? l[k] : c[k];
+      out.set(id, v);
+    } else if (!b) {
+      out.set(id, { ...(l || c) });                           // 只有一邊新增的
+    } else {
+      const kept = l || c;                                    // 另一邊刪掉了
+      if (keepIfEdited.some((k) => kept[k] !== b[k])) out.set(id, { ...kept });
+    }
+  }
+  return out;
+}
+
+/** 三方合併：base 上次同步好的、local 這台現在的、cloud 雲端現在的 → 合併後的資料 */
+function gpnMerge3(base, local, cloud) {
+  const B = gpnFlatten(gpnNormalize(base));
+  const L = gpnFlatten(gpnNormalize(local));
+  const C = gpnFlatten(gpnNormalize(cloud));
+  const find = (kind, id) => L[kind].get(id) || C[kind].get(id) || B[kind].get(id);
+
+  const tabs = gpnMergeMap(B.tabs, L.tabs, C.tabs, ['label', 'color', 'folders']);
+  const folders = gpnMergeMap(B.folders, L.folders, C.folders, ['label', 'tab']);
+  const items = gpnMergeMap(B.items, L.items, C.items, ['title', 'content', 'at'], ['title', 'content']);
+  for (const it of items.values()) {
+    const i = it.at.indexOf('\u0000');
+    it.tab = it.at.slice(0, i);
+    it.folder = it.at.slice(i + 1);
+  }
+
+  // 提示詞所在的書籤被另一邊刪了：書籤留著
+  for (const it of items.values()) {
+    if (!tabs.has(it.tab)) {
+      const t = find('tabs', it.tab);
+      tabs.set(it.tab, { label: t.label, color: t.color, folders: t.folders });
+    }
+  }
+
+  // 書籤的順序；超過上限（兩邊各加了幾個）的書籤，提示詞併進最後一個，一則都不丟
+  const tabOrder = gpnMergeOrder(B.tabOrder, L.tabOrder, C.tabOrder).filter((id) => tabs.has(id));
+  for (const id of tabs.keys()) if (!tabOrder.includes(id)) tabOrder.push(id);
+  const extraTabs = new Set(tabOrder.splice(GPN_MAX_TABS));
+  const lastTab = tabOrder[tabOrder.length - 1];
+  for (const it of items.values()) {
+    if (extraTabs.has(it.tab)) { it.tab = lastTab; it.folder = ''; }
+  }
+
+  // 提示詞所在的資料夾被另一邊刪了：資料夾留著（書籤還開著資料夾的話）
+  for (const it of items.values()) {
+    if (!tabs.get(it.tab).folders || !it.folder || folders.has(it.folder)) continue;
+    const f = find('folders', it.folder);
+    if (f && f.tab === it.tab) folders.set(it.folder, { ...f });
+  }
+
+  // 每個書籤的資料夾順序；同樣有上限，超過的併進最後一個
+  const folderOrder = new Map();
+  for (const tid of tabOrder) {
+    if (!tabs.get(tid).folders) continue;
+    const mine = (fid) => folders.get(fid)?.tab === tid;
+    const order = gpnMergeOrder(B.tabs.get(tid)?.order || [], L.tabs.get(tid)?.order || [], C.tabs.get(tid)?.order || [])
+      .filter(mine);
+    for (const [fid] of folders) if (mine(fid) && !order.includes(fid)) order.push(fid);
+    const extra = new Set(order.splice(GPN_MAX_FOLDERS));
+    for (const it of items.values()) {
+      if (it.tab === tid && extra.has(it.folder)) it.folder = order[order.length - 1];
+    }
+    folderOrder.set(tid, order);
+  }
+
+  // 每則提示詞放進合法的位置：書籤沒開資料夾就放書籤裡；開著但資料夾不見了就放第一個資料夾
+  for (const it of items.values()) {
+    const order = folderOrder.get(it.tab);
+    if (!order) { it.folder = ''; continue; }
+    if (order.includes(it.folder)) continue;
+    if (!order.length) {
+      const fid = 'f_' + it.tab;
+      folders.set(fid, { tab: it.tab, label: GPN_DEFAULT_FOLDER });
+      order.push(fid);
+    }
+    it.folder = order[0];
+  }
+
+  // 每個清單裡提示詞的順序
+  const members = new Map();
+  for (const [id, it] of items) {
+    const key = it.tab + '\u0000' + it.folder;
+    if (!members.has(key)) members.set(key, new Set());
+    members.get(key).add(id);
+  }
+  const listItems = (key) => {
+    const set = members.get(key);
+    if (!set) return [];
+    const order = gpnMergeOrder(B.lists.get(key) || [], L.lists.get(key) || [], C.lists.get(key) || [])
+      .filter((id) => set.has(id));
+    for (const id of set) if (!order.includes(id)) order.push(id);
+    return order.map((id) => {
+      const it = items.get(id);
+      return { id, title: it.title, content: it.content };
+    });
+  };
+
+  // 我的最愛：一邊取消就取消、一邊加了就加
+  const bF = new Set(B.favs), lF = new Set(L.favs), cF = new Set(C.favs);
+  const favs = gpnMergeOrder(B.favs, L.favs, C.favs)
+    .filter((id) => items.has(id) && (bF.has(id) ? lF.has(id) && cF.has(id) : lF.has(id) || cF.has(id)));
+
+  // 最近使用：兩邊合在一起、同一則取最近那次；一邊移除（或清空）了、之後也沒再用過的就拿掉
+  const recent = new Map();
+  for (const r of [...L.recent, ...C.recent]) {
+    if (!recent.has(r.id) || recent.get(r.id).usedAt < r.usedAt) recent.set(r.id, r);
+  }
+  const lR = new Set(L.recent.map((r) => r.id)), cR = new Set(C.recent.map((r) => r.id));
+  for (const b of B.recent) {
+    const r = recent.get(b.id);
+    if (r && (!lR.has(b.id) || !cR.has(b.id)) && r.usedAt <= b.usedAt) recent.delete(b.id);
+  }
+
+  return gpnNormalize({
+    version: GPN_VERSION,
+    activeId: local.activeId,
+    tabs: tabOrder.map((tid) => {
+      const t = tabs.get(tid);
+      const head = { id: tid, label: t.label, color: t.color };
+      const order = folderOrder.get(tid);
+      if (!order || !order.length) return { ...head, items: listItems(tid + '\u0000') };
+      return { ...head, folders: order.map((fid) => ({ id: fid, label: folders.get(fid).label, items: listItems(tid + '\u0000' + fid) })) };
+    }),
+    recent: [...recent.values()],
+    favs,
+  });
 }

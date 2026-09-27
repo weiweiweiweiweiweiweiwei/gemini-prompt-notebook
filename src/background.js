@@ -33,11 +33,11 @@ const gpnSync = gpnCreateSync({
   onState: (s) => chrome.storage.local.set({ [GPN_CLOUD_STATE_KEY]: s }),
 });
 
-// 面板或小視窗存檔了 → 推上雲端
+// 面板或小視窗存檔了 → 推上雲端（只換了書籤這種不算改內容的，markDirty 自己會略過）
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local' || !changes[GPN_KEY]) return;
   if (JSON.stringify(changes[GPN_KEY].newValue) === gpnLastRemote) return;
-  gpnSync.markDirty();
+  gpnSync.markDirty(changes[GPN_KEY].newValue);
 });
 
 /**

@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.12.0';
+const GPN_APP_VERSION = '4.13.0';
 
 /**
  * @param {object}   opts
@@ -782,8 +782,7 @@ function gpnCreatePanel(opts) {
       el('button', {
         class: 'gpn-title', type: 'button',
         title: standalone ? '點一下：複製這段提示詞' : '點一下：填入輸入框並複製',
-        onclick: () => usePrompt(item, card,
-          found ? found.tab.id : r.tabId, found ? found.folder?.id || '' : r.folderId),
+        onclick: () => usePrompt(item, card, '', '', true),
       },
         el('div', { class: 'gpn-title-text', text: cur.title || '(未命名)' }),
         el('div', { class: 'gpn-title-sub' },
@@ -839,15 +838,13 @@ function gpnCreatePanel(opts) {
 
   /* ========== 一鍵使用：不關面板，改在卡片上播動畫 ========== */
 
-  async function usePrompt(item, card, tabId, fid) {
+  /**
+   * fromRecent：在「最近使用」裡點的。這時不重新記一次，順序才不會跳：
+   * 不然點第三則，它會瞬間跑到第一則、Copied 也跟著跑到最上面；一直點最後一則還會整排輪流換位置。
+   */
+  async function usePrompt(item, card, tabId, fid, fromRecent = false) {
     const r = (await onUse(item)) || {};
-    recordUse(item, tabId, fid);
-    // 在「最近使用」裡點的：它會跑到最上面，Copied 改播在新的位置
-    if (activeTab().recent && isOpen()) {
-      renderList();
-      ui.list.scrollTop = 0;
-      card = ui.list.querySelector('.gpn-card') || card;
-    }
+    if (!fromRecent) recordUse(item, tabId, fid);
     if (r.badge) flashCopied(card, r.badge);
     if (r.toast) toast(r.toast, !!r.bad);
   }

@@ -215,8 +215,20 @@ const GpnStore = {
   /** 記憶體副本：萬一 storage 掛掉（例如擴充功能剛重新載入）至少當下還能用 */
   cache: gpnDefaultData(),
 
-  /** 自己寫進去的內容指紋，用來分辨 onChanged 是不是自己觸發的 */
-  _mine: '',
+  /**
+   * 自己寫進去、還沒收到回音（onChanged）的內容指紋，用來分辨 onChanged 是不是自己觸發的。
+   * 要記「一串」而不是只記最後一次：連續快速存好幾次（例如快速切換書籤）時，回音會一個一個晚到，
+   * 只記最後一次的話，前面幾次的回音會被當成「別人改的」，畫面就倒回舊的內容（刪掉的又跑回來）。
+   */
+  _mine: [],
+  /** 等回音的期間別人（其他分頁、雲端同步）也寫了：等自己的回音都到齊，再用最後的內容更新畫面 */
+  _missed: false,
+  _missedTimer: 0,
+  /**
+   * 儲存「最後會是」的內容：自己還有寫入在路上就是最後寫的那筆，不然是最後收到的那筆。
+   * 要存的和它一模一樣就不寫：Chrome 對沒變的寫入不會發 onChanged，回音永遠等不到。
+   */
+  _last: '',
 
   available() {
     try {
@@ -231,6 +243,7 @@ const GpnStore = {
     try {
       const got = await chrome.storage.local.get(GPN_KEY);
       this.cache = gpnNormalize(got[GPN_KEY]);
+      this._last = JSON.stringify(got[GPN_KEY] ?? null);
     } catch (err) {
       console.warn('[特務P] 讀取資料失敗，暫時使用記憶體資料：', err);
     }
@@ -241,11 +254,16 @@ const GpnStore = {
     this.cache = gpnNormalize(data);
     if (!this.available()) return false;
     try {
-      this._mine = JSON.stringify(this.cache);
+      const json = JSON.stringify(this.cache);
+      if (json === this._last) return true;
+      this._last = json;
+      this._mine.push(json);
+      if (this._mine.length > 50) this._mine.shift();
       await chrome.storage.local.set({ [GPN_KEY]: this.cache });
       return true;
     } catch (err) {
       console.warn('[特務P] 儲存失敗：', err);
+      this._last = '';
       return false;
     }
   },
@@ -256,9 +274,32 @@ const GpnStore = {
     try {
       chrome.storage.onChanged.addListener((changes, area) => {
         if (area !== 'local' || !changes[GPN_KEY]) return;
-        // 自己剛寫的就別再重畫一次，不然拖曳完畫面會閃一下
-        if (JSON.stringify(changes[GPN_KEY].newValue) === this._mine) return;
-        this.cache = gpnNormalize(changes[GPN_KEY].newValue);
+        const value = changes[GPN_KEY].newValue;
+        const json = JSON.stringify(value ?? null);
+        const i = this._mine.indexOf(json);
+        if (i >= 0) {
+          // 自己剛寫的就別再重畫一次，不然拖曳完畫面會閃一下
+          this._mine.splice(0, i + 1);
+          if (this._mine.length) return;     // 後面還有自己寫的在路上：儲存最後會是那一筆，_last 不動
+          this._last = json;
+          if (!this._missed) return;
+          this._missed = false;              // 中間夾著別人寫的：以儲存裡最後的內容為準
+          clearTimeout(this._missedTimer);
+        } else if (this._mine.length) {
+          // 自己還有幾筆在路上，它們會蓋過這一筆，等到齊再更新。萬一一直沒到齊，1.5 秒後直接讀儲存
+          this._missed = true;
+          clearTimeout(this._missedTimer);
+          this._missedTimer = setTimeout(async () => {
+            if (!this._missed) return;
+            this._missed = false;
+            this._mine = [];
+            cb(await this.load());
+          }, 1500);
+          return;
+        } else {
+          this._last = json;
+        }
+        this.cache = gpnNormalize(value);
         cb(this.cache);
       });
     } catch { /* 忽略：擴充功能環境失效時不影響主要功能 */ }

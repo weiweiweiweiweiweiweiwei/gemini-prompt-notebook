@@ -8,7 +8,7 @@
  * 瀏覽器不允許一個網頁去操作另一個網站的內容（同源政策），這是安全機制，
  * 沒有任何繞過方法。所以這裡一律是「點一下複製，再自己貼上」。
  *
- * 資料存在這個瀏覽器（localStorage）；連結 Google 雲端硬碟後，由 sync.js 自動同步。
+ * 資料一律先存在這個瀏覽器（localStorage，存好才算數）；連結 Google 雲端硬碟後，再由 sync.js 送上雲端。
  * 連結時會整頁換到 Google，按完「允許」回到這一頁，由最下面那段接手。
  *
  * 筆記本左下角外面的「全部提示詞」會換到 all.html：所有提示詞用純文字列在同一頁（見 all.js）。
@@ -71,7 +71,8 @@
     // 同一個瀏覽器開了好幾個網頁版分頁時，讓同步一次只跑一個
     lock: navigator.locks ? (name, fn) => navigator.locks.request(name, fn) : undefined,
   });
-  GpnStore.onLocalSave(() => sync.markDirty());
+  // 只換了書籤這種不算改內容的，markDirty 自己會略過
+  GpnStore.onLocalSave((doc) => sync.markDirty(doc));
 
   // 回到這個分頁、或網路恢復時，跟雲端對一下（最多 15 秒一次）
   let lastPull = 0;
@@ -80,7 +81,13 @@
     lastPull = Date.now();
     sync.syncNow();
   };
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) pull(); });
+  // 切到別的分頁、或要關掉了：還沒送出的馬上送，不等那 0.8 秒。
+  // 真的關掉的話瀏覽器可能來不及送完，但資料已經存在這個瀏覽器，下次打開會接著送。
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) sync.flush();
+    else pull();
+  });
+  window.addEventListener('pagehide', () => sync.flush());
   window.addEventListener('focus', pull);
   window.addEventListener('online', () => { lastPull = 0; pull(); });
 
