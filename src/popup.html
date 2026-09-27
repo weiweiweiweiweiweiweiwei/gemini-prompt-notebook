@@ -3,11 +3,24 @@
 <head>
 <meta charset="utf-8">
 <style>
-  /* Chrome 的小視窗最大 800 x 600，面板在裡面置中。背景和網頁版一樣是單純的灰。 */
+  /* Chrome 的小視窗最大 800 x 600，面板在裡面置中。
+     面板是毛玻璃，背後放和網頁版一樣的柔和色塊，玻璃感才出得來。 */
   html, body { margin: 0; width: 780px; height: 600px; overflow: hidden; }
-  body { background: #eceef1; }
+  body {
+    background:
+      radial-gradient(420px 420px at 8% 10%, rgba(255, 190, 110, .42), transparent 62%),
+      radial-gradient(460px 460px at 94% 16%, rgba(110, 160, 255, .38), transparent 62%),
+      radial-gradient(500px 500px at 70% 100%, rgba(100, 200, 170, .34), transparent 62%),
+      #eef1f6;
+  }
   @media (prefers-color-scheme: dark) {
-    body { background: #131314; }
+    body {
+      background:
+        radial-gradient(420px 420px at 8% 10%, rgba(240, 183, 87, .16), transparent 62%),
+        radial-gradient(460px 460px at 94% 16%, rgba(110, 168, 254, .18), transparent 62%),
+        radial-gradient(500px 500px at 70% 100%, rgba(79, 201, 194, .14), transparent 62%),
+        #131314;
+    }
   }
 </style>
 </head>

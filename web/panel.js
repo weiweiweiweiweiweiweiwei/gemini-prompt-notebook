@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.9.0';
+const GPN_APP_VERSION = '4.10.0';
 
 /**
  * @param {object}   opts
@@ -85,10 +85,6 @@ function gpnCreatePanel(opts) {
   const ICON_CLOUD_OFF =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.35 10.04A7.49 7.49 0 0 0 12 4c-1.48 0-2.85.43-4.01 1.17l1.46 1.46A5.497 5.497 0 0 1 17.5 11v.5H19c1.66 0 3 1.34 3 3 0 1.13-.64 2.11-1.56 2.62l1.45 1.45C23.16 17.16 24 15.68 24 14c0-2.64-2.05-4.78-4.65-4.96zM3 5.27l2.75 2.74C2.56 8.15 0 10.77 0 14c0 3.31 2.69 6 6 6h11.73l2 2L21 20.73 4.27 4 3 5.27zM7.73 10l8 8H6c-2.21 0-4-1.79-4-4s1.79-4 4-4h1.73z"/></svg>';
 
-  /** 加號：新增書籤 */
-  const ICON_ADD =
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>';
-
   /** 條列：「全部提示詞」頁 */
   const ICON_LIST =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>';
@@ -149,6 +145,7 @@ function gpnCreatePanel(opts) {
   /** 目前看的資料夾。刻意不存檔：依需求，點書籤一律從「第一個資料夾」開始。 */
   let folderId = null;
   let editing = null;        // 提示詞編輯中 { tabId, folderId | null, id | null }
+  let newTabColor = null;    // 新增書籤對話框選的顏色
   let settingsTabId = null;  // 設定視窗正在設定哪個書籤
   let folderEditing = null;  // 資料夾編輯中 { tabId, id | null }
   let delArmed = false, delTimer = 0;
@@ -169,10 +166,10 @@ function gpnCreatePanel(opts) {
    * 不能刪、不能改名、不能拖、不能直接新增提示詞（fixed）。
    */
   const recentTab = () => ({
-    id: GPN_RECENT_ID, label: '最近使用', fixed: true, recent: true, items: data.recent || [],
+    id: GPN_RECENT_ID, label: '最近使用', color: 'recent', fixed: true, recent: true, items: data.recent || [],
   });
   const favTab = () => ({
-    id: GPN_FAV_ID, label: '我的最愛', fixed: true, fav: true, items: [],
+    id: GPN_FAV_ID, label: '我的最愛', color: 'fav', fixed: true, fav: true, items: [],
   });
   const tabById = (id) => (id === GPN_RECENT_ID ? recentTab()
     : id === GPN_FAV_ID ? favTab()
@@ -297,12 +294,12 @@ function gpnCreatePanel(opts) {
 
   /* ---- 書籤寬度規則 ----
      自己的書籤數量越少就讓它們佔越寬，不要在中間留一大片空白。
-     注意：自己的書籤「等寬」，作用中與否不影響寬度，按起來才不會一直位移
-     （選中的書籤只換顏色，和 Chrome 的分頁一樣）。
+     注意：自己的書籤「等寬」，作用中與否不影響寬度——
+     改用高度來表現選取狀態，按起來才不會一直位移。
      最右邊的「我的最愛」「最近使用」只有圖示，寬度固定（見 styles.css 的 .gpn-tab.is-fixed）。 */
   const GPN_TAB_SHARE = { 1: 0.40, 2: 0.60, 3: 0.75, 4: 0.86, 5: 0.90, 6: 0.93, 7: 0.95, 8: 0.96 };
-  const GPN_TAB_GAP = 0;          // .gpn-tabs 的 gap（書籤之間改用細線隔開）
-  const GPN_TAB_ADD_W = 44;       // 「＋」按鈕的寬度＋左右邊距（styles.css 的 .gpn-tab-add）
+  const GPN_TAB_GAP = 4;          // .gpn-tabs 的 gap
+  const GPN_TAB_ADD_W = 44;       // 「＋」按鈕的寬度＋左邊距
   const GPN_TAB_FIXED_W = 58;     // 一個固定書籤的寬度（要和 styles.css 的 .gpn-tab.is-fixed 一致）
 
   function layoutTabs() {
@@ -318,14 +315,25 @@ function gpnCreatePanel(opts) {
     }
   }
 
-  /** 只更新「哪個書籤是作用中」，不重建元素 */
-  function updateTabStates() {
+  /**
+   * 只更新「哪個書籤是作用中」——不重建元素，高度變化才有動畫。
+   * animate=true 時，被點到的書籤會先下沉再升起（像把索引標籤抽出來）。
+   */
+  function updateTabStates(animate = false) {
     const tab = activeTab();
     if (!tab) return;
+    ui.book.setAttribute('data-color', tab.color);
+
     for (const [id, node] of ui.tabEls) {
       const on = id === tab.id;
       node.classList.toggle('is-active', on);
       node.querySelector('.gpn-tab-main')?.setAttribute('aria-selected', String(on));
+
+      if (on && animate) {
+        node.classList.remove('is-popping');
+        void node.offsetWidth;          // 強制重排，動畫才會重新播放
+        node.classList.add('is-popping');
+      }
     }
     layoutTabs();
   }
@@ -336,7 +344,7 @@ function gpnCreatePanel(opts) {
     data.activeId = id;
     folderId = null;
     persist();
-    updateTabStates();
+    updateTabStates(true);   // 下沉 → 升起
     renderFolders();
     renderList();
     revealActiveFolder();
@@ -367,8 +375,13 @@ function gpnCreatePanel(opts) {
         onclick: () => { if (t.id !== data.activeId) switchTab(t.id); },
       }, t.label);
 
-      // 設定鈕不放在書籤上——它會佔掉空間，害書籤上的字無法置中（齒輪在底部，見 build）
-      const node = el('div', { class: 'gpn-tab' + (isActive ? ' is-active' : ''), 'data-id': t.id }, main);
+      // 設定鈕不放在書籤上——它會佔掉空間，害書籤上的字無法置中。
+      // 改放到下方 paper-head 的右側（見 build 的 ui.gear）。
+      const node = el('div', {
+        class: 'gpn-tab' + (isActive ? ' is-active' : ''),
+        'data-color': t.color, 'data-id': t.id,
+        onanimationend: () => node.classList.remove('is-popping'),
+      }, main);
 
       attachHoldDrag({
         handle: main, node, box: ui.tabs, selector: '.gpn-tab:not(.is-fixed)',
@@ -385,29 +398,30 @@ function gpnCreatePanel(opts) {
     ui.addTabBtn = data.tabs.length < GPN_MAX_TABS
       ? el('button', {
           class: 'gpn-tab-add', type: 'button',
-          'aria-label': '新增書籤', title: '新增一個書籤',
-          html: ICON_ADD,
+          'aria-label': '新增書籤', title: '新增一個書籤分類',
           onclick: openNewTab,
-        })
+        }, '＋')
       : null;
     if (ui.addTabBtn) ui.tabs.append(ui.addTabBtn);
 
     // 最右邊固定兩個：「我的最愛」「最近使用」。不能刪、不能拖，其他書籤也拖不到它們後面
     ui.tabs.append(
-      fixedTabNode(GPN_FAV_ID, '我的最愛', ICON_STAR,
-        '我的最愛（在提示詞右邊按星號，就會收進這裡）', 'gpn-tab--push gpn-tab--fav'),
-      fixedTabNode(GPN_RECENT_ID, '最近使用', ICON_HISTORY,
+      fixedTabNode(GPN_FAV_ID, 'fav', '我的最愛', ICON_STAR,
+        '我的最愛（在提示詞右邊按星號，就會收進這裡）', 'gpn-tab--push'),
+      fixedTabNode(GPN_RECENT_ID, 'recent', '最近使用', ICON_HISTORY,
         `最近使用（最近用過的 ${GPN_RECENT_MAX} 則）`));
 
+    ui.book.setAttribute('data-color', tab.color);
     layoutTabs();
   }
 
   /** 固定書籤（我的最愛、最近使用）：只有圖示，名稱放在滑鼠提示和讀螢幕軟體用的 aria-label */
-  function fixedTabNode(id, label, icon, title, extraClass = '') {
+  function fixedTabNode(id, color, label, icon, title, extraClass = '') {
     const on = activeTab().id === id;
     const node = el('div', {
       class: 'gpn-tab is-fixed' + (extraClass ? ' ' + extraClass : '') + (on ? ' is-active' : ''),
-      'data-id': id,
+      'data-color': color, 'data-id': id,
+      onanimationend: () => node.classList.remove('is-popping'),
     }, el('button', {
       class: 'gpn-tab-main', type: 'button', role: 'tab', 'aria-selected': String(on),
       'aria-label': label, title,
@@ -979,6 +993,39 @@ function gpnCreatePanel(opts) {
     btn.textContent = text;
   }
 
+  /**
+   * 書籤顏色：平常只有一顆小按鈕（色點＋顏色名稱），點了才展開六個色票，選好就收起來。
+   * 以前六個大色票一直攤在畫面上，太搶眼。
+   * 回傳 { node, set(顏色), close() }；onPick(顏色)
+   */
+  function buildColorPicker(onPick) {
+    const dot = el('span', { class: 'gpn-color-dot' });
+    const name = el('span', { class: 'gpn-color-name' });
+    const btn = el('button', {
+      class: 'gpn-color-btn', type: 'button', 'aria-expanded': 'false',
+      onclick: () => toggle(),
+    }, dot, name, el('span', { class: 'gpn-color-caret', 'aria-hidden': 'true' }));
+    const box = el('div', { class: 'gpn-swatches', hidden: '' });
+    for (const c of GPN_COLORS) {
+      box.append(el('button', {
+        class: 'gpn-swatch', type: 'button', 'data-color': c,
+        'aria-label': GPN_COLOR_LABELS[c], title: GPN_COLOR_LABELS[c],
+        onclick: () => { set(c); close(); onPick(c); },
+      }));
+    }
+    function toggle(open = box.hidden) {
+      box.hidden = !open;
+      btn.setAttribute('aria-expanded', String(open));
+    }
+    const close = () => toggle(false);
+    function set(color) {
+      dot.setAttribute('data-color', color);
+      name.textContent = GPN_COLOR_LABELS[color] || '';
+      for (const s of box.children) s.classList.toggle('is-on', s.getAttribute('data-color') === color);
+    }
+    return { node: el('div', { class: 'gpn-color' }, btn, box), set, close };
+  }
+
   const stop = (e) => e.stopPropagation();
 
   /* ==========================================================================
@@ -1168,7 +1215,7 @@ function gpnCreatePanel(opts) {
 
   /* ==========================================================================
      六、新增書籤（自己的書籤後面那個「＋」）
-     已經存在的書籤要改名、開關資料夾、刪除，都在齒輪的設定裡。
+     已經存在的書籤要改名、換色、刪除，都在齒輪的設定裡。
      ========================================================================== */
 
   function buildNewTabLayer() {
@@ -1178,12 +1225,14 @@ function gpnCreatePanel(opts) {
       onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); onNewTabSave(); } },
     });
     ui.nNameHint = el('div', { class: 'gpn-hint', text: '請輸入書籤名稱' });
+    ui.nColor = buildColorPicker((c) => { newTabColor = c; });
 
     ui.newTabLayer = el('div', { class: 'gpn-edit-layer' },
       el('div', { class: 'gpn-dialog gpn-dialog--sm', onmousedown: stop },
         el('h2', { text: '新增書籤' }),
         el('div', { class: 'gpn-dialog-body' },
-          field('書籤名稱', null, ui.nName, ui.nNameHint)
+          field('書籤名稱', null, ui.nName, ui.nNameHint),
+          field('書籤顏色', null, ui.nColor.node)
         ),
         el('div', { class: 'gpn-actions' },
           el('button', { class: 'gpn-btn gpn-btn--cancel', type: 'button', onclick: closeNewTab }, '取消'),
@@ -1195,6 +1244,11 @@ function gpnCreatePanel(opts) {
 
   function openNewTab() {
     if (data.tabs.length >= GPN_MAX_TABS) return;
+    // 預設挑一個還沒用過的顏色
+    const used = new Set(data.tabs.map((t) => t.color));
+    newTabColor = GPN_COLORS.find((c) => !used.has(c)) || GPN_COLORS[0];
+    ui.nColor.set(newTabColor);
+    ui.nColor.close();
     ui.nName.value = '';
     ui.nName.classList.remove('is-bad');
     ui.nNameHint.classList.remove('is-on');
@@ -1214,10 +1268,7 @@ function gpnCreatePanel(opts) {
       ui.nName.focus();
       return;
     }
-    // 書籤已經不分顏色了，但資料格式裡還是有 color（舊版外掛讀得到），默默挑一個還沒用過的
-    const used = new Set(data.tabs.map((t) => t.color));
-    const color = GPN_COLORS.find((c) => !used.has(c)) || GPN_COLORS[0];
-    const tab = { id: gpnNewId('t'), label, color, items: [] };
+    const tab = { id: gpnNewId('t'), label, color: newTabColor, items: [] };
     data.tabs.push(tab);
     data.activeId = tab.id;          // 新增後直接切過去
     folderId = null;
@@ -1357,7 +1408,7 @@ function gpnCreatePanel(opts) {
   /* ==========================================================================
      八、設定（底部的齒輪）
      左邊選單、右邊內容。第一頁是「這個書籤」的名稱與資料夾，後面是全部書籤共用的雲端同步、備份。
-     改名、開關資料夾都是「改了就存」，不必按儲存，也就不會有改了卻忘記存的狀況。
+     改名、換色、開關資料夾都是「改了就存」，不必按儲存，也就不會有改了卻忘記存的狀況。
      ========================================================================== */
 
   function buildSettingsLayer() {
@@ -1384,13 +1435,14 @@ function gpnCreatePanel(opts) {
         text: `版本 ${GPN_APP_VERSION}` + (edition ? `　${edition}` : ''),
       }));
 
-    /* ---- 名稱與資料夾（這個書籤）：名稱 → 資料夾開關 → 最下面是刪除書籤 ---- */
+    /* ---- 名稱與資料夾（這個書籤）：名稱 → 顏色 → 資料夾開關 → 最下面是刪除書籤 ---- */
     ui.sName = el('input', {
       class: 'gpn-input', type: 'text', maxlength: '8', placeholder: '例如：工作',
       oninput: onSettingsName,
       onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); ui.sName.blur(); } },
     });
     ui.sNameHint = el('div', { class: 'gpn-hint', text: '名稱不能空白' });
+    ui.sColor = buildColorPicker(onSettingsColor);
     ui.sDelNote = el('div', { class: 'gpn-note' });
     ui.sDel = el('button', { class: 'gpn-btn gpn-btn--del', type: 'button', onclick: onTabDelete }, '刪除這個書籤');
     ui.sDanger = el('div', { class: 'gpn-danger' },
@@ -1418,6 +1470,7 @@ function gpnCreatePanel(opts) {
     const secTab = el('section', { class: 'gpn-section', 'data-section': 'tab' },
       el('h3', { text: '名稱與資料夾' }),
       field('書籤名稱', null, ui.sName, ui.sNameHint),
+      field('書籤顏色', null, ui.sColor.node),
       field('資料夾', null, ui.sSwitch, ui.sConfirm, ui.sFolderNote),
       ui.sDanger);
 
@@ -1446,7 +1499,7 @@ function gpnCreatePanel(opts) {
   function openSettings(tabId, section = 'tab') {
     const tab = tabById(tabId);
     if (!tab) return;
-    // 「最近使用」「我的最愛」沒有名稱、資料夾可以改，直接打開全部書籤共用的那幾頁
+    // 「最近使用」「我的最愛」沒有名稱、顏色、資料夾可以改，直接打開全部書籤共用的那幾頁
     const hasAccount = !!cloud && !!cloudState.configured;
     if (tab.fixed && section === 'tab') section = hasAccount ? 'account' : 'backup';
     if (section === 'account' && !hasAccount) section = tab.fixed ? 'backup' : 'tab';
@@ -1454,6 +1507,7 @@ function gpnCreatePanel(opts) {
     ui.sName.value = tab.label;
     ui.sName.classList.remove('is-bad');
     ui.sNameHint.classList.remove('is-on');
+    ui.sColor.close();
     disarmTabDelete();
     resetBackup();
     resetAccount();
@@ -1507,6 +1561,7 @@ function gpnCreatePanel(opts) {
 
     const n = gpnTabItemCount(tab);
     ui.sNavGroup.textContent = `「${tab.label}」這個書籤`;
+    ui.sColor.set(tab.color);
 
     const on = !!tab.folders;
     ui.sSwitch.setAttribute('aria-checked', String(on));
@@ -1527,6 +1582,15 @@ function gpnCreatePanel(opts) {
     ui.sNameHint.classList.toggle('is-on', !label);
     if (!label || label === tab.label) return;
     tab.label = label;
+    persist();
+    renderTabs();
+    refreshSettings();
+  }
+
+  function onSettingsColor(color) {
+    const tab = tabById(settingsTabId);
+    if (!tab || tab.fixed || tab.color === color) return;
+    tab.color = color;
     persist();
     renderTabs();
     refreshSettings();

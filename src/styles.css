@@ -57,10 +57,13 @@
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: var(--paper);
+  /* 毛玻璃底色，icon 維持原本的收藏旗幟 */
+  background: var(--glass);
+  backdrop-filter: var(--glass-filter);
+  -webkit-backdrop-filter: var(--glass-filter);
   border: 1px solid var(--outline);
   color: var(--text-mute);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-lg), inset 0 1px 0 var(--glass-hi);
   transition: transform .18s cubic-bezier(.2, 0, 0, 1),
               color .18s ease, border-color .18s ease;
 }
@@ -91,20 +94,12 @@ button { cursor: pointer; }
 /* 下面很多元件自己設了 display，會蓋掉瀏覽器內建的 [hidden]，這裡補回來 */
 [hidden] { display: none !important; }
 
-/* ---------- Design tokens：淺色 ----------
-   長相仿 Chrome 的視窗：最底是深一階的「框」（書籤列），
-   選中的書籤和底下的紙張是同一塊淺色，卡片像網址列一樣比紙張再深一點。
-   全部是不透明的純色：以前的毛玻璃會讓顏色跟著背後的網頁變，看起來雜。 */
+/* ---------- Design tokens：淺色 ---------- */
 :host {
   color-scheme: light;                 /* 下拉選單等原生元件跟著主題 */
-  --frame:             #dfe1e5;        /* 書籤列（沒選中的書籤就是這個顏色） */
-  --paper:             #ffffff;        /* 選中的書籤、紙張、對話框 */
-  --card:              #f1f3f4;        /* 卡片 */
-  --tab-hover:         rgba(0, 0, 0, .06);
-  --sep:               rgba(0, 0, 0, .22);   /* 沒選中的書籤之間的細線 */
-  --line:              rgba(0, 0, 0, .10);   /* 分隔線 */
   --surface:           #ffffff;
-  --surface-input:     #f1f3f4;
+  --surface-card:      #ffffff;
+  --surface-input:     #f8f9fa;
   --outline:           #dadce0;
   --outline-strong:    #c4c7c5;
   --text:              #1f1f1f;
@@ -114,48 +109,105 @@ button { cursor: pointer; }
   --error:             #d93025;
   --error-container:   #fce8e6;
   --hover:             rgba(0, 0, 0, .06);
-  --selected:          rgba(0, 0, 0, .09);   /* 選中的資料夾、設定的選單：簡單的灰 */
+  --folder-on:         rgba(0, 0, 0, .10);   /* 選中的資料夾：比滑過再深一點的灰 */
   --scrim:             rgba(0, 0, 0, .18);
   --shadow-lg: 0 8px 12px 6px rgba(0,0,0,.09), 0 4px 4px rgba(0,0,0,.12);
   --shadow-md: 0 2px 6px 2px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.1);
 
-  --tab-h: 42px;                       /* 書籤的高度（全部一樣高） */
+  /* 書籤高度（keyframes 也會用到，所以集中定義在這裡） */
+  --tab-h: 42px;
+  --tab-h-active: 54px;
 
-  --c-warn: #b7791f;                   /* 雲端沒連上 */
-  --c-ok:   #1e8e3e;                   /* 已同步 */
-  --c-fav:  #e2a300;                   /* 我的最愛：星星的金黃色 */
+  /* ---- 毛玻璃（Liquid Glass）----
+     真正看得見背後的玻璃：表面只疊很淡的一層，
+     可讀性交給 --glass-filter 裡的 brightness() 負責把背景推向主題亮度。 */
+  --glass-blur: 28px;
+  --glass-sat: 170%;
+  --glass-hi: rgba(255, 255, 255, .85);          /* 上緣高光（模擬鏡面反光） */
+  --glass-rim: rgba(255, 255, 255, .5);          /* 邊緣細光 */
+  --scrim-blur: 2px;
+
+  /* 這一行是整個效果的核心：
+     真正的玻璃不是靠「疊一層不透明色」，而是把背後的畫面模糊、增豔，
+     再用 brightness() 往主題亮度推 —— 背景看得見，文字對比也還在。
+     淺色主題要把背後「提亮」，深色主題要「壓暗」。 */
+  --glass-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(1.3);
+
+  /* ---- Liquid Glass 的玻璃本體：中性、不上色 ----
+     這是這套設計的核心：表面本身幾乎沒有顏色，顏色是「背後透出來的」。
+     所以不再有牛皮紙黃／薄荷綠那種整片上色的表面。 */
+  --glass:       rgba(255, 255, 255, .30);   /* 主要玻璃（紙張、對話框） */
+  --glass-soft:  rgba(255, 255, 255, .16);   /* 次要玻璃（未選取的書籤） */
+  --glass-card:  rgba(255, 255, 255, .42);   /* 卡片（承載文字，稍微實一點） */
+  --glass-line:  rgba(255, 255, 255, .55);   /* 玻璃邊界細光 */
+
+  /* 書籤識別色只當「重點色」用：一條細色帶 + 極淡的暈染，不是整片塗滿 */
+  --c-amber-accent:  #d99a2b;
+  --c-green-accent:  #3f9d55;
+  --c-blue-accent:   #3b82f6;
+  --c-rose-accent:   #e05c86;
+  --c-purple-accent: #8b5cf6;
+  --c-teal-accent:   #14a5a0;
+  --c-recent-accent: #64748b;
+  --c-fav-accent:    #e2a300;          /* 我的最愛：星星的金黃色 */
 }
 
-/* ---------- Design tokens：深色（數值取自 Chrome 的深色主題） ----------
+/* ---------- Design tokens：深色 ----------
    外掛跟著 AI 網站的深淺色；網頁版和工具列小視窗跟著系統。 */
 :host([data-theme="dark"]) {
   color-scheme: dark;
-  --frame:             #1f1f1f;
-  --paper:             #3c3c3c;
-  --card:              #282828;
-  --tab-hover:         rgba(255, 255, 255, .07);
-  --sep:               rgba(255, 255, 255, .22);
-  --line:              rgba(255, 255, 255, .10);
   --surface:           #1e1f20;
-  --surface-input:     #282828;
-  --outline:           #5f6368;
-  --outline-strong:    #80868b;
+  --surface-card:      #2a2b2d;
+  --surface-input:     #131314;
+  --outline:           #444746;
+  --outline-strong:    #5f6368;
   --text:              #e3e3e3;
-  --text-mute:         #b0b5ba;
+  --text-mute:         #a2a9b0;
   --primary:           #a8c7fa;
   --on-primary:        #062e6f;
   --error:             #f2b8b5;
   --error-container:   #5c1d1a;
-  --hover:             rgba(255, 255, 255, .08);
-  --selected:          rgba(255, 255, 255, .12);
+  --hover:             rgba(255, 255, 255, .09);
+  --folder-on:         rgba(255, 255, 255, .14);
   --scrim:             rgba(0, 0, 0, .3);
   --shadow-lg: 0 8px 12px 6px rgba(0,0,0,.3), 0 4px 4px rgba(0,0,0,.4);
   --shadow-md: 0 2px 6px 2px rgba(0,0,0,.28), 0 1px 2px rgba(0,0,0,.34);
 
-  --c-warn: #f0b757;
-  --c-ok:   #6dc47f;
-  --c-fav:  #fcc934;
+  /* 深色底下高光要收斂，否則會像鑲白邊 */
+  --glass-hi: rgba(255, 255, 255, .16);
+  --glass-rim: rgba(255, 255, 255, .08);
+
+  /* 深色主題反過來：把背後「壓暗」，淺色文字才讀得清楚 */
+  --glass-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(.5);
+
+  --glass:       rgba(255, 255, 255, .07);
+  --glass-soft:  rgba(255, 255, 255, .035);
+  --glass-card:  rgba(255, 255, 255, .11);
+  --glass-line:  rgba(255, 255, 255, .18);
+
+  /* 深色底下重點色要亮一階才看得出來 */
+  --c-amber-accent:  #f0b757;
+  --c-green-accent:  #6dc47f;
+  --c-blue-accent:   #6ea8fe;
+  --c-rose-accent:   #f386a6;
+  --c-purple-accent: #b49bf7;
+  --c-teal-accent:   #4fc9c2;
+  --c-recent-accent: #94a3b8;
+  --c-fav-accent:    #fcc934;
 }
+
+/* ---------- 顏色對應 ----------
+   Liquid Glass 的做法：表面一律是中性玻璃，
+   書籤的識別色只透過 --accent 以「細色帶 + 極淡暈染」呈現。
+   筆記本、書籤、設定視窗都掛 data-color，所以這裡不限定元素。 */
+[data-color="amber"]  { --accent: var(--c-amber-accent); }
+[data-color="green"]  { --accent: var(--c-green-accent); }
+[data-color="blue"]   { --accent: var(--c-blue-accent); }
+[data-color="rose"]   { --accent: var(--c-rose-accent); }
+[data-color="purple"] { --accent: var(--c-purple-accent); }
+[data-color="teal"]   { --accent: var(--c-teal-accent); }
+[data-color="recent"] { --accent: var(--c-recent-accent); }
+[data-color="fav"]    { --accent: var(--c-fav-accent); }
 
 /* ---------- 遮罩 ---------- */
 .gpn-overlay {
@@ -191,8 +243,7 @@ button { cursor: pointer; }
 
 /* ---------- 筆記本主體：固定尺寸，切換書籤時不跳動 ----------
    寬度比單層時代寬：左邊多了一欄資料夾，右邊的卡片仍維持原本的寬度。
-   螢幕高度通常比寬度吃緊，所以寧可加寬也不加高。
-   整本像一個 Chrome 視窗：上面是書籤列（深色的框），下面是紙張（淺色）。 */
+   螢幕高度通常比寬度吃緊，所以寧可加寬也不加高。 */
 .gpn-book {
   position: relative;              /* 左下角外面的「全部提示詞」以筆記本為準定位 */
   --folders-w: 216px;              /* 資料夾欄寬度：「2. 摘要與資料整理」剛好一行 */
@@ -206,8 +257,6 @@ button { cursor: pointer; }
   max-height: calc((100vh - 48px) / var(--gpn-zoom, 1));
   display: flex;
   flex-direction: column;
-  border-radius: 18px;
-  box-shadow: var(--shadow-lg);
   animation: gpn-rise .22s cubic-bezier(.2, 0, 0, 1);
   transition: transform .22s cubic-bezier(.2, 0, 0, 1), opacity .22s ease, filter .22s ease;
 }
@@ -219,79 +268,95 @@ button { cursor: pointer; }
   pointer-events: none;
 }
 
-/* ---------- 書籤列：仿 Chrome 的分頁 ----------
-   沒選中的書籤沒有底色（就是框的深色），書籤之間用一條細線隔開；
-   選中的書籤和底下的紙張是同一塊淺色，兩個下角往外彎，像從紙張長出來一樣。
-   所有書籤一樣高：選中與否只看顏色，按起來不會跳動。 */
+/* ---------- 書籤列 ----------
+   這層不能設 position/z-index，否則會產生新堆疊脈絡，
+   書籤就無法和下方紙張互相疊壓，索引標籤的立體感會失效。
+   padding-left: 0 → 第一個書籤的左緣和下方紙張切齊。 */
 .gpn-tabs {
-  flex: none;
   display: flex;
-  align-items: flex-end;
-  height: calc(var(--tab-h) + 8px);
-  padding: 0 10px;                 /* 左右留一點，選中書籤往外彎的角才不會被切掉 */
-  background: var(--frame);
-  border-radius: 18px 18px 0 0;
+  align-items: flex-end;      /* 書籤一律對齊底部，長高時只往上長 */
+  gap: 4px;
+  padding-left: 0;
+  flex: none;
+  /* 固定成「最高的書籤」的高度。
+     否則這一列的高度會跟著書籤長高／變矮，
+     下面的紙張就會被推著上下移動（彈跳時整個面板跟著晃）。 */
+  height: var(--tab-h-active);
 }
 
 .gpn-tab {
-  --r: 10px;                       /* 選中時兩個下角往外彎的半徑 */
   position: relative;
-  /* 寬度由 panel.js 依書籤數量算出，所有書籤「等寬」且不隨選取改變 */
+  z-index: 1;                  /* 低於紙張 → 被紙張蓋住 */
+  /* 寬度由 content.js 依書籤數量算出百分比，所有書籤「等寬」且不隨選取改變；
+     選取狀態改用「高度」表現，按起來才不會一直左右位移。 */
   flex: none;
   min-width: 54px;
   height: var(--tab-h);
   display: flex;
-  border-radius: 12px 12px 0 0;
+  align-items: center;
+  background: var(--glass-soft);
+  backdrop-filter: var(--glass-filter);
+  -webkit-backdrop-filter: var(--glass-filter);
+  border: 1px solid var(--glass-line);
+  border-bottom: none;
+  border-radius: 14px 14px 0 0;
+  box-shadow: inset 0 1px 0 var(--glass-hi);
+  overflow: hidden;
   touch-action: manipulation;
-  transition: background-color .15s ease;
+  /* 刻意「不」對 height 做 transition：被取消選取的書籤直接降回原高度。
+     只有被點選的書籤走下面的 keyframes，畫面焦點單純、節奏俐落。
+     （這是實際比較過幾種版本後選定的行為） */
+  transition: background-color .3s ease,
+              filter .15s ease;
 }
-.gpn-tab:not(.is-active):hover { background: var(--tab-hover); }
+.gpn-tab:hover { filter: brightness(1.18); }
 .gpn-tab.is-active {
-  z-index: 2;
-  /* 往下多蓋 1px 到紙張上：放大 140% 時才不會在書籤和紙張之間露出一條細縫 */
-  height: calc(var(--tab-h) + 1px);
+  height: var(--tab-h-active);   /* 明顯高過未選取的書籤 */
+  z-index: 3;                  /* 高於紙張 → 蓋住紙張上緣 */
   margin-bottom: -1px;
-  background: var(--paper);
-}
-/* 選中書籤兩個下角往外彎的弧（Chrome 分頁的「腳」） */
-.gpn-tab.is-active::before,
-.gpn-tab.is-active::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  width: var(--r);
-  height: var(--r);
-  pointer-events: none;
-}
-.gpn-tab.is-active::before {
-  right: 100%;
-  background: radial-gradient(circle at 0 0, transparent var(--r), var(--paper) calc(var(--r) + .5px));
-}
-.gpn-tab.is-active::after {
-  left: 100%;
-  background: radial-gradient(circle at 100% 0, transparent var(--r), var(--paper) calc(var(--r) + .5px));
+  /* 中性玻璃 + 極淡的識別色暈染（8%），不是整片上色 */
+  background:
+    linear-gradient(to bottom,
+      color-mix(in srgb, var(--accent) 16%, transparent),
+      transparent 60%),
+    var(--glass);
+  /* 底緣用和紙張一模一樣的玻璃色，才不會出現接縫 */
+  border-bottom: 1px solid var(--glass);
+  /* 頂部一條細色帶：書籤的識別色改由這裡表現 */
+  box-shadow: inset 0 2px 0 var(--accent), inset 0 3px 0 var(--glass-hi);
 }
 
 /* 長按 250ms 後進入「排序模式」：被抓起的書籤浮起來，其餘淡化 */
 .gpn-tab.is-drag {
   z-index: 9;
-  transform: scale(1.05);
+  transform: scale(1.06);
   cursor: grabbing;
-  background: var(--paper);
-  border-radius: 12px;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, .32);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, .38), inset 0 1px 0 var(--glass-hi);
   transition: transform .16s cubic-bezier(.2, 0, 0, 1);
 }
-.gpn-tab.is-drag::before, .gpn-tab.is-drag::after { display: none; }
 .gpn-tabs.is-reordering .gpn-tab:not(.is-drag) { opacity: .55; }
 .gpn-tabs.is-reordering .gpn-tab-main { cursor: grabbing; }
 
+/* 點選時：從「未選取的高度」開始下沉，沉到紙張後面，再緩緩升起到作用中高度。
+   高度必須寫在 keyframes 裡——若交給 transition，瀏覽器會先把高度套成
+   作用中高度才開始播動畫，看起來就像「先瞬間跳到最高點再下沉」。
+   z-index 整段維持 1（低於紙張的 2），下沉時才會沉到紙張後面，
+   而不是蓋住 paper-head 的文字；動畫結束後才回到 .is-active 的 3。 */
+.gpn-tab.is-popping { animation: gpn-tab-pop .62s cubic-bezier(.33, 0, .18, 1); }
+@keyframes gpn-tab-pop {
+  0%   { height: var(--tab-h);        transform: translateY(0);   z-index: 1 }
+  34%  { height: var(--tab-h);        transform: translateY(6px); z-index: 1 }  /* 沉到紙張後面 */
+  100% { height: var(--tab-h-active); transform: translateY(0);   z-index: 1 }  /* 再升起長高 */
+}
+
 /* 書籤上只有文字，沒有別的元素，中文字才能真正置中 */
 .gpn-tab-main {
-  position: relative;
   flex: 1 1 auto;
   min-width: 0;
-  padding: 0 12px;
+  height: 100%;
+  /* 多留一點下方內距：書籤是靠底部對齊的，沒有這個留白，
+     下沉或未選取時文字會幾乎貼到底部框線，看起來很擠。 */
+  padding: 0 12px 6px;
   font-size: 16px;
   font-weight: 600;
   color: var(--text-mute);
@@ -299,71 +364,67 @@ button { cursor: pointer; }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: color .15s ease;
+  transition: color .3s ease;
 }
-.gpn-tab.is-active .gpn-tab-main, .gpn-tab:hover .gpn-tab-main { color: var(--text); }
-.gpn-tab-main:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; border-radius: 12px 12px 0 0; }
-/* 書籤之間的細線：畫在每個書籤的左邊。
-   和 Chrome 一樣，選中或滑過的書籤兩側不畫，第一個、以及靠右的「我的最愛」左邊也不畫 */
-.gpn-tab-main::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 11px;
-  bottom: 11px;
-  width: 1px;
-  background: var(--sep);
-  transition: opacity .15s ease;
-}
-.gpn-tab:first-child .gpn-tab-main::before,
-.gpn-tab--push .gpn-tab-main::before,
-.gpn-tab.is-active .gpn-tab-main::before,
-.gpn-tab.is-active + .gpn-tab .gpn-tab-main::before,
-.gpn-tab:hover .gpn-tab-main::before,
-.gpn-tab:hover + .gpn-tab .gpn-tab-main::before,
-.gpn-tabs.is-reordering .gpn-tab-main::before { opacity: 0; }
-
+.gpn-tab.is-active .gpn-tab-main { color: var(--text); }
 .gpn-tab-icon { display: inline-flex; vertical-align: -3px; margin-right: 5px; }
 .gpn-tab-icon svg { width: 17px; height: 17px; fill: currentColor; }
+.gpn-tab-main:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
 /* 「我的最愛」「最近使用」固定靠最右邊，和自己的書籤之間空出來 */
 .gpn-tab--push { margin-left: auto; }
-.gpn-tab--fav .gpn-tab-icon { color: var(--c-fav); }
+.gpn-tab[data-color="fav"] .gpn-tab-icon { color: var(--c-fav-accent); }
 /* 「我的最愛」「最近使用」只有圖示，固定窄寬（要和 panel.js 的 GPN_TAB_FIXED_W 一致） */
 .gpn-tab.is-fixed { width: 58px; min-width: 0; }
 .gpn-tab.is-fixed .gpn-tab-main { padding-left: 0; padding-right: 0; }
 .gpn-tab.is-fixed .gpn-tab-icon { margin-right: 0; }
 .gpn-tab.is-fixed .gpn-tab-icon svg { width: 21px; height: 21px; }
 
-/* 新增書籤：和 Chrome 的「＋」一樣，自己的書籤後面一顆小圓鈕
-   （寬度＋左右邊距要和 panel.js 的 GPN_TAB_ADD_W 一致） */
+/* 新增書籤 */
 .gpn-tab-add {
+  position: relative;
+  top: 5px;
+  z-index: 1;
   flex: none;
-  align-self: center;
-  width: 34px;
-  height: 34px;
-  margin: 8px 4px 0 6px;           /* 往下 4px：和書籤的文字對齊，而不是和整條書籤列對齊 */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
+  width: 42px; height: 38px;
+  margin-left: 2px;
+  border: 1px dashed var(--outline-strong);
+  border-bottom: none;
+  border-radius: 12px 12px 0 0;
+  background: transparent;
   color: var(--text-mute);
-  transition: background-color .15s ease, color .15s ease;
+  font-size: 17px;
+  line-height: 1;
+  transition: top .16s cubic-bezier(.2,0,0,1), color .16s ease,
+              border-color .16s ease, background-color .16s ease;
 }
-.gpn-tab-add:hover { background: var(--tab-hover); color: var(--text); }
-.gpn-tab-add:focus-visible { outline: 3px solid var(--primary); outline-offset: 1px; }
-.gpn-tab-add svg { width: 22px; height: 22px; display: block; fill: currentColor; }
+.gpn-tab-add:hover {
+  top: 2px;
+  color: var(--primary);
+  border-color: var(--primary);
+  background: var(--hover);
+}
+.gpn-tab-add:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 
 /* ---------- 紙張 ---------- */
 .gpn-paper {
   position: relative;
+  z-index: 2;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--paper);
-  /* 上面兩個角是直角：接著書籤列 */
-  border-radius: 0 0 18px 18px;
+  /* 中性玻璃紙張：所有書籤共用同一種材質，不再依書籤上色 */
+  background: var(--glass);
+  backdrop-filter: var(--glass-filter);
+  -webkit-backdrop-filter: var(--glass-filter);
+  border: 1px solid var(--glass-line);
+  /* 上面兩個角都是直角：左上接第一個書籤，右上接最右邊的「最近使用」 */
+  border-radius: 0 0 20px 20px;
+  /* 外陰影拉開層次，內側上緣高光模擬玻璃的鏡面反光 */
+  box-shadow: var(--shadow-lg), inset 0 1px 0 var(--glass-hi);
   overflow: hidden;
+  /* 換書籤時紙張顏色跟著書籤一起淡入淡出（配合放慢後的書籤動畫） */
+  transition: background-color .5s ease, border-color .5s ease;
 }
 /* 網頁版在不能存檔的瀏覽器裡打開時的警告 */
 .gpn-notice {
@@ -394,7 +455,9 @@ button { cursor: pointer; }
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--line);
+  border-right: 1px solid var(--glass-line);
+  /* 很淡的一層底，和右邊的卡片區分開，但仍然是同一張紙 */
+  background: var(--glass-soft);
 }
 .gpn-folder-list {
   flex: 1;
@@ -417,8 +480,8 @@ button { cursor: pointer; }
   transition: background-color .16s ease;
 }
 .gpn-folder:hover { background: var(--hover); }
-/* 選中的資料夾：簡單的灰底就好（設定視窗左邊的選單也是同一個灰） */
-.gpn-folder.is-active { background: var(--selected); }
+/* 選中的資料夾：簡單的灰底就好。資料夾只是分類，不需要搶眼的顏色（書籤本身已經有顏色了） */
+.gpn-folder.is-active { background: var(--folder-on); }
 .gpn-folder-main {
   flex: 1;
   min-width: 0;
@@ -441,8 +504,8 @@ button { cursor: pointer; }
   position: relative;
   z-index: 2;
   transform: scale(1.04);
-  background: var(--paper);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, .28);
+  background: var(--glass-card);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, .28), inset 0 1px 0 var(--glass-hi);
   cursor: grabbing;
   transition: transform .16s cubic-bezier(.2, 0, 0, 1);
 }
@@ -524,7 +587,7 @@ button { cursor: pointer; }
 .gpn-tool:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 .gpn-tool > svg { width: 22px; height: 22px; display: block; fill: currentColor; }
 /* 雲端狀態平常都是灰色，只有出問題才上色（沒連上：黃；同步失敗：紅） */
-.gpn-cloud-btn[data-kind="warn"] { color: var(--c-warn); }
+.gpn-cloud-btn[data-kind="warn"] { color: var(--c-amber-accent); }
 .gpn-cloud-btn[data-kind="bad"] { color: var(--error); border-color: var(--error); }
 .gpn-cloud-btn .gpn-cloud-icon svg { width: 22px; height: 22px; }
 .gpn-cloud-icon { display: inline-flex; }
@@ -579,13 +642,18 @@ button { cursor: pointer; }
   align-items: stretch;
   flex: none;
   min-height: 68px;
-  /* 像 Chrome 的網址列：沒有框線、沒有陰影，只比紙張深一點 */
-  background: var(--card);
+  background: var(--glass-card);
+  backdrop-filter: var(--glass-filter);
+  -webkit-backdrop-filter: var(--glass-filter);
+  border: 1px solid var(--outline);
   border-radius: 16px;
-  transition: box-shadow .16s ease, transform .16s ease;
+  box-shadow: var(--shadow-md), inset 0 1px 0 var(--glass-hi);
+  transition: box-shadow .16s ease, border-color .16s ease, transform .16s ease;
 }
+.gpn-card:hover { border-color: var(--outline-strong); }
 .gpn-card.is-dragging {
-  box-shadow: 0 0 0 2px var(--primary), 0 10px 22px rgba(0,0,0,.34);
+  border-color: var(--primary);
+  box-shadow: 0 10px 22px rgba(0,0,0,.34);
   transform: scale(1.012);
 }
 .gpn-list.is-dragging .gpn-card:not(.is-dragging) { opacity: .55; }
@@ -687,8 +755,8 @@ button { cursor: pointer; }
   transition: background-color .16s ease, color .16s ease, opacity .16s ease, transform .16s ease;
 }
 .gpn-card:hover .gpn-star, .gpn-star:focus-visible { opacity: 1; }
-.gpn-star:hover { background: var(--hover); color: var(--c-fav); }
-.gpn-star.is-on { color: var(--c-fav); opacity: 1; }
+.gpn-star:hover { background: var(--hover); color: var(--c-fav-accent); }
+.gpn-star.is-on { color: var(--c-fav-accent); opacity: 1; }
 .gpn-star:active { transform: scale(.88); }
 .gpn-star:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
 .gpn-star svg { width: 22px; height: 22px; display: block; fill: currentColor; }
@@ -697,7 +765,7 @@ button { cursor: pointer; }
   display: flex; align-items: center; justify-content: center;
   color: var(--text-mute);
   border-radius: 0 16px 16px 0;
-  border-left: 1px solid var(--line);
+  border-left: 1px solid var(--outline);
   transition: background-color .16s ease, color .16s ease;
 }
 .gpn-edit:hover { background: var(--hover); color: var(--primary); }
@@ -725,7 +793,7 @@ button { cursor: pointer; }
   flex: none;
   display: flex; align-items: center; gap: 10px;
   padding: 12px 16px 16px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--glass-line);
 }
 .gpn-add {
   flex: 1; min-width: 0;
@@ -762,11 +830,13 @@ button { cursor: pointer; }
   max-height: calc((100vh - 48px) / var(--gpn-zoom, 1));
   display: flex;
   flex-direction: column;
-  background: var(--paper);
+  background: var(--glass);
+  backdrop-filter: var(--glass-filter);
+  -webkit-backdrop-filter: var(--glass-filter);
   color: var(--text);
-  border: 1px solid var(--line);
+  border: 1px solid var(--outline);
   border-radius: 28px;
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-lg), inset 0 1px 0 var(--glass-hi);
   animation: gpn-rise .2s cubic-bezier(.2, 0, 0, 1);
   overflow: hidden;
 }
@@ -829,8 +899,47 @@ button { cursor: pointer; }
 }
 
 
+/* 書籤顏色：平常只有一顆小按鈕（色點＋名稱），點了才展開色票 */
+.gpn-color-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 14px 0 16px;
+  border-radius: 12px;
+  border: 1px solid var(--outline);
+  background: var(--surface-input);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 500;
+  transition: border-color .16s ease;
+}
+.gpn-color-btn:hover { border-color: var(--outline-strong); }
+.gpn-color-btn:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.gpn-color-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); }
+.gpn-color-caret {
+  width: 7px; height: 7px; margin: -3px 2px 0 4px;
+  border-right: 2px solid var(--text-mute);
+  border-bottom: 2px solid var(--text-mute);
+  transform: rotate(45deg);
+  transition: transform .16s ease, margin .16s ease;
+}
+.gpn-color-btn[aria-expanded="true"] .gpn-color-caret { transform: rotate(-135deg); margin-top: 3px; }
+.gpn-swatches { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.gpn-swatch {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(128,128,128,.4);
+  transition: transform .14s cubic-bezier(.2,0,0,1), outline-color .14s ease;
+  outline: 2px solid transparent;
+  outline-offset: 3px;
+}
+.gpn-swatch:hover { transform: scale(1.1); }
+.gpn-swatch.is-on { outline-color: var(--text-mute); }
+.gpn-swatch:focus-visible { outline-color: var(--primary); }
+
 /* ---------- 備份與同步 ---------- */
-.gpn-sep { height: 1px; margin: 24px 0 20px; background: var(--line); }
+.gpn-sep { height: 1px; margin: 22px 0; background: var(--glass-line); }
 
 .gpn-brow { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 2px; }
 .gpn-btn2 {
@@ -885,6 +994,12 @@ button { cursor: pointer; }
   background: color-mix(in srgb, var(--primary) 12%, transparent);
 }
 .gpn-seg:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.gpn-swatch[data-color="amber"]  { background: var(--c-amber-accent); }
+.gpn-swatch[data-color="green"]  { background: var(--c-green-accent); }
+.gpn-swatch[data-color="blue"]   { background: var(--c-blue-accent); }
+.gpn-swatch[data-color="rose"]   { background: var(--c-rose-accent); }
+.gpn-swatch[data-color="purple"] { background: var(--c-purple-accent); }
+.gpn-swatch[data-color="teal"]   { background: var(--c-teal-accent); }
 
 .gpn-actions {
   flex: none;
@@ -947,7 +1062,8 @@ button { cursor: pointer; }
   flex-direction: column;
   gap: 4px;
   padding: 20px 12px 16px 14px;
-  border-right: 1px solid var(--line);
+  border-right: 1px solid var(--glass-line);
+  background: var(--glass-soft);
   overflow-y: auto;
 }
 .gpn-dialog .gpn-settings-nav h2 { padding: 4px 10px 10px; }
@@ -976,8 +1092,8 @@ button { cursor: pointer; }
   transition: background-color .16s ease, color .16s ease;
 }
 .gpn-nav-item:hover { background: var(--hover); }
-/* 選中的項目：和主畫面選中的資料夾同一個灰 */
-.gpn-nav-item.is-active { color: var(--text); font-weight: 600; background: var(--selected); }
+/* 選中的項目：和主畫面選中的資料夾同一個灰（兩邊的底色也一樣是 --glass-soft） */
+.gpn-nav-item.is-active { color: var(--text); font-weight: 600; background: var(--folder-on); }
 .gpn-nav-item:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
 .gpn-nav-icon svg { width: 19px; height: 19px; display: block; fill: currentColor; }
 .gpn-nav-text { flex: 1; min-width: 0; }
@@ -1082,13 +1198,13 @@ button { cursor: pointer; }
   font-weight: 600;
   color: var(--text-mute);
 }
-.gpn-account-status[data-kind="ok"] { color: var(--c-ok); }
-.gpn-account-status[data-kind="warn"] { color: var(--c-warn); }
+.gpn-account-status[data-kind="ok"] { color: var(--c-green-accent); }
+.gpn-account-status[data-kind="warn"] { color: var(--c-amber-accent); }
 .gpn-account-status[data-kind="bad"] { color: var(--error); }
 .gpn-btn2[disabled], .gpn-btn[disabled] { opacity: .5; pointer-events: none; }
 
 /* 刪除書籤：和其他設定隔開，放在最下面 */
-.gpn-danger { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--line); }
+.gpn-danger { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--glass-line); }
 .gpn-danger .gpn-btn--del {
   margin-top: 12px;
   border: 1px solid color-mix(in srgb, var(--error) 45%, transparent);
@@ -1165,7 +1281,7 @@ button { cursor: pointer; }
     overflow-y: hidden;
     padding: 12px;
     border-right: 0;
-    border-bottom: 1px solid var(--line);
+    border-bottom: 1px solid var(--glass-line);
     scrollbar-width: none;
   }
   .gpn-settings-nav::-webkit-scrollbar { display: none; }
@@ -1191,9 +1307,11 @@ button { cursor: pointer; }
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: var(--paper);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-md);
+  background: var(--glass);
+  backdrop-filter: var(--glass-filter);
+  -webkit-backdrop-filter: var(--glass-filter);
+  border: 1px solid var(--glass-line);
+  box-shadow: var(--shadow-md), inset 0 1px 0 var(--glass-hi);
   color: var(--text-mute);
   transition: color .14s ease, border-color .14s ease;
 }
@@ -1246,13 +1364,46 @@ button { cursor: pointer; }
 }
 
 /* ============================================================================
-   六、小螢幕 / 側邊欄
+   六、毛玻璃的退場機制
+   半透明會讓對比度隨背景浮動，是這種材質最大的可讀性風險。
+   下面三種情況一律改回「完全不透明」，確保字永遠看得清楚。
    ========================================================================== */
+
+/* 1. 瀏覽器不支援 backdrop-filter → 沒有模糊就別留透明度 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :host {
+    --glass: var(--surface); --glass-soft: var(--surface);
+    --glass-card: var(--surface-card); --glass-filter: none;
+  }
+}
+
+/* 2. 使用者在系統設定要求降低透明度（macOS/Windows 的輔助使用選項） */
+@media (prefers-reduced-transparency: reduce) {
+  :host {
+    --glass: var(--surface); --glass-soft: var(--surface);
+    --glass-card: var(--surface-card); --glass-filter: none;
+  }
+  .gpn-overlay, .gpn-paper, .gpn-tab, .gpn-card, .gpn-dialog, .gpn-fab, .gpn-folders,
+  .gpn-settings-nav {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+/* 3. 使用者要求高對比 */
+@media (prefers-contrast: more) {
+  :host {
+    --glass: var(--surface); --glass-soft: var(--surface);
+    --glass-card: var(--surface-card); --glass-filter: none;
+  }
+}
+
+/* ---------- 小螢幕 / 側邊欄 ---------- */
 
 /* 面板被擠窄（手機、很窄的視窗）時，資料夾從左邊直排改成上面一排可左右捲 */
 @container gpn-book (max-width: 600px) {
   .gpn-body { flex-direction: column; }
-  .gpn-folders { width: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  .gpn-folders { width: auto; border-right: 0; border-bottom: 1px solid var(--glass-line); }
   .gpn-folder-list {
     flex-direction: row;
     overflow-x: auto;
