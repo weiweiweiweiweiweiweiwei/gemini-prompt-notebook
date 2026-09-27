@@ -7,7 +7,7 @@
  *   → 網頁版：web/share.js
  * tools/checksync.py 會比對這兩份，不一樣就會叫。
  *
- * 匯出格式（.json 檔內容，也是「代碼」解開後的樣子）：
+ * 匯出格式（.json 備份檔的內容）：
  * {
  *   "app": "gpn", "version": 4, "exportedAt": "2026-09-22T12:34:56.000Z",
  *   "tabs": [
@@ -23,15 +23,9 @@
 
 const GPN_SHARE_APP = 'gpn';
 
-/* ========== 代碼（base64）================================================= */
-
-/** JSON → base64。中文要先轉成 UTF-8 位元組，直接 btoa 會炸掉。 */
-function gpnEncodeShare(payload) {
-  const bytes = new TextEncoder().encode(JSON.stringify(payload));
-  let bin = '';
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin);
-}
+/* ========== 舊版的「代碼」（base64）========================================
+   以前設定裡有「複製代碼／貼上代碼」，現在統一只用備份檔。
+   但有人可能把以前複製的代碼存成檔案，所以匯入時還是認得。 */
 
 function gpnDecodeShare(code) {
   // 使用者從信件或聊天視窗複製時，常常會夾帶換行和空白
@@ -59,8 +53,6 @@ function gpnBuildExport(data) {
   };
 }
 
-const gpnExportCode = (data) => gpnEncodeShare(gpnBuildExport(data));
-
 function gpnExportFileName() {
   const d = new Date();
   const p = (n) => String(n).padStart(2, '0');
@@ -85,19 +77,19 @@ function gpnDownloadExport(data) {
 /* ========== 匯入 ========================================================== */
 
 /**
- * 解析使用者貼上的代碼或選的檔案內容。
- * 兩種都吃：純 JSON 文字，或 base64 代碼。
+ * 解析選的備份檔內容。
+ * 兩種都吃：純 JSON 文字，或舊版的 base64 代碼。
  * 回傳 { ok, data?, error?, tabCount?, folderCount?, itemCount? }
  */
 function gpnParseImport(raw) {
   const text = String(raw || '').trim();
-  if (!text) return { ok: false, error: '沒有內容，請先貼上代碼或選一個備份檔' };
+  if (!text) return { ok: false, error: '這個檔案是空的' };
 
   let obj = null;
   try {
     obj = text.startsWith('{') ? JSON.parse(text) : gpnDecodeShare(text);
   } catch {
-    return { ok: false, error: '看不懂這段內容，請確認有從頭到尾完整複製到' };
+    return { ok: false, error: '看不懂這個檔案，請選「特務P」下載的備份檔' };
   }
 
   if (!obj || typeof obj !== 'object') return { ok: false, error: '內容格式不對' };

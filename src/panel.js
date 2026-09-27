@@ -6,7 +6,7 @@
  *   網頁版（web/app.js）
  * src/panel.js 和 web/panel.js 必須一字不差，tools/checksync.py 會檢查。
  *
- * 資料夾是每個書籤各自決定要不要用的（齒輪 → 資料夾）：
+ * 資料夾是每個書籤各自決定要不要用的（齒輪 → 名稱與資料夾）：
  *   沒開 → 紙張裡只有卡片，和最早的版本一樣
  *   有開 → 左邊多一欄資料夾，點書籤一律先顯示第一個資料夾
  *
@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.8.0';
+const GPN_APP_VERSION = '4.9.0';
 
 /**
  * @param {object}   opts
@@ -58,7 +58,7 @@ function gpnCreatePanel(opts) {
     '<path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41' +
     'l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
 
-  /** 齒輪：設定（名稱、顏色、資料夾、備份）
+  /** 齒輪：設定（名稱與資料夾、雲端同步、備份）
       注意：path 一定要寫成「單一字串」。之前用字串相接，接點漏掉一個空格
       （`.06-.94` + `0-.32` → `.06-.940-.32`），整段路徑語法就壞掉、畫不出來。 */
   const ICON_GEAR =
@@ -69,10 +69,6 @@ function gpnCreatePanel(opts) {
     '<circle cx="9" cy="5" r="1.7"/><circle cx="15" cy="5" r="1.7"/>' +
     '<circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/>' +
     '<circle cx="9" cy="19" r="1.7"/><circle cx="15" cy="19" r="1.7"/></svg>';
-
-  const ICON_FOLDER =
-    '<svg viewBox="0 0 24 24" aria-hidden="true">' +
-    '<path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/></svg>';
 
   const ICON_TAB =
     '<svg viewBox="0 0 24 24" aria-hidden="true">' +
@@ -88,6 +84,10 @@ function gpnCreatePanel(opts) {
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>';
   const ICON_CLOUD_OFF =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.35 10.04A7.49 7.49 0 0 0 12 4c-1.48 0-2.85.43-4.01 1.17l1.46 1.46A5.497 5.497 0 0 1 17.5 11v.5H19c1.66 0 3 1.34 3 3 0 1.13-.64 2.11-1.56 2.62l1.45 1.45C23.16 17.16 24 15.68 24 14c0-2.64-2.05-4.78-4.65-4.96zM3 5.27l2.75 2.74C2.56 8.15 0 10.77 0 14c0 3.31 2.69 6 6 6h11.73l2 2L21 20.73 4.27 4 3 5.27zM7.73 10l8 8H6c-2.21 0-4-1.79-4-4s1.79-4 4-4h1.73z"/></svg>';
+
+  /** 加號：新增書籤 */
+  const ICON_ADD =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>';
 
   /** 條列：「全部提示詞」頁 */
   const ICON_LIST =
@@ -149,13 +149,13 @@ function gpnCreatePanel(opts) {
   /** 目前看的資料夾。刻意不存檔：依需求，點書籤一律從「第一個資料夾」開始。 */
   let folderId = null;
   let editing = null;        // 提示詞編輯中 { tabId, folderId | null, id | null }
-  let newTabColor = null;    // 新增書籤對話框選的顏色
   let settingsTabId = null;  // 設定視窗正在設定哪個書籤
   let folderEditing = null;  // 資料夾編輯中 { tabId, id | null }
   let delArmed = false, delTimer = 0;
   let tabDelArmed = false, tabDelTimer = 0;
   let folderDelArmed = false, folderDelTimer = 0;
   let backupMode = 'merge';  // 'merge' | 'replace'，預設挑不會弄丟東西的那個
+  let backupFile = null;     // 選好的備份檔 { name, text }
   let impArmed = false, impTimer = 0;
   let cloudState = { configured: false };   // 雲端同步的狀態（見 sync.js）
   let wipeArmed = false, wipeTimer = 0;
@@ -169,10 +169,10 @@ function gpnCreatePanel(opts) {
    * 不能刪、不能改名、不能拖、不能直接新增提示詞（fixed）。
    */
   const recentTab = () => ({
-    id: GPN_RECENT_ID, label: '最近使用', color: 'recent', fixed: true, recent: true, items: data.recent || [],
+    id: GPN_RECENT_ID, label: '最近使用', fixed: true, recent: true, items: data.recent || [],
   });
   const favTab = () => ({
-    id: GPN_FAV_ID, label: '我的最愛', color: 'fav', fixed: true, fav: true, items: [],
+    id: GPN_FAV_ID, label: '我的最愛', fixed: true, fav: true, items: [],
   });
   const tabById = (id) => (id === GPN_RECENT_ID ? recentTab()
     : id === GPN_FAV_ID ? favTab()
@@ -211,7 +211,7 @@ function gpnCreatePanel(opts) {
        以前紙張最上面有一條「資料夾｜幾則｜點標題複製…」的說明列，資訊不重要又佔空間，拿掉了；
        真正要用的只有設定（齒輪），和雲端狀態一起搬到底部「新增提示詞」的右邊。 */
     ui.gear = el('button', {
-      class: 'gpn-tool', type: 'button', title: '設定（名稱、顏色、資料夾、雲端同步、備份）',
+      class: 'gpn-tool', type: 'button', title: '設定（名稱與資料夾、雲端同步、備份）',
       'aria-label': '設定', html: ICON_GEAR,
       onclick: () => openSettings(data.activeId),
     });
@@ -297,12 +297,12 @@ function gpnCreatePanel(opts) {
 
   /* ---- 書籤寬度規則 ----
      自己的書籤數量越少就讓它們佔越寬，不要在中間留一大片空白。
-     注意：自己的書籤「等寬」，作用中與否不影響寬度——
-     改用高度來表現選取狀態，按起來才不會一直位移。
+     注意：自己的書籤「等寬」，作用中與否不影響寬度，按起來才不會一直位移
+     （選中的書籤只換顏色，和 Chrome 的分頁一樣）。
      最右邊的「我的最愛」「最近使用」只有圖示，寬度固定（見 styles.css 的 .gpn-tab.is-fixed）。 */
   const GPN_TAB_SHARE = { 1: 0.40, 2: 0.60, 3: 0.75, 4: 0.86, 5: 0.90, 6: 0.93, 7: 0.95, 8: 0.96 };
-  const GPN_TAB_GAP = 4;          // .gpn-tabs 的 gap
-  const GPN_TAB_ADD_W = 44;       // 「＋」按鈕的寬度＋左邊距
+  const GPN_TAB_GAP = 0;          // .gpn-tabs 的 gap（書籤之間改用細線隔開）
+  const GPN_TAB_ADD_W = 44;       // 「＋」按鈕的寬度＋左右邊距（styles.css 的 .gpn-tab-add）
   const GPN_TAB_FIXED_W = 58;     // 一個固定書籤的寬度（要和 styles.css 的 .gpn-tab.is-fixed 一致）
 
   function layoutTabs() {
@@ -318,25 +318,14 @@ function gpnCreatePanel(opts) {
     }
   }
 
-  /**
-   * 只更新「哪個書籤是作用中」——不重建元素，高度變化才有動畫。
-   * animate=true 時，被點到的書籤會先下沉再升起（像把索引標籤抽出來）。
-   */
-  function updateTabStates(animate = false) {
+  /** 只更新「哪個書籤是作用中」，不重建元素 */
+  function updateTabStates() {
     const tab = activeTab();
     if (!tab) return;
-    ui.book.setAttribute('data-color', tab.color);
-
     for (const [id, node] of ui.tabEls) {
       const on = id === tab.id;
       node.classList.toggle('is-active', on);
       node.querySelector('.gpn-tab-main')?.setAttribute('aria-selected', String(on));
-
-      if (on && animate) {
-        node.classList.remove('is-popping');
-        void node.offsetWidth;          // 強制重排，動畫才會重新播放
-        node.classList.add('is-popping');
-      }
     }
     layoutTabs();
   }
@@ -347,7 +336,7 @@ function gpnCreatePanel(opts) {
     data.activeId = id;
     folderId = null;
     persist();
-    updateTabStates(true);   // 下沉 → 升起
+    updateTabStates();
     renderFolders();
     renderList();
     revealActiveFolder();
@@ -378,13 +367,8 @@ function gpnCreatePanel(opts) {
         onclick: () => { if (t.id !== data.activeId) switchTab(t.id); },
       }, t.label);
 
-      // 設定鈕不放在書籤上——它會佔掉空間，害書籤上的字無法置中。
-      // 改放到下方 paper-head 的右側（見 build 的 ui.gear）。
-      const node = el('div', {
-        class: 'gpn-tab' + (isActive ? ' is-active' : ''),
-        'data-color': t.color, 'data-id': t.id,
-        onanimationend: () => node.classList.remove('is-popping'),
-      }, main);
+      // 設定鈕不放在書籤上——它會佔掉空間，害書籤上的字無法置中（齒輪在底部，見 build）
+      const node = el('div', { class: 'gpn-tab' + (isActive ? ' is-active' : ''), 'data-id': t.id }, main);
 
       attachHoldDrag({
         handle: main, node, box: ui.tabs, selector: '.gpn-tab:not(.is-fixed)',
@@ -401,30 +385,29 @@ function gpnCreatePanel(opts) {
     ui.addTabBtn = data.tabs.length < GPN_MAX_TABS
       ? el('button', {
           class: 'gpn-tab-add', type: 'button',
-          'aria-label': '新增書籤', title: '新增一個書籤分類',
+          'aria-label': '新增書籤', title: '新增一個書籤',
+          html: ICON_ADD,
           onclick: openNewTab,
-        }, '＋')
+        })
       : null;
     if (ui.addTabBtn) ui.tabs.append(ui.addTabBtn);
 
     // 最右邊固定兩個：「我的最愛」「最近使用」。不能刪、不能拖，其他書籤也拖不到它們後面
     ui.tabs.append(
-      fixedTabNode(GPN_FAV_ID, 'fav', '我的最愛', ICON_STAR,
-        '我的最愛（在提示詞右邊按星號，就會收進這裡）', 'gpn-tab--push'),
-      fixedTabNode(GPN_RECENT_ID, 'recent', '最近使用', ICON_HISTORY,
+      fixedTabNode(GPN_FAV_ID, '我的最愛', ICON_STAR,
+        '我的最愛（在提示詞右邊按星號，就會收進這裡）', 'gpn-tab--push gpn-tab--fav'),
+      fixedTabNode(GPN_RECENT_ID, '最近使用', ICON_HISTORY,
         `最近使用（最近用過的 ${GPN_RECENT_MAX} 則）`));
 
-    ui.book.setAttribute('data-color', tab.color);
     layoutTabs();
   }
 
   /** 固定書籤（我的最愛、最近使用）：只有圖示，名稱放在滑鼠提示和讀螢幕軟體用的 aria-label */
-  function fixedTabNode(id, color, label, icon, title, extraClass = '') {
+  function fixedTabNode(id, label, icon, title, extraClass = '') {
     const on = activeTab().id === id;
     const node = el('div', {
       class: 'gpn-tab is-fixed' + (extraClass ? ' ' + extraClass : '') + (on ? ' is-active' : ''),
-      'data-color': color, 'data-id': id,
-      onanimationend: () => node.classList.remove('is-popping'),
+      'data-id': id,
     }, el('button', {
       class: 'gpn-tab-main', type: 'button', role: 'tab', 'aria-selected': String(on),
       'aria-label': label, title,
@@ -996,22 +979,6 @@ function gpnCreatePanel(opts) {
     btn.textContent = text;
   }
 
-  /** 六色色票；onPick(顏色) */
-  function buildSwatches(onPick) {
-    const box = el('div', { class: 'gpn-swatches' });
-    for (const c of GPN_COLORS) {
-      box.append(el('button', {
-        class: 'gpn-swatch', type: 'button', 'data-color': c,
-        'aria-label': GPN_COLOR_LABELS[c], title: GPN_COLOR_LABELS[c],
-        onclick: () => onPick(c),
-      }));
-    }
-    return box;
-  }
-  function markSwatch(box, color) {
-    for (const s of box.children) s.classList.toggle('is-on', s.getAttribute('data-color') === color);
-  }
-
   const stop = (e) => e.stopPropagation();
 
   /* ==========================================================================
@@ -1201,7 +1168,7 @@ function gpnCreatePanel(opts) {
 
   /* ==========================================================================
      六、新增書籤（自己的書籤後面那個「＋」）
-     已經存在的書籤要改名、換色、刪除，都在齒輪的設定裡。
+     已經存在的書籤要改名、開關資料夾、刪除，都在齒輪的設定裡。
      ========================================================================== */
 
   function buildNewTabLayer() {
@@ -1211,15 +1178,12 @@ function gpnCreatePanel(opts) {
       onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); onNewTabSave(); } },
     });
     ui.nNameHint = el('div', { class: 'gpn-hint', text: '請輸入書籤名稱' });
-    ui.nSwatches = buildSwatches((c) => { newTabColor = c; markSwatch(ui.nSwatches, c); });
 
     ui.newTabLayer = el('div', { class: 'gpn-edit-layer' },
       el('div', { class: 'gpn-dialog gpn-dialog--sm', onmousedown: stop },
         el('h2', { text: '新增書籤' }),
         el('div', { class: 'gpn-dialog-body' },
-          field('書籤名稱', '（最多 8 個字）', ui.nName, ui.nNameHint),
-          field('書籤顏色', null, ui.nSwatches),
-          el('div', { class: 'gpn-note', text: '新書籤一開始不分資料夾。之後需要的話，可以在齒輪的設定裡開啟。' })
+          field('書籤名稱', null, ui.nName, ui.nNameHint)
         ),
         el('div', { class: 'gpn-actions' },
           el('button', { class: 'gpn-btn gpn-btn--cancel', type: 'button', onclick: closeNewTab }, '取消'),
@@ -1231,10 +1195,6 @@ function gpnCreatePanel(opts) {
 
   function openNewTab() {
     if (data.tabs.length >= GPN_MAX_TABS) return;
-    // 預設挑一個還沒用過的顏色
-    const used = new Set(data.tabs.map((t) => t.color));
-    newTabColor = GPN_COLORS.find((c) => !used.has(c)) || GPN_COLORS[0];
-    markSwatch(ui.nSwatches, newTabColor);
     ui.nName.value = '';
     ui.nName.classList.remove('is-bad');
     ui.nNameHint.classList.remove('is-on');
@@ -1254,7 +1214,10 @@ function gpnCreatePanel(opts) {
       ui.nName.focus();
       return;
     }
-    const tab = { id: gpnNewId('t'), label, color: newTabColor, items: [] };
+    // 書籤已經不分顏色了，但資料格式裡還是有 color（舊版外掛讀得到），默默挑一個還沒用過的
+    const used = new Set(data.tabs.map((t) => t.color));
+    const color = GPN_COLORS.find((c) => !used.has(c)) || GPN_COLORS[0];
+    const tab = { id: gpnNewId('t'), label, color, items: [] };
     data.tabs.push(tab);
     data.activeId = tab.id;          // 新增後直接切過去
     folderId = null;
@@ -1317,7 +1280,7 @@ function gpnCreatePanel(opts) {
     ui.fNote.textContent = !folder
       ? '想調整順序的話，在左邊的資料夾上「長按」，就可以上下拖曳。'
       : last
-        ? '這是最後一個資料夾，不能刪除。不想分資料夾的話，可以到齒輪 → 資料夾 把它關掉。'
+        ? '這是最後一個資料夾，不能刪除。不想分資料夾的話，可以到齒輪 → 名稱與資料夾 把它關掉。'
         : '想調整順序的話，在左邊的資料夾上「長按」，就可以上下拖曳。';
     disarmFolderDelete();
 
@@ -1392,30 +1355,28 @@ function gpnCreatePanel(opts) {
   }
 
   /* ==========================================================================
-     八、設定（紙張右上角的齒輪）
-     左邊選單、右邊內容。前兩頁是「這個書籤」的設定，最後一頁是全部資料的備份。
-     改名、換色、開關資料夾都是「改了就存」，不必按儲存，也就不會有改了卻忘記存的狀況。
+     八、設定（底部的齒輪）
+     左邊選單、右邊內容。第一頁是「這個書籤」的名稱與資料夾，後面是全部書籤共用的雲端同步、備份。
+     改名、開關資料夾都是「改了就存」，不必按儲存，也就不會有改了卻忘記存的狀況。
      ========================================================================== */
 
   function buildSettingsLayer() {
     /* ---- 左邊選單 ---- */
     ui.sNavGroup = el('div', { class: 'gpn-nav-group' });
-    ui.sNavBadge = el('span', { class: 'gpn-nav-badge' });
-    const navItem = (key, icon, text, extra) => el('button', {
+    const navItem = (key, icon, text) => el('button', {
       class: 'gpn-nav-item', type: 'button', role: 'tab', 'data-section': key,
       onclick: () => showSection(key),
-    }, el('span', { class: 'gpn-nav-icon', html: icon }), el('span', { class: 'gpn-nav-text', text }), extra);
+    }, el('span', { class: 'gpn-nav-icon', html: icon }), el('span', { class: 'gpn-nav-text', text }));
     ui.sNavItems = [
-      navItem('tab', ICON_TAB, '名稱與顏色'),
-      navItem('folders', ICON_FOLDER, '資料夾', ui.sNavBadge),
+      navItem('tab', ICON_TAB, '名稱與資料夾'),
       // 沒有雲端功能的地方（例如測試）就不出現這一項
       cloud ? navItem('account', ICON_CLOUD_DONE, '雲端同步') : null,
-      navItem('backup', ICON_SYNC, '備份與同步'),
+      navItem('backup', ICON_SYNC, '備份'),
     ].filter(Boolean);
-    const [navTab, navFolders, ...navAll] = ui.sNavItems;
+    const [navTab, ...navAll] = ui.sNavItems;
     const nav = el('nav', { class: 'gpn-settings-nav', role: 'tablist', 'aria-orientation': 'vertical' },
       el('h2', { text: '設定' }),
-      ui.sNavGroup, navTab, navFolders,
+      ui.sNavGroup, navTab,
       el('div', { class: 'gpn-nav-group', text: '所有書籤' }), ...navAll,
       // 外掛和網頁版長得不一樣時，先看這裡的數字是不是一樣
       el('div', {
@@ -1423,28 +1384,19 @@ function gpnCreatePanel(opts) {
         text: `版本 ${GPN_APP_VERSION}` + (edition ? `　${edition}` : ''),
       }));
 
-    /* ---- 名稱與顏色 ---- */
+    /* ---- 名稱與資料夾（這個書籤）：名稱 → 資料夾開關 → 最下面是刪除書籤 ---- */
     ui.sName = el('input', {
       class: 'gpn-input', type: 'text', maxlength: '8', placeholder: '例如：工作',
       oninput: onSettingsName,
       onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); ui.sName.blur(); } },
     });
-    ui.sNameHint = el('div', { class: 'gpn-hint', text: '名稱不能空白；留空的話會保留原本的名稱' });
-    ui.sSwatches = buildSwatches(onSettingsColor);
+    ui.sNameHint = el('div', { class: 'gpn-hint', text: '名稱不能空白' });
     ui.sDelNote = el('div', { class: 'gpn-note' });
     ui.sDel = el('button', { class: 'gpn-btn gpn-btn--del', type: 'button', onclick: onTabDelete }, '刪除這個書籤');
     ui.sDanger = el('div', { class: 'gpn-danger' },
       el('div', { class: 'gpn-label', text: '刪除書籤' }), ui.sDelNote, ui.sDel);
 
-    const secTab = el('section', { class: 'gpn-section', 'data-section': 'tab' },
-      el('h3', { text: '名稱與顏色' }),
-      field('書籤名稱', '（最多 8 個字）', ui.sName, ui.sNameHint),
-      field('書籤顏色', null, ui.sSwatches),
-      el('div', { class: 'gpn-note', text: '改好會自動儲存。' }),
-      ui.sDanger);
-
-    /* ---- 資料夾 ---- */
-    ui.sSwitchTitle = el('b');
+    ui.sSwitchTitle = el('b', { text: '使用資料夾' });
     ui.sSwitchState = el('span');
     ui.sSwitch = el('button', {
       class: 'gpn-switch-row', type: 'button', role: 'switch', 'aria-checked': 'false',
@@ -1452,7 +1404,7 @@ function gpnCreatePanel(opts) {
     },
       el('span', { class: 'gpn-switch', 'aria-hidden': 'true' }),
       el('span', { class: 'gpn-switch-text' }, ui.sSwitchTitle, ui.sSwitchState));
-    ui.sFolderNote = el('div', { class: 'gpn-note gpn-note--roomy' });
+    ui.sFolderNote = el('div', { class: 'gpn-note' });
 
     // 關閉資料夾會把分類攤平，所以先講清楚會發生什麼事，再讓他決定
     ui.sConfirmText = el('div');
@@ -1463,22 +1415,19 @@ function gpnCreatePanel(opts) {
         el('button', { class: 'gpn-btn2', type: 'button', onclick: hideFolderConfirm }, '先不要')));
     ui.sConfirm.hidden = true;
 
-    const secFolders = el('section', { class: 'gpn-section', 'data-section': 'folders' },
-      el('h3', { text: '資料夾' }),
-      el('p', {
-        class: 'gpn-lede',
-        text: '提示詞很多的書籤，可以再分成幾個資料夾，左邊會多一欄讓你切換。' +
-              '提示詞不多的書籤（例如「常用」）不開也沒關係。',
-      }),
-      ui.sSwitch, ui.sConfirm, ui.sFolderNote);
+    const secTab = el('section', { class: 'gpn-section', 'data-section': 'tab' },
+      el('h3', { text: '名稱與資料夾' }),
+      field('書籤名稱', null, ui.sName, ui.sNameHint),
+      field('資料夾', null, ui.sSwitch, ui.sConfirm, ui.sFolderNote),
+      ui.sDanger);
 
     /* ---- 雲端同步 ---- */
     const secAccount = cloud ? buildAccountSection() : null;
 
-    /* ---- 備份與同步 ---- */
+    /* ---- 備份 ---- */
     const secBackup = buildBackupSection();
 
-    ui.sSections = [secTab, secFolders, secAccount, secBackup].filter(Boolean);
+    ui.sSections = [secTab, secAccount, secBackup].filter(Boolean);
     ui.sBody = el('div', { class: 'gpn-settings-body' }, ...ui.sSections);
 
     ui.settings = el('div', { class: 'gpn-dialog gpn-settings', onmousedown: stop },
@@ -1497,9 +1446,9 @@ function gpnCreatePanel(opts) {
   function openSettings(tabId, section = 'tab') {
     const tab = tabById(tabId);
     if (!tab) return;
-    // 「最近使用」「我的最愛」沒有名稱、顏色、資料夾可以改，直接打開全部書籤共用的那幾頁
+    // 「最近使用」「我的最愛」沒有名稱、資料夾可以改，直接打開全部書籤共用的那幾頁
     const hasAccount = !!cloud && !!cloudState.configured;
-    if (tab.fixed && (section === 'tab' || section === 'folders')) section = hasAccount ? 'account' : 'backup';
+    if (tab.fixed && section === 'tab') section = hasAccount ? 'account' : 'backup';
     if (section === 'account' && !hasAccount) section = tab.fixed ? 'backup' : 'tab';
     settingsTabId = tabId;
     ui.sName.value = tab.label;
@@ -1541,44 +1490,33 @@ function gpnCreatePanel(opts) {
     const tab = tabById(settingsTabId);
     if (!tab) return;
 
-    ui.bStats.textContent =
-      `這台目前有 ${data.tabs.length} 個書籤、${gpnCountFolders(data)} 個資料夾、` +
-      `${gpnCountItems(data)} 則提示詞`;
-    ui.settings.setAttribute('data-color', tab.color);
+    const folders = gpnCountFolders(data);
+    ui.bStats.textContent = `${data.tabs.length} 個書籤、` +
+      (folders ? `${folders} 個資料夾、` : '') + `${gpnCountItems(data)} 則提示詞`;
 
-    // 「最近使用」「我的最愛」：藏起「這個書籤」那一組（名稱與顏色、資料夾）
+    // 「最近使用」「我的最愛」：藏起「這個書籤」那一組（名稱與資料夾）
     // 雲端還沒設定好：「雲端同步」整頁不出現，免得使用者看到一堆給管理員的說明
     const fixed = !!tab.fixed;
     ui.sNavGroup.hidden = fixed;
     for (const b of ui.sNavItems) {
       const key = b.getAttribute('data-section');
-      if (key === 'tab' || key === 'folders') b.hidden = fixed;
+      if (key === 'tab') b.hidden = fixed;
       if (key === 'account') b.hidden = !cloudState.configured;
     }
     if (fixed) return;
 
     const n = gpnTabItemCount(tab);
     ui.sNavGroup.textContent = `「${tab.label}」這個書籤`;
-    markSwatch(ui.sSwatches, tab.color);
 
     const on = !!tab.folders;
     ui.sSwitch.setAttribute('aria-checked', String(on));
-    ui.sSwitchTitle.textContent = `「${tab.label}」使用資料夾`;
-    ui.sSwitchState.textContent = on ? '開啟中' : '關閉中';
-    ui.sNavBadge.textContent = on ? '開' : '關';
-    ui.sNavBadge.classList.toggle('is-on', on);
+    ui.sSwitchState.textContent = on ? `開啟中・${tab.folders.length} 個資料夾` : '關閉中';
     ui.sFolderNote.textContent = on
-      ? `目前有 ${tab.folders.length} 個資料夾、${n} 則提示詞。` +
-        '新增、改名、刪除資料夾，都在主畫面左邊那一欄；在資料夾上「長按」可以上下拖曳排序。'
-      : n
-        ? `開啟後，現在的 ${n} 則提示詞會先放進「${GPN_DEFAULT_FOLDER}」資料夾，` +
-          '之後可以再新增資料夾，用鉛筆把提示詞搬過去。'
-        : `開啟後，會先建立一個「${GPN_DEFAULT_FOLDER}」資料夾。`;
+      ? '新增、改名資料夾在主畫面左邊那一欄'
+      : n ? `開啟後，現有的 ${n} 則會先放進「${GPN_DEFAULT_FOLDER}」` : '';
 
     ui.sDanger.hidden = data.tabs.length <= 1;        // 最後一個書籤不給刪
-    ui.sDelNote.textContent = n
-      ? `書籤裡的 ${n} 則提示詞會一起刪除，刪了就找不回來。刪之前可以先到「備份與同步」下載備份。`
-      : '這個書籤裡沒有提示詞。';
+    ui.sDelNote.textContent = n ? `裡面的 ${n} 則提示詞會一起刪除，刪了就找不回來` : '';
   }
 
   function onSettingsName() {
@@ -1589,15 +1527,6 @@ function gpnCreatePanel(opts) {
     ui.sNameHint.classList.toggle('is-on', !label);
     if (!label || label === tab.label) return;
     tab.label = label;
-    persist();
-    renderTabs();
-    refreshSettings();
-  }
-
-  function onSettingsColor(color) {
-    const tab = tabById(settingsTabId);
-    if (!tab || tab.fixed || tab.color === color) return;
-    tab.color = color;
     persist();
     renderTabs();
     refreshSettings();
@@ -1621,8 +1550,7 @@ function gpnCreatePanel(opts) {
     // 只有一個資料夾時，關掉不會失去任何分類，直接關
     if (tab.folders.length > 1) {
       ui.sConfirmText.textContent =
-        `關閉後，${tab.folders.length} 個資料夾裡的 ${gpnTabItemCount(tab)} 則提示詞，` +
-        '會依資料夾的順序合併成一個清單。提示詞一則都不會刪除，但資料夾的分類就沒有了。';
+        `${tab.folders.length} 個資料夾會合併成一個清單。提示詞都會留著，只是不再分資料夾。`;
       ui.sConfirm.hidden = false;
       return;
     }
@@ -1878,41 +1806,16 @@ function gpnCreatePanel(opts) {
     if (st.fileId) ui.aFileLink.href = `https://drive.google.com/file/d/${encodeURIComponent(st.fileId)}/view`;
   }
 
-  /* ---- 備份與同步 ----
-     為什麼需要這個：公家機關的電腦不能裝擴充功能，所以另外做了網頁版。
-     兩邊是各自獨立的儲存空間，靠這裡的「代碼／備份檔」手動搬資料。
-     有了帳號同步之後，這裡變成「額外留一份」和「分享給別人」用。 */
+  /* ---- 備份 ----
+     為什麼需要這個：公家機關的電腦不能裝擴充功能，所以另外做了網頁版，兩邊是各自獨立的儲存空間。
+     沒連結雲端硬碟時，靠這裡的「備份檔」手動搬資料；有連結之後，這裡變成「額外留一份」和「分享給別人」用。
+     以前還有「複製代碼／貼上代碼」，兩種方法並存反而讓人看不懂，現在統一只用備份檔。 */
 
   function buildBackupSection() {
-    /* ① 帶出去 */
+    /* 下載 */
     ui.bStats = el('div', { class: 'gpn-note' });
 
-    const outRow = el('div', { class: 'gpn-brow' },
-      el('button', {
-        class: 'gpn-btn2', type: 'button',
-        onclick: () => { gpnDownloadExport(data); toast('備份檔已開始下載'); },
-      }, '⬇　下載備份檔'),
-      el('button', {
-        class: 'gpn-btn2', type: 'button',
-        onclick: async (e) => {
-          const btn = e.currentTarget;
-          const ok = await gpnShareCopy(gpnExportCode(data));
-          toast(ok ? '代碼已複製，貼到另一台就好' : '複製失敗，請改用下載備份檔', !ok);
-          if (ok) {
-            btn.classList.add('is-done');
-            setTimeout(() => btn.classList.remove('is-done'), 1400);
-          }
-        },
-      }, '⧉　複製代碼')
-    );
-
-    /* ② 帶回來 */
-    ui.bCode = el('textarea', {
-      class: 'gpn-textarea gpn-textarea--code', spellcheck: 'false',
-      placeholder: '在這裡貼上另一台複製的代碼，或整份 .json 內容…',
-      oninput: () => { disarmImport(); refreshBackupPreview(); },
-    });
-
+    /* 匯入：選檔案 → 選合併或完全取代 → 按兩次匯入 */
     ui.bFile = el('input', {
       type: 'file', accept: '.json,application/json', class: 'gpn-file',
       onchange: async (e) => {
@@ -1920,55 +1823,46 @@ function gpnCreatePanel(opts) {
         e.target.value = '';                 // 選同一個檔案兩次也要觸發
         if (!file) return;
         try {
-          ui.bCode.value = await gpnReadFile(file);
+          backupFile = { name: file.name, text: await gpnReadFile(file) };
         } catch {
+          backupFile = null;
           toast('這個檔案讀不起來', true);
-          return;
         }
         disarmImport();
         refreshBackupPreview();
       },
     });
+    ui.bPickText = el('span', { class: 'gpn-pick-name' });
+    ui.bPick = el('button', { class: 'gpn-btn2 gpn-pick', type: 'button', onclick: () => ui.bFile.click() },
+      el('span', { text: '📁' }), ui.bPickText);
 
     ui.bMerge = el('button', {
       class: 'gpn-seg is-on', type: 'button',
       onclick: () => setBackupMode('merge'),
-    }, '合併', el('span', { text: '推薦' }));
-
+    }, '合併');
     ui.bReplace = el('button', {
       class: 'gpn-seg', type: 'button',
       onclick: () => setBackupMode('replace'),
     }, '完全取代');
 
-    ui.bModeNote = el('div', { class: 'gpn-note' });
     ui.bNote = el('div', { class: 'gpn-note gpn-note--status' });
-
     ui.bImport = el('button', {
       class: 'gpn-btn gpn-btn--save gpn-btn--block', type: 'button', onclick: onImport,
     }, '匯入');
 
     return el('section', { class: 'gpn-section', 'data-section': 'backup' },
-      el('h3', { text: '備份與同步' }),
-      el('p', { class: 'gpn-lede', text:
-        '所有書籤一起備份成一個檔案或一段代碼：可以額外留一份以防萬一，或把提示詞分享給別人。' +
-        '（連結 Google 雲端硬碟的話，每台電腦會自動同步，不需要靠這裡搬。）' }),
-      field('① 把資料帶出去', '（給另一台電腦、外掛或網頁版用）', outRow, ui.bStats),
+      el('h3', { text: '備份' }),
+      el('div', { class: 'gpn-brow' },
+        el('button', {
+          class: 'gpn-btn2', type: 'button',
+          onclick: () => { gpnDownloadExport(data); toast('備份檔已開始下載'); },
+        }, '⬇　下載備份檔')),
+      ui.bStats,
       el('div', { class: 'gpn-sep' }),
-      field('② 把資料帶回來', '（貼上代碼，或選一個備份檔）',
-        ui.bCode,
-        el('div', { class: 'gpn-brow' },
-          el('button', {
-            class: 'gpn-btn2', type: 'button',
-            onclick: () => ui.bFile.click(),
-          }, '📁　改用備份檔…'),
-          el('button', {
-            class: 'gpn-btn2', type: 'button',
-            onclick: () => { ui.bCode.value = ''; disarmImport(); refreshBackupPreview(); },
-          }, '清空')
-        ),
+      field('匯入備份檔', null,
+        el('div', { class: 'gpn-brow' }, ui.bPick),
         ui.bFile,
         el('div', { class: 'gpn-seg-row' }, ui.bMerge, ui.bReplace),
-        ui.bModeNote,
         ui.bNote,
         ui.bImport)
     );
@@ -1982,46 +1876,39 @@ function gpnCreatePanel(opts) {
     refreshBackupPreview();
   }
 
-  /** 解析目前輸入框的內容，把結果寫進 ui.bNote，同時回傳解析結果 */
+  /** 解析選好的備份檔，把「會發生什麼事」寫進 ui.bNote，同時回傳解析結果 */
   function refreshBackupPreview() {
-    const raw = ui.bCode.value.trim();
+    ui.bPickText.textContent = backupFile ? backupFile.name : '選擇備份檔…';
+    ui.bPick.classList.toggle('is-done', !!backupFile);
     ui.bNote.classList.remove('is-bad', 'is-ok');
 
-    ui.bModeNote.textContent = backupMode === 'merge'
-      ? '保留你現在的提示詞，只把還沒有的加進來。'
-      : '現在這台的提示詞會被整個蓋掉，換成備份裡的內容。';
-
-    if (!raw) {
-      ui.bNote.textContent = '';
-      ui.bImport.disabled = true;
+    if (!backupFile) {
+      // 還沒選檔案：只用一句話說明兩個選項的差別
+      ui.bNote.textContent = backupMode === 'merge' ? '保留現有的，只加入新的' : '現有的會全部被換掉';
+      ui.bNote.classList.toggle('is-bad', backupMode === 'replace');
+      ui.bImport.hidden = true;
       return null;
     }
 
-    const parsed = gpnParseImport(raw);
+    const parsed = gpnParseImport(backupFile.text);
     if (!parsed.ok) {
       ui.bNote.textContent = parsed.error;
       ui.bNote.classList.add('is-bad');
-      ui.bImport.disabled = true;
+      ui.bImport.hidden = true;
       return null;
     }
 
-    ui.bImport.disabled = false;
-    ui.bNote.classList.add('is-ok');
+    ui.bImport.hidden = false;
     if (backupMode === 'merge') {
       const p = gpnPreviewMerge(data, parsed.data);
-      const extra = [
-        p.newTabs ? `${p.newTabs} 個新書籤` : '',
-        p.newFolders ? `${p.newFolders} 個新資料夾` : '',
-      ].filter(Boolean).join('、');
+      ui.bNote.classList.add('is-ok');
       ui.bNote.textContent = p.added
-        ? `讀到 ${parsed.itemCount} 則提示詞，其中 ${p.added} 則是新的，會加進來` +
-          (extra ? `（含 ${extra}）` : '') +
-          (p.skipped ? `；${p.skipped} 則重複的會跳過` : '')
-        : `讀到 ${parsed.itemCount} 則提示詞，但你這台都已經有了，不會有變化`;
+        ? `會加入 ${p.added} 則新的提示詞` + (p.skipped ? `，${p.skipped} 則已經有了` : '')
+        : `${parsed.itemCount} 則都已經有了，不會有變化`;
     } else {
-      ui.bNote.textContent =
-        `讀到 ${parsed.tabCount} 個書籤、${parsed.folderCount} 個資料夾、` +
-        `${parsed.itemCount} 則提示詞，會取代現在的全部內容`;
+      const have = gpnCountItems(data);
+      ui.bNote.classList.add('is-bad');
+      ui.bNote.textContent = `現有的 ${have} 則會換成備份裡的 ${parsed.itemCount} 則`;
     }
     return parsed;
   }
@@ -2029,14 +1916,11 @@ function gpnCreatePanel(opts) {
   /** 匯入會動到既有資料，所以一律二段式確認（和刪除同一套做法） */
   async function onImport() {
     const parsed = refreshBackupPreview();
-    if (!parsed) { ui.bCode.focus(); return; }
+    if (!parsed) return;
 
     if (!impArmed) {
       impArmed = true;
-      const have = gpnCountItems(data);
-      armButton(ui.bImport, backupMode === 'merge'
-        ? '確定合併？再按一次'
-        : have ? `確定取代？現有 ${have} 則會不見，再按一次` : '確定取代？再按一次');
+      armButton(ui.bImport, backupMode === 'merge' ? '確定合併？再按一次' : '確定取代？再按一次');
       clearTimeout(impTimer);
       impTimer = setTimeout(disarmImport, 6000);
       return;
@@ -2066,7 +1950,7 @@ function gpnCreatePanel(opts) {
   }
 
   function resetBackup() {
-    ui.bCode.value = '';
+    backupFile = null;
     setBackupMode('merge');          // 每次都從最安全的選項開始
   }
 
