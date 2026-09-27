@@ -10,8 +10,9 @@
  *   它只轉交 token，提示詞不會經過它（提示詞直接在瀏覽器和 Google 雲端硬碟之間傳）。
  *
  * open：雲端同步要不要對所有人打開。
- *   Google Cloud、中繼都設定好之前先關著（false），使用者看不到任何同步畫面。
- *   管理員想先自己試：在網頁版網址後面加 ?try-cloud=1（這個瀏覽器會記住；?try-cloud=0 取消）。
+ *   2026-09-27 起打開（true）：Google Cloud 的轉址網址、中繼的密鑰都確認過可以用了。
+ *   關著（false）時使用者看不到任何同步畫面；管理員想先自己試，在網頁版網址後面加 ?try-cloud=1
+ *   （這個瀏覽器會記住；?try-cloud=0 取消）。
  *
  * site：網頁版的網址。外掛連結雲端硬碟時，Google 會先把人帶回這個網站的 ext-login.html，
  *   再由外掛接手（見 src/ext-login.js）。
@@ -21,7 +22,7 @@
 const GPN_CLOUD = {
   clientId: '179560802326-nrdhcrs4r84dltajila7er82ae9nqn67.apps.googleusercontent.com',
   tokenUrl: 'https://jsgvyxbkvszvhkrpbvjy.supabase.co/functions/v1/google-token',
-  open: false,
+  open: true,
   site: 'https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/',
 };
 

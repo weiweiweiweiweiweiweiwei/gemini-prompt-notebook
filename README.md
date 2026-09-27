@@ -316,7 +316,9 @@ Google 規定換登入憑證（token）要附 **用戶端密鑰**，密鑰不能
 | `GOOGLE_CLIENT_ID` | 和 `cloud-config.js` 的 `clientId` 一樣 |
 | `GOOGLE_CLIENT_SECRET` | 上一步抄下來的 Client secret |
 
-設好之後不用重新部署。
+左邊的 **Name** 欄照抄上面的名稱，右邊的 **Value** 欄才填內容（不要把用戶端 ID 填進 Name）。
+設好之後不用重新部署。Google 現在只在建立時顯示一次完整的 Client secret，
+沒存到的話在用戶端頁面按 **新增密碼**（Add secret）重新產生一組。
 
 #### ③ 自己先試
 
@@ -329,7 +331,7 @@ https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/?try-cloud=1
 只有「這個瀏覽器」會打開，而且會記住；加 `?try-cloud=0` 就關回去。連結一次，確認雲端硬碟裡出現
 「特務P 提示詞筆記本.json」。（外掛不吃這個開關，要等 ④ 打開後才會出現。）
 
-#### ④ 正式打開
+#### ④ 正式打開（2026-09-27 已經打開，版本 4.10.1）
 
 1. `src/cloud-config.js`：`open` 改成 `true`。
 2. 調高 `manifest.json` 的 `version` 和 `src/panel.js` 的 `GPN_APP_VERSION`。
