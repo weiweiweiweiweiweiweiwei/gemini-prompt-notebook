@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <meta name="robots" content="noindex">
-<title>常用提示詞 · 外掛登入</title>
+<title>特務P · 外掛連結雲端硬碟</title>
 <link rel="stylesheet" href="page.css">
 <style>
   .box {
@@ -23,18 +23,18 @@
 </head>
 <body>
 <!--
-  外掛「用 Google 帳號登入」的回程頁。真正的工作由外掛的 content script（src/ext-login.js）做；
+  外掛「連結 Google 雲端硬碟」的回程頁。真正的工作由外掛的 content script（src/ext-login.js）做；
   這一頁只負責顯示訊息。沒裝外掛的人打開，幾秒後會看到說明。
 -->
 <div class="box">
-  <h1>常用提示詞</h1>
-  <div id="msg">正在完成登入…</div>
+  <h1>特務P</h1>
+  <div id="msg">正在連結 Google 雲端硬碟…</div>
 </div>
 <script>
   setTimeout(() => {
     if (document.documentElement.dataset.gpnExt) return;       // 外掛有接手
     document.getElementById('msg').innerHTML =
-      '這一頁是給 Chrome 外掛登入用的。<br>要用網頁版，請到 <a href="./">網頁版首頁</a>。';
+      '這一頁是給 Chrome 外掛連結雲端硬碟用的。<br>要用網頁版，請到 <a href="./">網頁版首頁</a>。';
   }, 2500);
 </script>
 </body>

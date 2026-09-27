@@ -1,5 +1,5 @@
 /* ============================================================================
-   常用提示詞筆記本 — 樣式表
+   特務P（常用提示詞筆記本）— 樣式表
    用在四個地方：
      1. Light DOM（manifest 的 content_scripts.css）→ 注入工具列的觸發按鈕
      2. Shadow DOM（content.js 用 fetch + adoptedStyleSheets）→ 外掛的面板
@@ -148,6 +148,7 @@ button { cursor: pointer; }
   --c-purple-accent: #8b5cf6;
   --c-teal-accent:   #14a5a0;
   --c-recent-accent: #64748b;
+  --c-fav-accent:    #e2a300;          /* 我的最愛：星星的金黃色 */
 }
 
 /* ---------- Design tokens：深色 ----------
@@ -190,6 +191,7 @@ button { cursor: pointer; }
   --c-purple-accent: #b49bf7;
   --c-teal-accent:   #4fc9c2;
   --c-recent-accent: #94a3b8;
+  --c-fav-accent:    #fcc934;
 }
 
 /* ---------- 顏色對應 ----------
@@ -203,6 +205,7 @@ button { cursor: pointer; }
 [data-color="purple"] { --accent: var(--c-purple-accent); }
 [data-color="teal"]   { --accent: var(--c-teal-accent); }
 [data-color="recent"] { --accent: var(--c-recent-accent); }
+[data-color="fav"]    { --accent: var(--c-fav-accent); }
 
 /* ---------- 遮罩 ---------- */
 .gpn-overlay {
@@ -240,6 +243,7 @@ button { cursor: pointer; }
    寬度比單層時代寬：左邊多了一欄資料夾，右邊的卡片仍維持原本的寬度。
    螢幕高度通常比寬度吃緊，所以寧可加寬也不加高。 */
 .gpn-book {
+  position: relative;              /* 左下角外面的「全部提示詞」以筆記本為準定位 */
   --folders-w: 216px;              /* 資料夾欄寬度：「2. 摘要與資料整理」剛好一行 */
   width: 740px;
   height: 680px;
@@ -318,7 +322,7 @@ button { cursor: pointer; }
   box-shadow: inset 0 2px 0 var(--accent), inset 0 3px 0 var(--glass-hi);
 }
 
-/* 長按 450ms 後進入「排序模式」：被抓起的書籤浮起來，其餘淡化 */
+/* 長按 250ms 後進入「排序模式」：被抓起的書籤浮起來，其餘淡化 */
 .gpn-tab.is-drag {
   z-index: 9;
   transform: scale(1.06);
@@ -362,6 +366,16 @@ button { cursor: pointer; }
 .gpn-tab-icon { display: inline-flex; vertical-align: -3px; margin-right: 5px; }
 .gpn-tab-icon svg { width: 17px; height: 17px; fill: currentColor; }
 .gpn-tab-main:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
+/* 「我的最愛」「最近使用」固定靠最右邊，和自己的書籤之間空出來 */
+.gpn-tab--push { margin-left: auto; }
+.gpn-tab[data-color="fav"] .gpn-tab-icon { color: var(--c-fav-accent); }
+/* 固定書籤左右留白小一點，「★ 我的最愛」才能多撐幾個書籤不縮成只剩圖示 */
+.gpn-tab.is-fixed .gpn-tab-main { padding-left: 8px; padding-right: 8px; }
+/* 擠不下文字時只留圖示（見 panel.js 的 fitFixedTabs） */
+.gpn-tab.is-compact .gpn-tab-main { padding-left: 4px; padding-right: 4px; }
+.gpn-tab.is-compact .gpn-tab-label { display: none; }
+.gpn-tab.is-compact .gpn-tab-icon { margin-right: 0; }
+.gpn-tab.is-compact .gpn-tab-icon svg { width: 20px; height: 20px; }
 
 /* 新增書籤 */
 .gpn-tab-add {
@@ -402,7 +416,8 @@ button { cursor: pointer; }
   backdrop-filter: var(--glass-filter);
   -webkit-backdrop-filter: var(--glass-filter);
   border: 1px solid var(--glass-line);
-  border-radius: 0 20px 20px 20px;
+  /* 上面兩個角都是直角：左上接第一個書籤，右上接最右邊的「最近使用」 */
+  border-radius: 0 0 20px 20px;
   /* 外陰影拉開層次，內側上緣高光模擬玻璃的鏡面反光 */
   box-shadow: var(--shadow-lg), inset 0 1px 0 var(--glass-hi);
   overflow: hidden;
@@ -510,7 +525,7 @@ button { cursor: pointer; }
 /* 長按才會拖曳，按住時不要選到字 */
 .gpn-folder-main, .gpn-tab-main { user-select: none; -webkit-user-select: none; }
 
-/* 長按 450ms 後進入排序：被抓起的資料夾浮起來，其餘淡化（和書籤同一套） */
+/* 長按 250ms 後進入排序：被抓起的資料夾浮起來，其餘淡化（和書籤同一套） */
 .gpn-folder.is-drag {
   position: relative;
   z-index: 2;
@@ -665,7 +680,7 @@ button { cursor: pointer; }
 .gpn-card {
   position: relative;               /* 複製動畫要蓋在上面 */
   display: grid;
-  grid-template-columns: 40px 1fr 52px;
+  grid-template-columns: 40px 1fr 46px 52px;   /* 把手、標題、星號、鉛筆 */
   align-items: stretch;
   flex: none;
   min-height: 68px;
@@ -723,6 +738,7 @@ button { cursor: pointer; }
 .gpn-card.is-copied .gpn-grip,
 .gpn-card.is-copied .gpn-card-time,
 .gpn-card.is-copied .gpn-title,
+.gpn-card.is-copied .gpn-star,
 .gpn-card.is-copied .gpn-edit {
   opacity: 0;
   transition: opacity .16s ease;
@@ -780,6 +796,20 @@ button { cursor: pointer; }
   font-size: 13.5px; color: var(--text-mute);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+/* 星號：加入／移出「我的最愛」。沒加入時淡淡的空心，滑過才明顯；加入了是金黃色實心 */
+.gpn-star {
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-mute);
+  opacity: .55;
+  transition: background-color .16s ease, color .16s ease, opacity .16s ease, transform .16s ease;
+}
+.gpn-card:hover .gpn-star, .gpn-star:focus-visible { opacity: 1; }
+.gpn-star:hover { background: var(--hover); color: var(--c-fav-accent); }
+.gpn-star.is-on { color: var(--c-fav-accent); opacity: 1; }
+.gpn-star:active { transform: scale(.88); }
+.gpn-star:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
+.gpn-star svg { width: 22px; height: 22px; display: block; fill: currentColor; }
 
 .gpn-edit {
   display: flex; align-items: center; justify-content: center;
@@ -877,6 +907,17 @@ button { cursor: pointer; }
 .gpn-input.is-bad, .gpn-textarea.is-bad { border-color: var(--error); box-shadow: 0 0 0 1px var(--error); }
 .gpn-hint { margin-top: 6px; font-size: 13.5px; color: var(--error); display: none; }
 .gpn-hint.is-on { display: block; }
+
+/* 內容框下面那一列：左邊是錯誤提示，右邊是字數 */
+.gpn-under { display: flex; align-items: baseline; gap: 12px; }
+.gpn-count {
+  margin: 6px 2px 0 auto;
+  font-size: 13.5px;
+  color: var(--text-mute);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: help;
+}
 
 /* 「放在哪個資料夾」下拉選單：自己畫箭頭，原生的太小不好認 */
 .gpn-select-wrap { position: relative; }
@@ -1144,12 +1185,8 @@ button { cursor: pointer; }
 .gpn-social-btn[disabled] { opacity: .6; pointer-events: none; }
 .gpn-social-icon svg { width: 22px; height: 22px; display: block; fill: currentColor; }
 .gpn-social-btn[data-provider="google"]   { background: #ffffff; color: #1f1f1f; border-color: var(--outline-strong); }
-.gpn-social-btn[data-provider="line"]     { background: #06c755; color: #ffffff; }
-.gpn-social-btn[data-provider="facebook"] { background: #1877f2; color: #ffffff; }
-.gpn-social-btn[data-provider="apple"]    { background: #000000; color: #ffffff; }
-:host([data-theme="dark"]) .gpn-social-btn[data-provider="apple"] { background: #ffffff; color: #000000; }
 
-/* 文字連結樣式的小按鈕（忘記密碼？、隱私權政策） */
+/* 文字連結（在雲端硬碟查看、隱私權政策） */
 .gpn-link {
   padding: 4px 2px;
   font-size: 14px;
@@ -1160,42 +1197,10 @@ button { cursor: pointer; }
 }
 .gpn-link:hover { filter: brightness(1.15); }
 .gpn-link:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
-.gpn-pass-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.gpn-pass-row .gpn-check { margin-top: 8px; }
 .gpn-privacy { display: inline-block; margin-top: 22px; font-size: 13px; color: var(--text-mute); }
 .gpn-note--status + .gpn-btn2 { width: 100%; margin-top: 10px; }
 
-/* 從「重設密碼」信回來：請他設新密碼（放在已登入畫面最上面） */
-.gpn-recover {
-  margin-bottom: 20px;
-  padding: 16px 18px 18px;
-  border-radius: 16px;
-  border: 2px solid var(--primary);
-  background: color-mix(in srgb, var(--primary) 8%, transparent);
-}
-.gpn-recover .gpn-field { margin: 14px 0 0; }
-
-.gpn-or {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 18px 0 16px;
-  font-size: 13.5px;
-  color: var(--text-mute);
-}
-.gpn-or::before, .gpn-or::after { content: ''; flex: 1; height: 1px; background: var(--glass-line); }
-.gpn-seg-row--top { margin: 0 0 18px; }
-.gpn-check {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  font-size: 14px;
-  color: var(--text-mute);
-  cursor: pointer;
-  user-select: none;
-}
-.gpn-check input { width: 18px; height: 18px; margin: 0; accent-color: var(--primary); cursor: pointer; }
+.gpn-file-link { display: inline-block; margin: 2px 0 6px; }
 
 .gpn-account-card {
   display: flex;
@@ -1327,6 +1332,58 @@ button { cursor: pointer; }
   .gpn-dialog .gpn-settings-nav h2, .gpn-nav-group, .gpn-nav-icon, .gpn-nav-version { display: none; }
   .gpn-nav-item { min-height: 42px; white-space: nowrap; }
   .gpn-settings-body { padding: 18px 18px 8px; }
+}
+
+/* ============================================================================
+   三之二、筆記本左下角外面的「全部提示詞」（只有網頁版有，按了換到 all.html）
+   放在筆記本外面：不佔紙張的空間，也不會和「新增提示詞」搞混。
+   畫面太窄、左邊放不下時，改成筆記本下面的一條。
+   ========================================================================== */
+.gpn-account-avatar--google { background: #ffffff; box-shadow: var(--shadow-md); }
+
+.gpn-all-link {
+  position: absolute;
+  right: calc(100% + 20px);
+  bottom: 12px;
+  width: 76px;
+  padding: 12px 4px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  border-radius: 20px;
+  background: var(--glass);
+  backdrop-filter: var(--glass-filter);
+  -webkit-backdrop-filter: var(--glass-filter);
+  border: 1px solid var(--glass-line);
+  box-shadow: var(--shadow-md), inset 0 1px 0 var(--glass-hi);
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  text-decoration: none;
+  transition: transform .16s cubic-bezier(.2, 0, 0, 1), border-color .16s ease, color .16s ease;
+}
+.gpn-all-link:hover { transform: translateY(-2px); border-color: var(--primary); color: var(--primary); }
+.gpn-all-link:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.gpn-all-link-icon svg { width: 26px; height: 26px; display: block; fill: currentColor; }
+.gpn-all-link-text > span { display: block; }   /* 「全部／提示詞」兩行，不要斷在奇怪的地方 */
+
+@media (max-width: 940px) {
+  .gpn-all-link {
+    position: static;
+    flex: none;
+    width: auto;
+    flex-direction: row;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 10px;
+    font-size: 15px;
+  }
+  .gpn-all-link-icon svg { width: 20px; height: 20px; }
+  .gpn-all-link-text > span { display: inline; }
 }
 
 /* ============================================================================

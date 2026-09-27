@@ -1,8 +1,6 @@
 /**
  * 外掛裡的面板、工具列小視窗用的「雲端」：自己不連線，全部請背景程式（background.js）做。
- * 提供給 panel.js 的介面和網頁版的同步引擎（sync.js）一樣：
- *   getState / onState / signIn / signUp / signInWithProvider / resendConfirm /
- *   resetPassword / signOut / deleteAccount / syncNow
+ * 提供給 panel.js 的介面和網頁版一樣：getState / onState / connect / signOut / syncNow
  */
 function gpnExtensionCloud() {
   'use strict';
@@ -47,17 +45,9 @@ function gpnExtensionCloud() {
       }
     },
     onState: (cb) => { listeners.push(cb); },
-    signIn: (email, password) => send('signIn', { email, password }),
-    signUp: (email, password) => send('signUp', { email, password }),
-    resendConfirm: (email) => send('resendConfirm', { email }),
-    resetPassword: (email) => send('resetPassword', { email }),
-    /** 背景程式會開一個新分頁去那一家登入，登入完那個分頁會自己關掉 */
-    signInWithProvider: (provider) => send('oauthStart', { provider }),
-    canSocial: true,
-    // 驗證信、重設密碼信的連結會打開「網頁版」，不會回到外掛；面板的說明文字要跟著改
-    linksOpenWeb: true,
+    /** 背景程式會開一個新分頁去 Google 連結雲端硬碟，完成後那個分頁會自己關掉 */
+    connect: () => send('connect'),
     signOut: (opts = {}) => send('signOut', { wipe: !!opts.wipe }),
-    deleteAccount: () => send('deleteAccount'),
     syncNow: () => send('syncNow'),
   };
 }

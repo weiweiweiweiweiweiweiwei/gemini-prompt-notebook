@@ -12,6 +12,7 @@
  *         { id, label, items: [ {id,title,content} ] } ] },
  *   ],
  *   recent: [ { id, title, content, usedAt, tabId, folderId } ], // 最近使用記錄
+ *   favs: [ 提示詞 id, ... ],                           // 我的最愛（照使用者排的順序）
  * }
  * 一個書籤只會有 items 或 folders 其中一個；有 folders 就代表開了資料夾，
  * 而且至少有一個資料夾。
@@ -24,7 +25,11 @@
  * 「最近使用」不是一般的書籤：它不能刪、不能放自己的提示詞，內容是自動記下來的，
  * 所以不放在 tabs 裡，另外存一份 recent（最新的在最前面，最多 50 筆，同一則只留最新那次）。
  * id 是原本那則提示詞的 id，畫面上會用它找回提示詞「現在」的標題和內容。
- * 畫面上它是最左邊那個書籤，id 固定是 GPN_RECENT_ID。
+ * 畫面上它是最右邊那個書籤，id 固定是 GPN_RECENT_ID。
+ *
+ * 「我的最愛」也不是一般的書籤：它只記「哪幾則提示詞被加了星號」（favs，存提示詞的 id），
+ * 提示詞本身還是留在原本的書籤裡，所以改了、搬了都不影響；原本那則刪掉了，這裡也就跟著消失。
+ * 畫面上它固定在「最近使用」的左邊，id 固定是 GPN_FAV_ID。
  */
 
 /* ==== 共用資料契約 開始 ====================================================
@@ -40,6 +45,7 @@ const GPN_MAX_FOLDERS = 12;              // 每個書籤最多幾個資料夾
 const GPN_DEFAULT_FOLDER = '一般';        // 書籤剛開啟資料夾時，原本的提示詞放在這裡
 const GPN_RECENT_ID = 't_recent';        // 「最近使用」書籤的 id（固定、不能刪）
 const GPN_RECENT_MAX = 50;               // 最近使用最多記幾筆
+const GPN_FAV_ID = 't_star';             // 「我的最愛」書籤的 id（固定、不能刪；注意不是預設書籤「常用」的 t_fav）
 const GPN_COLORS = ['amber', 'green', 'blue', 'rose', 'purple', 'teal'];
 const GPN_COLOR_LABELS = {
   amber: '牛皮黃', green: '森林綠', blue: '天空藍',
@@ -59,6 +65,7 @@ function gpnDefaultData() {
       { id: 't_oth', label: '其他', color: 'green', items: [] },
     ],
     recent: [],
+    favs: [],
   };
 }
 
@@ -149,6 +156,7 @@ function gpnNormalize(raw) {
 
   // id 全部不可重複（重複會讓切換、拖曳、移動選錯對象）
   const seen = new Set();
+  const itemIds = new Set();
   const uniq = (obj, prefix) => {
     while (seen.has(obj.id)) obj.id = gpnNewId(prefix);
     seen.add(obj.id);
@@ -157,17 +165,22 @@ function gpnNormalize(raw) {
     uniq(t, 't');
     for (const list of gpnListsOf(t)) {
       if (list !== t) uniq(list, 'f');
-      for (const it of list.items) uniq(it, 'p');
+      for (const it of list.items) { uniq(it, 'p'); itemIds.add(it.id); }
     }
   }
 
   // activeId：v2 以後直接用；v1 的 active 是 'favorite' / 'other'
   let activeId = raw.activeId;
   if (!activeId && raw.active) activeId = raw.active === 'other' ? 't_oth' : 't_fav';
-  if (activeId !== GPN_RECENT_ID && !tabs.some((t) => t.id === activeId)) activeId = tabs[0].id;
+  const fixed = activeId === GPN_RECENT_ID || activeId === GPN_FAV_ID;
+  if (!fixed && !tabs.some((t) => t.id === activeId)) activeId = tabs[0].id;
 
-  // 最近使用記錄的 id 指向提示詞，本來就會和提示詞的 id 重複，所以不參加上面的「不可重複」檢查
-  return { version: GPN_VERSION, activeId, tabs, recent: gpnCleanRecent(raw.recent) };
+  // 我的最愛：只留還存在的提示詞，同一則只留一次
+  const favs = (Array.isArray(raw.favs) ? raw.favs : [])
+    .filter((id, i, arr) => typeof id === 'string' && itemIds.has(id) && arr.indexOf(id) === i);
+
+  // 最近使用、我的最愛的 id 指向提示詞，本來就會和提示詞的 id 重複，所以不參加上面的「不可重複」檢查
+  return { version: GPN_VERSION, activeId, tabs, recent: gpnCleanRecent(raw.recent), favs };
 }
 
 /** 書籤裡所有「裝提示詞的清單」：有資料夾就是各個資料夾，沒有就是書籤自己 */
@@ -219,7 +232,7 @@ const GpnStore = {
       const got = await chrome.storage.local.get(GPN_KEY);
       this.cache = gpnNormalize(got[GPN_KEY]);
     } catch (err) {
-      console.warn('[常用提示詞] 讀取資料失敗，暫時使用記憶體資料：', err);
+      console.warn('[特務P] 讀取資料失敗，暫時使用記憶體資料：', err);
     }
     return this.cache;
   },
@@ -232,7 +245,7 @@ const GpnStore = {
       await chrome.storage.local.set({ [GPN_KEY]: this.cache });
       return true;
     } catch (err) {
-      console.warn('[常用提示詞] 儲存失敗：', err);
+      console.warn('[特務P] 儲存失敗：', err);
       return false;
     }
   },

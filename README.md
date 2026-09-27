@@ -1,4 +1,6 @@
-# 常用提示詞
+# 特務P
+
+（原名「常用提示詞」）
 
 把常用的 AI 指令存起來，點一下就填進輸入框（或複製）。
 提示詞用 **書籤** 分類；提示詞很多的書籤，還可以在裡面再分 **資料夾**
@@ -59,27 +61,40 @@
 | 打開面板 | 點輸入框工具列的 **書籤圖示** |
 | 關閉面板 | 點面板 **外面** 的地方（或按 Esc） |
 | 換書籤 | 點上面的書籤標籤（有資料夾的書籤，一律先顯示 **第一個資料夾**） |
-| 找剛剛用過的 | 最左邊的 **最近使用**（見下面） |
+| 找剛剛用過的 | 最右邊的 **最近使用**（見下面） |
+| 收藏最常用的 | 點卡片右邊的 **☆**，收進 **我的最愛**（見下面） |
 | 使用提示詞 | 點卡片中間的 **標題** → 填進輸入框 + 複製，卡片顯示 **Copied**（面板不會關） |
 | 調整順序 | 按住卡片最左邊的 **⣿** 上下拖曳 |
-| 書籤換位置 | **長按** 書籤約半秒，再左右拖曳（故意設計成不好觸發，避免點選時誤拖） |
-| 修改內容 | 點卡片右邊的 **鉛筆** 圖示 |
+| 書籤換位置 | **長按** 書籤約 0.25 秒，再左右拖曳（一般點一下不會誤拖） |
+| 修改內容 | 點卡片右邊的 **鉛筆** 圖示（「實際的 Prompt 內容」下面會顯示字數） |
 | 把提示詞搬到別的書籤／資料夾 | 鉛筆 → 最下面的「**放在哪裡**」選別的 → 儲存 |
 | 新增提示詞 | 點面板最下面的 **＋ 新增提示詞**（會放進目前的書籤／資料夾） |
 | 刪除提示詞 | 進入編輯畫面 → 左下角 **刪除** → 再按一次確認 |
-| 新增書籤 | 點書籤列最右邊的 **＋**（可取名 + 選 6 種顏色，最多 8 個；一開始不分資料夾） |
+| 新增書籤 | 點自己的書籤後面的 **＋**（可取名 + 選 6 種顏色，最多 8 個；一開始不分資料夾） |
+| 一頁看完全部提示詞 | 網頁版：點筆記本 **左下角外面** 的 **全部提示詞**（見下面「全部提示詞：給問問 Gemini 看」） |
 | **設定** | 點紙張右上角的 **齒輪**，見下面「設定裡有什麼」 |
 
-### 最近使用
+### 我的最愛、最近使用
 
-書籤列最左邊固定有一個 **最近使用**（不能刪除、不能改名），像 YouTube 的觀看記錄：
+書籤列最右邊固定有兩個書籤（不能刪除、不能改名、不能拖），左邊是 **我的最愛**、最右邊是 **最近使用**。
+書籤很多、擠不下的時候只會顯示圖示（★ 和 時鐘），滑鼠移上去看得到名稱。
+
+**我的最愛**：把最常用的幾則集中在一起，不用到各個書籤裡找。
+
+- 點任何一則提示詞右邊的 **☆**，變成金色 **★** 就收進來了；再按一次就拿掉（提示詞本身還在原本的書籤）。
+- 標題下面有「從哪個書籤來的」；在這裡按鉛筆，改的就是原本那一則。
+- 按住左邊的 **⣿** 可以排自己的順序，不會影響它在原本書籤裡的位置。
+- 原本那則被刪掉的話，這裡也會跟著消失。
+- 連結 Google 雲端硬碟的話會跟著同步；備份檔不含我的最愛（和最近使用記錄一樣）。
+
+**最近使用**像 YouTube 的觀看記錄：
 
 - 點過的提示詞會自動記下來，**最新的在最上面**，依日期分成「今天」「昨天」「星期三（9/17）」「9月10日」。
 - 最多 **50 則**，超過就把最舊的拿掉；同一則用了好幾次只會出現一次（在最新那次的位置）。
 - 每一則左邊是使用時間、標題下面有「從哪個書籤來的」；原本那則被改過的話，顯示改過後的樣子。
 - 右邊的 **×** 可以把單一則從記錄移除；最下面有 **清除全部使用記錄**（按兩次）。
   清除記錄不會動到提示詞本身。
-- 登入帳號的話，記錄也會跟著同步（外掛用過的，網頁版的「最近使用」也看得到）。
+- 連結 Google 雲端硬碟的話，記錄也會跟著同步（外掛用過的，網頁版的「最近使用」也看得到）。
   備份檔不含記錄——那是自己的使用習慣，分享給別人時不會帶過去。
 
 **有開資料夾的書籤**，左邊會多一欄資料夾：
@@ -87,9 +102,29 @@
 | 想做的事 | 怎麼操作 |
 |---|---|
 | 換資料夾 | 點左邊資料夾欄的名稱 |
-| 資料夾換位置 | **長按** 資料夾約半秒，再上下拖曳（和書籤同一套） |
+| 資料夾換位置 | **長按** 資料夾約 0.25 秒，再上下拖曳（和書籤同一套） |
 | 新增資料夾 | 資料夾欄最下面的 **＋ 新增資料夾**（每個書籤最多 12 個） |
 | 資料夾改名／刪除 | 點目前選中那個資料夾右邊的 **鉛筆** |
+
+### 全部提示詞：給「問問 Gemini」看（網頁版）
+
+筆記本平常一次只顯示一個書籤，卡片上也只有前幾個字。網頁版筆記本 **左下角外面** 有一顆 **全部提示詞**，
+按了會換到另一頁（`all.html`）：**所有書籤、所有資料夾的提示詞，完整內容用純文字列在同一頁**，像一份記事本。
+
+- 依「書籤 → 資料夾 → 提示詞」分段，每一則前面有編號（#1、#2…），★ 是我的最愛。
+- 沒有卡片、按鈕、收合，所有字都直接攤在頁面上；十幾萬字也沒問題（實測約 15 萬字，重畫一次 0.03 秒）。
+- 上面一條可以只看某一個書籤，或按 **全部** 看所有書籤。編號永遠照「全部」的順序，只看一個書籤時也不會變。
+- 有連結 Google 雲端硬碟的話，打開這一頁時會先同步一次；網頁版在另一個分頁改了，這一頁也會跟著更新。
+- 按左上角 **← 回到筆記本** 回去。這一頁可以直接加入書籤：
+  `https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/all.html`
+
+搭配 Chrome 的「問問 Gemini」這樣用：
+
+1. 一個分頁開公文，另一個分頁開這一頁。
+2. 把兩個分頁都分享給「問問 Gemini」，描述情境，請它挑該用哪一則（它可以用編號回答）。
+3. 回到這一頁，選取那一則的內容複製；或回到筆記本點那一則。
+
+（外掛的面板和小視窗沒有這顆按鈕：外掛的頁面「問問 Gemini」讀不到，請用網頁版。）
 
 ### 設定裡有什麼（齒輪）
 
@@ -99,7 +134,7 @@
 |---|---|
 | 名稱與顏色 | 這個書籤的名稱、顏色；最下面可以刪除這個書籤（按兩次） |
 | 資料夾 | 這個書籤要不要用資料夾的開關 |
-| 帳號與同步 | 登入／註冊、同步狀態、登出（見第三節） |
+| 雲端同步 | 連結 Google 雲端硬碟、同步狀態、中斷連結（見第三節） |
 | 備份與同步 | 所有書籤一起匯出／匯入成檔案或代碼（見第三節） |
 
 - **開啟** 資料夾：原本的提示詞會先放進「一般」資料夾，之後再新增資料夾、用鉛筆把提示詞搬過去。
@@ -133,10 +168,10 @@
 
 ### 資料存在哪？（傳網址給別人時要知道的）
 
-- **沒登入**：提示詞只存在他自己的這個瀏覽器，不會上傳到任何地方。
+- **沒連結雲端硬碟**：提示詞只存在他自己的這個瀏覽器，不會上傳到任何地方。
   換電腦、換瀏覽器、清除瀏覽資料、用無痕視窗，都會看不到原本的資料。
-- **登入帳號**：另外存一份在雲端，外掛、網頁版、每一台電腦自動同步（見第三節）。
-  每個帳號只看得到自己的提示詞，你看不到別人的，別人也看不到你的。
+- **連結 Google 雲端硬碟**：另外存一份在 **他自己的** Google 雲端硬碟，外掛、網頁版、每一台電腦自動同步（見第三節）。
+  資料在各人自己的雲端硬碟裡，你看不到別人的，別人也看不到你的，我們的伺服器也不經手。
 - 別人第一次打開是空的。想分享提示詞，用 **齒輪 → 備份與同步** 把代碼或備份檔傳給對方匯入。
 
 ### 網頁版和外掛的差別
@@ -150,7 +185,7 @@
 | 怎麼關 | 點外面或按 Esc | 點小視窗外面 | 不用關，它就是整個網頁 |
 | 深色／淺色 | 跟著 AI 網站 | 跟著系統 | 跟著系統 |
 | 資料存在哪 | 這台電腦的 Chrome | 同左（和外掛共用） | 這台電腦的這個瀏覽器 |
-| 登入帳號後 | 自動同步 | 自動同步（和外掛共用登入） | 自動同步 |
+| 連結雲端硬碟後 | 自動同步 | 自動同步（和外掛共用連結） | 自動同步 |
 
 按 `Esc` 會先關掉打開的對話框。
 
@@ -162,48 +197,36 @@
 
 ## 三、兩邊怎麼同步
 
-### 方法一：登入帳號，自動同步（推薦）
+### 方法一：連結 Google 雲端硬碟，自動同步（推薦）
 
-**齒輪 → 帳號與同步**（或紙張右上角的「**登入同步**」），選一種方式登入：
+**齒輪 → 雲端同步**（或紙張右上角的「**雲端同步**」）→ 按 **用 Google 帳號連結雲端硬碟**：
 
-| 方式 | 過程 | 備註 |
-|---|---|---|
-| **用 Google 帳號登入** | 選好帳號就回來 | 不用另外記密碼，最推薦 |
-| **用 LINE 帳號登入** | 在 LINE 的頁面確認（掃 QR Code 或輸入 LINE 密碼） | LINE 可能不提供 Email，帳號頁會顯示「LINE 帳號」 |
-| **用 Facebook 帳號登入** | 在 Facebook 的頁面確認 | |
-| **Email ＋ 密碼** | 註冊後要到信箱點驗證信 | 不想用社群帳號的人 |
+1. 到 Google 的畫面 **選帳號**——公司帳號、個人帳號請選對，之後每台電腦都選同一個。
+2. Google 會問能不能讓特務P 存取雲端硬碟，按 **允許**（有勾選框的話，要把雲端硬碟那一項打勾）。
+3. 回到特務P 就開始同步。網頁版會整頁換過去再回來；外掛會另開一個分頁，完成後那個分頁自己關掉。
 
-（只會出現管理員有打開的方式，見下面的「帳號系統的設定」。）
+（直接雙擊開檔案的網頁版不能連結——Google 沒辦法把人帶回電腦裡的檔案。）
 
-外掛、網頁版、每一台電腦登入 **同一個帳號**，之後就不用管了。
-**每一台都用同一種方式登入** 最不會搞混——用 LINE 登入和用 Email 註冊，是兩個不同的帳號。
+提示詞會存在你的 Google 雲端硬碟裡的 **「特務P 提示詞筆記本.json」** 這個檔案：
 
-**用 Email 註冊的過程：**
+- 特務P 只申請「只能碰自己建立的檔案」這個最小權限，看不到雲端硬碟裡的其他東西。
+- 檔案可以改名、搬到別的資料夾，特務P 都找得到；**請不要手動修改內容**。
+- 被刪掉的話，下次同步會用這台電腦上的提示詞重建一個。
+- 雲端同步頁有 **在 Google 雲端硬碟裡查看這個檔案** 的連結。
 
-1. 按 **註冊新帳號** → 輸入 Email、密碼（至少 6 個字）、再輸入一次密碼 → 按 **註冊**。
-2. 到信箱找「請確認你的信箱｜常用提示詞」（找不到就看垃圾郵件），按 **確認我的信箱**。
-3. 會打開網頁版並自動登入。在外掛裡註冊的，驗證完回到外掛輸入密碼按 **登入**。
+連結之後：
 
-- 還沒點驗證信就按登入：會提醒你，並出現 **重新寄驗證信**。
-- **忘記密碼？**：先在上面填 Email 再按它 → 收信按 **設定新密碼** → 網頁版會直接跳出「請設定新的密碼」。
-- 信裡的連結有時間限制、只能用一次；過期了就重新寄一封。
-
-**社群登入的過程：** 網頁版會換到那一家的登入頁，登入完就回來；外掛會另開一個分頁，登入完那個分頁會自己關掉。
-（直接雙擊開檔案的網頁版沒有社群登入按鈕——那一家沒辦法把人帶回電腦裡的檔案。）
-
-登入之後：
-
-- 改了提示詞，大約一秒內就存到雲端；打開面板、回到網頁版的分頁時，會先把別台改的拉下來。
+- 改了提示詞，大約一秒內就存到雲端硬碟；打開面板、回到網頁版的分頁時，會先把別台改的拉下來。
 - 紙張右上角看得到狀態：**已同步**（綠）／**待同步**／**同步中**／**未連線**（黃，恢復網路後會自己補上）。
-- 第一次在某台電腦登入時，這台原本的提示詞會 **和雲端合併**，不會被蓋掉。
+- 第一次在某台電腦連結時，這台原本的提示詞會 **和雲端合併**，不會被蓋掉。
 - 兩台同時改（例如一台沒網路時改了）：以雲端為底，把這台多出來的加進去，寧可多、不會少。
-- **登出**：這台的提示詞留著，只是不再同步。
-  在別人的電腦上用完，請按 **登出並清除這台電腦上的提示詞**（雲端的不會刪，下次登入就回來）。
-- 同一台電腦換別人登入，不會把前一個人的提示詞帶進新帳號。
-- **刪除我的帳號**（按兩次）：帳號和雲端上的提示詞永久刪除，這台電腦上的留著。
+- **中斷連結**：這台的提示詞和雲端硬碟上的檔案都留著，只是不再同步。
+  在別人的電腦上用完，請按 **中斷連結並清除這台電腦上的提示詞**（雲端硬碟上的不會刪，下次連結就回來）。
+- 同一台電腦換連結另一個 Google 帳號，不會把前一個帳號的提示詞帶進新帳號。
+- 不想用了：中斷連結後，到雲端硬碟把那個檔案刪掉。
 
-> 沒登入也能照常使用，只是資料只存在那一台。
-> 存了什麼、誰看得到、怎麼刪除，寫在 [隱私權政策](https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/privacy.html)。
+> 沒連結也能照常使用，只是資料只存在那一台。
+> 資料存在哪、誰看得到、怎麼刪除，寫在 [隱私權政策](https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/privacy.html)。
 
 ### 方法二：手動匯出／匯入（不想用帳號、或要分享給別人時）
 
@@ -249,135 +272,79 @@
 
 ---
 
-### 帳號系統的設定（管理員做一次就好）
-
-整個過程長這樣，每一步做完都可以先停下來：
+### 雲端同步（Google 雲端硬碟）的設定（管理員做一次就好）
 
 ```
-① 資料庫  →  ② 網址設定  →  ③ 寄信（SMTP）和信件範本  →  ④ 社群登入（Google／LINE／Facebook 各自申請）
-                                                                  ↓
-                                ⑥ 正式打開（open: true） ←  ⑤ 自己先試（?try-cloud=1）
+瀏覽器（外掛／網頁版） ──提示詞──▶ 使用者自己的 Google 雲端硬碟
+        │
+        └─ 只有「換登入憑證」這一步 ──▶ token 中繼（Supabase Edge Function：google-token）──▶ Google
 ```
 
-目前的 Supabase 專案：**gemini-prompt-notebook**（東京機房，免費方案），網址 `https://jsgvyxbkvszvhkrpbvjy.supabase.co`。
-下面「Callback URL」都是：`https://jsgvyxbkvszvhkrpbvjy.supabase.co/auth/v1/callback`
+Google 規定換登入憑證（token）要附 **用戶端密鑰**，密鑰不能放在網頁或外掛裡，所以放在 token 中繼上。
+中繼只轉交 token，不碰雲端硬碟、不保存任何東西（程式在 `supabase/functions/google-token/index.ts`）。
 
-#### ① 資料庫（已完成）
+目前的設定（`src/cloud-config.js`）：
 
-**SQL Editor** → 貼上 `supabase/schema.sql` 的全部內容 → **Run**。
-建立資料表、權限規則（每個帳號只能讀寫自己的那一列）和「刪除我的帳號」要用的函式。重複執行也沒關係。
+- `clientId`：沿用原本 Supabase Google 登入的那個 OAuth 用戶端（`179560802326-…apps.googleusercontent.com`）
+- `tokenUrl`：`https://jsgvyxbkvszvhkrpbvjy.supabase.co/functions/v1/google-token`（已部署，JWT 驗證關閉）
+- `open`：`false`（下面都設好、自己試過之後才改成 `true`）
 
-`src/cloud-config.js` 裡的 `url`、`key` 已經填好。`key` 是 **Publishable key**，本來就是公開的；
-**絕對不要** 把 secret key／service_role key 放進程式——那把可以讀寫所有人的資料。
+#### ① Google Cloud Console（和原本 Google 登入是同一個專案、同一個 OAuth 用戶端）
 
-#### ② 網址設定
+1. **APIs & Services → Library** → 搜尋 **Google Drive API** → **Enable**。
+2. **Google Auth Platform → Data Access**（舊版介面叫 OAuth consent screen → Scopes）→ **Add or remove scopes**：
+   加上 `…/auth/drive.file`（「查看、編輯、建立及刪除這個應用程式使用的 Google 雲端硬碟檔案」）。
+   這是 Google 分類裡「非敏感」的權限，不用送審。
+3. **Branding**：App name 改成「特務P」（使用者在 Google 的同意畫面上會看到這個名字）。
+4. **Audience**：Publishing status 要是 **In production**。
+   還在 Testing 的話，只有 Test users 能連結，而且 **每 7 天就要重新連結一次**。
+5. **Clients → 那個 Web application 用戶端** → **Authorized redirect URIs** 加上這兩條：
+   - `https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/`
+   - `https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/ext-login.html`
+6. 同一頁抄下 **Client secret**（下一步要用；不要放進程式、不要傳給別人）。
 
-**Authentication → URL Configuration**：
+#### ② Supabase：把密鑰交給 token 中繼
 
-- **Site URL**：`https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/`
-- **Redirect URLs** 加一條：`https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/**`
-  （社群登入、驗證信、重設密碼信，最後都會回到這個網站；外掛是回到其中的 `ext-login.html` 再交給外掛）
+**Edge Functions → Secrets**（或 **Project Settings → Edge Functions**）新增兩個：
 
-#### ③ 寄信（SMTP）和信件範本
+| Name | Value |
+|---|---|
+| `GOOGLE_CLIENT_ID` | 和 `cloud-config.js` 的 `clientId` 一樣 |
+| `GOOGLE_CLIENT_SECRET` | 上一步抄下來的 Client secret |
 
-Supabase 內建的寄信服務 **只會寄給專案團隊成員**，一般人收不到驗證信，所以要接自己的寄信服務。
-最簡單的是用一個 Gmail 帳號寄（建議另外開一個專用的 Gmail）：
+設好之後不用重新部署。
 
-1. 那個 Google 帳號 → **安全性** → 開啟 **兩步驟驗證**。
-2. 同一頁搜尋「**應用程式密碼**」→ 建立一組（名稱隨便，例如 Supabase）→ 會得到一組 16 個字母的密碼。
-   這組密碼只貼在 Supabase 後台，不要放進程式、不要傳給別人。
-3. Supabase → **Authentication → Emails → SMTP Settings** → 打開 **Enable custom SMTP**：
-   - Sender email：那個 Gmail　／　Sender name：`常用提示詞`
-   - Host：`smtp.gmail.com`　／　Port：`587`
-   - Username：那個 Gmail　／　Password：剛剛的 16 個字母
-4. **Authentication → Emails → Templates**：
-   - **Confirm sign up**：主旨 `請確認你的信箱｜常用提示詞`，內容貼 `supabase/templates/confirm-signup.html`
-   - **Reset password**：主旨 `重設密碼｜常用提示詞`，內容貼 `supabase/templates/reset-password.html`
-5. **Authentication → Sign In / Providers → Email**：確認 **Confirm email** 是 **開著** 的。
-6. （選用）**Authentication → Rate Limits** 可以調整每小時最多寄幾封信。個人 Gmail 一天大約能寄 500 封，家用綽綽有餘。
+#### ③ 自己先試
 
-設好之後，用自己的另一個信箱註冊一次試試看。
-
-#### ④-1 Google 登入
-
-1. [Google Cloud Console](https://console.cloud.google.com/) 建一個專案。
-2. **APIs & Services → OAuth consent screen**：User type 選 **External**，App name 填「常用提示詞」，
-   填支援用的 Email；隱私權政策網址填 `https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/privacy.html`。建好後按 **Publish app**
-   （沒發布的話，只有加進 Test users 的人能登入）。
-3. **APIs & Services → Credentials → Create credentials → OAuth client ID**：
-   - Application type：**Web application**
-   - Authorized redirect URIs：上面的 Callback URL
-4. 把 **Client ID** 和 **Client secret** 貼到 Supabase 的 **Authentication → Sign In / Providers → Google**，打開 **Enable**。
-
-#### ④-2 LINE 登入
-
-Supabase 沒有內建 LINE，但 LINE 支援 OpenID Connect，可以用「自訂登入方式」接上（免費方案最多 3 個）。
-
-1. [LINE Developers Console](https://developers.line.biz/console/) 用自己的 LINE 帳號登入 → 建立一個 **Provider**（名稱：常用提示詞）。
-2. 在 Provider 裡 **Create a new channel** → 選 **LINE Login** → 地區選台灣、App types 勾 **Web app**，其他照填。
-3. 這個 channel 的 **LINE Login** 分頁 → **Callback URL** 填上面的 Callback URL。
-4. （選用）**Basic settings → OpenID Connect → Email address permission → Apply**：
-   要上傳一張「會怎麼使用 Email」的截圖（可以用隱私權政策頁的截圖）。
-   沒申請也能登入，只是拿不到 Email，帳號頁會顯示「LINE 帳號」。
-5. 把 channel 從 **Developing** 改成 **Published**（沒發布的話只有自己能登入）。
-6. **Basic settings** 抄下 **Channel ID** 和 **Channel secret**。
-7. Supabase → **Authentication → Sign In / Providers → New Provider** → 選 **Auto-discovery (OIDC)**：
-   - Identifier：`custom:line`
-   - Client ID：Channel ID　／　Client Secret：Channel secret
-   - Issuer URL：`https://access.line.me`
-   - Scopes：有申請 Email 權限就用 `openid profile email`，沒申請就用 `openid profile`
-   - 按 **Create and enable provider**。
-
-#### ④-3 Facebook 登入
-
-1. [Meta for Developers](https://developers.facebook.com/) → **我的應用程式 → 建立應用程式** →
-   用途選「**使用 Facebook 登入驗證用戶身分並要求取得資料**」，名稱填「常用提示詞」。
-2. **使用案例 → Facebook 登入 → 自訂**：權限加上 **email**；設定裡的
-   **有效的 OAuth 重新導向 URI** 填上面的 Callback URL。
-3. **應用程式設定 → 基本資料**：
-   - 隱私政策網址：`https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/privacy.html`
-   - 用戶資料刪除 → 資料刪除說明網址：`https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/privacy.html#delete`
-   - 填好應用程式圖示和類別。
-4. 抄下 **應用程式編號** 和 **應用程式密鑰**，貼到 Supabase 的 **Sign In / Providers → Facebook**，打開 **Enable**。
-5. 把應用程式切換成 **上線（Live）**（開發模式下只有自己能登入）。
-
-#### ④-4 Apple 登入（先不做）
-
-要付費的 Apple Developer Program（每年 US$99）才能申請。程式已經支援，之後要加的話在 `providers` 加 `'apple'`。
-
-#### ⑤ 自己先試
-
-`cloud-config.js` 的 `open` 還是 `false` 時，所有人都看不到帳號功能（和以前一樣）。
-管理員想先試用，在網頁版網址後面加 **`?try-cloud=1`**：
+`open` 還是 `false` 時，一般使用者看不到雲端同步。管理員在網頁版網址後面加 **`?try-cloud=1`**：
 
 ```
 https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/?try-cloud=1
 ```
 
-只有「這個瀏覽器」會打開帳號功能，而且會記住；加 `?try-cloud=0` 就關回去。
-（外掛不吃這個開關，要等 ⑥ 打開後才會出現帳號功能。）
+只有「這個瀏覽器」會打開，而且會記住；加 `?try-cloud=0` 就關回去。連結一次，確認雲端硬碟裡出現
+「特務P 提示詞筆記本.json」。（外掛不吃這個開關，要等 ④ 打開後才會出現。）
 
-`providers` 要先填上已經設好的登入方式，試用時才會出現那幾顆按鈕：
+#### ④ 正式打開
 
-```js
-providers: ['google', 'custom:line', 'facebook'],   // 只放已經在 Supabase 打開的
-```
-
-#### ⑥ 正式打開
-
-1. `src/cloud-config.js`：`open` 改成 `true`，`providers` 確認只放已經設好的。
+1. `src/cloud-config.js`：`open` 改成 `true`。
 2. 調高 `manifest.json` 的 `version` 和 `src/panel.js` 的 `GPN_APP_VERSION`。
 3. 跑 `python tools/checksync.py --fix`，推上 GitHub（網頁版會自動重新發布）。
 4. 外掛到 `chrome://extensions` 按 ⟳ 重新載入。
 
-#### 管理員在後台看得到什麼？
+#### 機關的 Google Workspace 帳號連不上？
 
-| 在哪裡 | 看得到 | 看不到 |
-|---|---|---|
-| **Authentication → Users** | Email、用哪種方式登入、註冊時間、最後登入時間 | **密碼**。Email 註冊的密碼只存「雜湊」（無法還原）；用 Google／LINE／Facebook 登入的人，密碼是在那一家輸入的，這邊根本拿不到 |
-| **Table Editor → notebooks** | 每個人的提示詞內容（後台是管理員權限，不受「只能看自己」的規則限制） | |
+有些機關的 Google 管理員會擋「還沒被核准的第三方應用程式」存取雲端硬碟。
+連結時如果看到「這個應用程式已遭封鎖」之類的畫面，請機關的 Google 管理員到
+**管理控制台 → 安全性 → API 控制項 → 第三方應用程式存取權**，把上面的 Client ID 設成「信任」。
 
-後台可以幫忙：刪除某個使用者（他的提示詞會一起刪掉）、寄重設密碼信給他。
+#### 管理員看得到什麼？
+
+提示詞在每個人自己的雲端硬碟裡，**管理員看不到**。token 中繼不保存任何東西；
+Supabase 的 Edge Function 記錄只有「幾點被呼叫、成功或失敗」。
+
+> 以前（4.5 版）用的 Supabase 帳號系統已經停用：程式不再連資料庫。
+> 舊的 `notebooks` 資料表、`Authentication → Users` 裡的帳號還留在 Supabase 上，確認大家都改用雲端硬碟之後可以刪掉。
 
 ---
 
@@ -417,7 +384,9 @@ providers: ['google', 'custom:line', 'facebook'],   // 只放已經在 Supabase 
 - 有開資料夾的書籤至少有一個資料夾（最後一個不能刪，不想分就到設定關掉）。
 - 「目前看哪個資料夾」刻意不存檔：點書籤一律從第一個資料夾開始。
 - 另外還有 `"recent": [ { id, title, content, usedAt, tabId, folderId } ]`：最近使用記錄，
-  `id` 指向原本那則提示詞。畫面上是最左邊的「最近使用」書籤（`activeId` 可以是 `"t_recent"`）。
+  `id` 指向原本那則提示詞。畫面上是最右邊的「最近使用」書籤（`activeId` 可以是 `"t_recent"`）。
+- 以及 `"favs": [ "p1", … ]`：我的最愛，依使用者排的順序存提示詞的 `id`（找不到的會自動拿掉）。
+  畫面上是「最近使用」左邊的「我的最愛」書籤（`activeId` 可以是 `"t_star"`；注意不是預設書籤「常用」的 `t_fav`）。
 - 匯出檔多了 `"app": "gpn"` 和 `"exportedAt"`，其他和上面一樣。
 - 舊格式的升級規則寫在 `src/store.js` 最上面。
 
@@ -434,24 +403,24 @@ src/
   content.js           外掛專屬：注入按鈕、找到輸入框、把提示詞填進去
   styles.css           面板的全部樣式（毛玻璃）
   popup.html / .js     工具列小視窗
-  sync.js              雲端同步（登入、換 token、拉下來、推上去、合併）
-  cloud-config.js      雲端的連線設定（Supabase 網址和公開金鑰）
+  sync.js              雲端同步：連結 Google、換 token、讀寫雲端硬碟上的筆記本、合併
+  cloud-config.js      雲端的連線設定（Google OAuth 用戶端 ID、token 中繼的網址）
   background.js        外掛的背景程式：整個外掛只有它一個在跟雲端溝通
   cloud-ext.js         外掛的面板和小視窗用來請背景程式做事
-  ext-login.js         外掛用社群帳號登入的最後一步（只在網頁版的 ext-login.html 上執行）
+  ext-login.js         外掛連結雲端硬碟的最後一步（只在網頁版的 ext-login.html 上執行）
 web/
   index.html           網頁版
   app.js               網頁版專屬：把面板放在網頁正中間、點提示詞改成只複製
   page.css             網頁本身的背景
-  ext-login.html       外掛用社群帳號登入時的回程頁（沒裝外掛的人打開只會看到說明）
-  privacy.html         隱私權政策（Google、Facebook 申請登入時要填這個網址）
+  all.html / all.js / all.css   「全部提示詞」頁：所有提示詞的純文字清單（給「問問 Gemini」讀）
+  ext-login.html       外掛連結雲端硬碟時的回程頁（沒裝外掛的人打開只會看到說明）
+  privacy.html         隱私權政策（Google 同意畫面要填這個網址）
   store.js             同樣的資料格式 + localStorage 存取
   share.js / panel.js / styles.css / sync.js / cloud-config.js   和 src/ 同一份
 presets/
   chatgpt-99-prompts.json            可以直接匯入的 99 個提示詞
 supabase/
-  schema.sql           雲端資料庫的資料表、權限規則、刪除帳號的函式
-  templates/           驗證信、重設密碼信的範本（貼到 Supabase 後台）
+  functions/google-token/index.ts   token 中繼（Supabase Edge Function），見「雲端同步的設定」
 tools/
   checksync.py         檢查 src/ 和 web/ 的共用程式碼有沒有分岔
 .github/workflows/
@@ -499,22 +468,21 @@ python tools/checksync.py --fix    # 用 src/ 的內容覆蓋 web/
 內容仍然已經複製到剪貼簿，直接在輸入框按 `Ctrl + V` 貼上即可。
 
 **網頁版重開之後資料不見了？**
-沒登入時，網頁版的資料只存在「這個瀏覽器」裡。清除瀏覽資料、換瀏覽器、換電腦、用無痕視窗，
-都會看不到。登入帳號就會存到雲端；不想登入的話，請定期 **下載備份檔**。
+沒連結雲端硬碟時，網頁版的資料只存在「這個瀏覽器」裡。清除瀏覽資料、換瀏覽器、換電腦、用無痕視窗，
+都會看不到。連結 Google 雲端硬碟就會存到雲端；不想連結的話，請定期 **下載備份檔**。
 
 **右上角一直顯示「未連線」或「同步失敗」？**
-提示詞還是有存在這台電腦，恢復網路後會自己補同步。一直不好的話，到 **齒輪 → 帳號與同步** 看錯誤訊息，
+提示詞還是有存在這台電腦，恢復網路後會自己補同步。一直不好的話，到 **齒輪 → 雲端同步** 看錯誤訊息，
 或按「立即同步」再試一次。外掛剛更新過的話，先重新整理 AI 網站的分頁。
 
-**收不到驗證信／重設密碼信？**
-先看垃圾郵件。還是沒有的話，回到登入畫面按「重新寄驗證信」（或再按一次「忘記密碼？」）。
-一直都收不到，請管理員確認 ③ 的 SMTP 設定。
+**說「和 Google 雲端硬碟的連結已經失效」？**
+到 Google 帳戶移除過特務P 的存取權、改過密碼、或很久沒用時會這樣。重新連結同一個帳號就好，提示詞不會不見。
 
-**點信裡的連結說「已經過期或用過了」？**
-連結只能用一次、而且有時間限制。回到登入畫面重新寄一封，點最新的那封。
+**說「剛剛沒有勾選允許存取 Google 雲端硬碟」？**
+Google 的同意畫面上，雲端硬碟那一項要打勾。再按一次連結，這次記得勾。
 
-**登入說「登入已過期」？**
-很久沒用、或在別處改了密碼時會這樣，重新登入就好，提示詞不會不見。
+**說「你的機關帳號不允許這個應用程式存取雲端硬碟」？**
+見上面「機關的 Google Workspace 帳號連不上？」。
 
 **代碼貼上去說「看不懂這段內容」？**
 多半是沒複製完整。改用「下載備份檔 → 選檔案」最不會出錯。

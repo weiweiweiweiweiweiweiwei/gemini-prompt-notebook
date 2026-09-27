@@ -16,7 +16,7 @@
  *   ]
  * }
  * 舊版（v2、v3）匯出的備份也都吃得下，見 store.js 的升級規則。
- * 「最近使用」記錄不放進備份：那是自己的使用習慣，分享給別人時不該帶過去。
+ * 「最近使用」記錄、「我的最愛」不放進備份：那是自己的使用習慣，分享給別人時不該帶過去。
  *
  * 依賴 store.js 的共用資料契約（gpnNormalize、GPN_MAX_* 等），載入順序要在它之後。
  */
@@ -64,7 +64,7 @@ const gpnExportCode = (data) => gpnEncodeShare(gpnBuildExport(data));
 function gpnExportFileName() {
   const d = new Date();
   const p = (n) => String(n).padStart(2, '0');
-  return `常用提示詞-備份-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}.json`;
+  return `特務P-備份-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}.json`;
 }
 
 /** 觸發瀏覽器下載一個 .json 備份檔 */
@@ -102,7 +102,7 @@ function gpnParseImport(raw) {
 
   if (!obj || typeof obj !== 'object') return { ok: false, error: '內容格式不對' };
   if (obj.app && obj.app !== GPN_SHARE_APP) {
-    return { ok: false, error: '這不是「常用提示詞」匯出的備份' };
+    return { ok: false, error: '這不是「特務P」匯出的備份' };
   }
   if (!Array.isArray(obj.tabs)) return { ok: false, error: '這份備份裡找不到書籤資料' };
 
@@ -134,14 +134,18 @@ function gpnParseImport(raw) {
 function gpnMergeData(current, incoming) {
   const out = gpnNormalize(current);
   let added = 0, skipped = 0, newTabs = 0, newFolders = 0;
+  // 對方的提示詞 id → 合併後是哪一則（「我的最愛」要靠它找回來，因為加進來的會換新 id）
+  const idMap = new Map();
 
   const mergeItems = (list, incomingItems) => {
-    const seen = new Set(list.items.map((i) => i.title + '\u0000' + i.content));
+    const seen = new Map(list.items.map((i) => [i.title + '\u0000' + i.content, i.id]));
     for (const item of incomingItems) {
       const key = item.title + '\u0000' + item.content;
-      if (seen.has(key)) { skipped++; continue; }
-      seen.add(key);
-      list.items.push({ id: gpnNewId(), title: item.title, content: item.content });
+      if (seen.has(key)) { skipped++; idMap.set(item.id, seen.get(key)); continue; }
+      const id = gpnNewId();
+      seen.set(key, id);
+      idMap.set(item.id, id);
+      list.items.push({ id, title: item.title, content: item.content });
       added++;
     }
   };
@@ -195,6 +199,8 @@ function gpnMergeData(current, incoming) {
 
   // 最近使用記錄：兩邊合在一起，依使用時間排，同一則只留最新那次（備份檔不含記錄，只有雲端同步會帶）
   out.recent = gpnCleanRecent([...(out.recent || []), ...(incoming.recent || [])]);
+  // 我的最愛：兩邊的都留著，這邊的排前面（備份檔不含這個，只有雲端同步會帶）
+  out.favs = [...(out.favs || []), ...(incoming.favs || []).map((id) => idMap.get(id))];
 
   // 資料夾 id 若和別的書籤裡的撞到，normalize 會自動換一個新的
   return { data: gpnNormalize(out), added, newTabs, newFolders, skipped };

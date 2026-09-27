@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>隱私權政策 · 常用提示詞</title>
+<title>隱私權政策 · 特務P</title>
 <link rel="stylesheet" href="page.css">
 <style>
   .doc {
@@ -25,53 +25,60 @@
 <body>
 <main class="doc">
   <h1>隱私權政策</h1>
-  <p class="muted">常用提示詞（Chrome 外掛與網頁版）　最後更新：2026 年 9 月 24 日</p>
+  <p class="muted">特務P（Chrome 外掛與網頁版）　最後更新：2026 年 9 月 26 日</p>
 
   <h2>一句話說明</h2>
-  <p>不登入時，你的提示詞只存在你自己的瀏覽器裡，我們收不到任何東西。
-     登入帳號後，為了讓每台電腦同步，你的提示詞會存一份在雲端，只有你自己的帳號讀得到。</p>
+  <p>你的提示詞只存在兩個地方：你自己的瀏覽器，以及（如果你選擇連結）<strong>你自己的 Google 雲端硬碟</strong>。
+     我們沒有保存提示詞的伺服器，也看不到你的提示詞。</p>
 
-  <h2>我們保存哪些資料</h2>
-  <p>只有在你<strong>登入帳號</strong>之後，才會保存以下資料：</p>
+  <h2>沒有連結雲端硬碟時</h2>
+  <p>提示詞只存在這台電腦的瀏覽器裡（外掛存在 Chrome 的外掛儲存空間，網頁版存在瀏覽器的網站儲存空間），
+     不會傳到任何地方。</p>
+
+  <h2>連結 Google 雲端硬碟之後</h2>
   <ul>
-    <li><strong>帳號資料</strong>：Email、登入方式（Email／Google／LINE／Facebook）、帳號建立時間、最後登入時間。
-        用社群帳號登入時，那一家只會提供基本資料（名稱、Email、大頭貼網址）。</li>
-    <li><strong>你的筆記本</strong>：書籤、資料夾、提示詞內容，以及「最近使用」記錄（最多 50 筆）。</li>
+    <li><strong>存在哪裡</strong>：你的 Google 雲端硬碟裡的一個檔案，檔名是「特務P 提示詞筆記本.json」，
+        內容是你的書籤、資料夾、提示詞、「我的最愛」和「最近使用」記錄（最多 50 筆）。
+        它就是你雲端硬碟裡的一般檔案，適用你和 Google 之間的服務條款（公司、機關帳號則適用機關和 Google 的合約）。</li>
+    <li><strong>特務P 能碰什麼</strong>：只申請「只能存取特務P 自己建立的檔案」這個最小的權限（drive.file），
+        看不到、也改不到你雲端硬碟裡的任何其他檔案。另外會讀取你的 Google 帳號 Email，只用來顯示「已連結 ○○@○○」。</li>
+    <li><strong>資料怎麼傳</strong>：提示詞直接在你的瀏覽器和 Google 之間傳送，不會經過我們。</li>
+    <li><strong>唯一經過我們的東西</strong>：Google 規定「換登入憑證（token）」時要附上一組應用程式密鑰，
+        這組密鑰不能放在網頁裡，所以放在一個很小的中繼程式上（架在 Supabase，日本東京機房）。
+        它只負責把 Google 發的登入憑證轉交給你的瀏覽器，不保存、不記錄任何東西，也碰不到你的提示詞。</li>
+    <li>登入憑證只存在你自己的瀏覽器裡，用來讓各台電腦自動同步。</li>
   </ul>
 
   <h2>我們不會保存的資料</h2>
   <ul>
-    <li><strong>你的密碼明文</strong>：用 Email 註冊時，密碼只以無法還原的方式（雜湊）保存，任何人——包括網站管理員——都看不到原本的密碼。
-        用 Google、LINE、Facebook 登入時，你是在那一家的網站上輸入密碼，我們完全拿不到。</li>
+    <li>你的提示詞、書籤、使用記錄（它們在你的瀏覽器和你的雲端硬碟裡）。</li>
+    <li>你的 Google 密碼：你是在 Google 的網站上登入，我們完全拿不到。</li>
     <li>你在 Gemini、ChatGPT、Claude 等 AI 網站上的對話內容、瀏覽紀錄。</li>
     <li>廣告或追蹤用的 Cookie。本網站沒有任何廣告與分析追蹤。</li>
   </ul>
 
-  <h2>資料存在哪裡、誰看得到</h2>
-  <ul>
-    <li>雲端資料存放在 <a href="https://supabase.com" target="_blank" rel="noopener">Supabase</a>（日本東京機房）。</li>
-    <li>資料庫設有權限規則：每個帳號只能讀寫自己的資料，別的使用者看不到。</li>
-    <li>網站管理員為了維護服務，技術上可以在後台看到帳號列表與資料內容，但不會拿來做其他用途，
-        也不會出售或提供給任何第三方。</li>
-  </ul>
-
   <h2 id="delete">如何刪除你的資料</h2>
   <ol>
-    <li>打開常用提示詞（外掛面板或網頁版），按右上角的 <strong>齒輪</strong>。</li>
-    <li>左邊選 <strong>帳號與同步</strong>，拉到最下面，按 <strong>刪除我的帳號</strong>（要按兩次確認）。</li>
-    <li>你的帳號、雲端上的提示詞與使用記錄會立即永久刪除。</li>
+    <li>打開特務P（外掛面板或網頁版），按右上角的 <strong>齒輪 → 雲端同步 → 中斷連結</strong>。</li>
+    <li>到 <a href="https://drive.google.com/" target="_blank" rel="noopener">Google 雲端硬碟</a>，
+        把「特務P 提示詞筆記本.json」刪掉（也要從垃圾桶清掉才會永久刪除）。</li>
+    <li>想連權限也收回：到 <a href="https://myaccount.google.com/connections" target="_blank" rel="noopener">Google 帳戶 → 第三方應用程式和服務</a>，
+        移除「特務P」的存取權。</li>
   </ol>
-  <p>如果沒辦法登入、無法自己刪除，請到
-     <a href="https://github.com/weiweiweiweiweiweiweiwei/gemini-prompt-notebook/issues" target="_blank" rel="noopener">這裡</a>
-     留言說明，我們會協助處理。</p>
-  <p>只存在瀏覽器裡的資料（沒登入時），清除瀏覽器的網站資料或移除外掛就會刪除。</p>
+  <p>只存在瀏覽器裡的資料，清除瀏覽器的網站資料或移除外掛就會刪除。
+     在別人的電腦上用完，可以按 <strong>中斷連結並清除這台電腦上的提示詞</strong>。</p>
+
+  <h2>以前用帳號登入的使用者</h2>
+  <p>9.26 以前的版本是用我們自己的帳號系統（Supabase）同步，提示詞存在那邊的資料庫。
+     改成 Google 雲端硬碟之後，那邊的資料不再使用；你的每台電腦上都還留著提示詞，連結雲端硬碟時會自動併進去。
+     想確認舊資料已經刪除，請到下面的 GitHub 頁留言。</p>
 
   <h2>聯絡我們</h2>
   <p>對這份政策有任何問題，請到
      <a href="https://github.com/weiweiweiweiweiweiweiwei/gemini-prompt-notebook/issues" target="_blank" rel="noopener">GitHub 專案頁</a>
      留言。</p>
 
-  <p class="muted"><a href="./">← 回到常用提示詞</a></p>
+  <p class="muted"><a href="./">← 回到特務P</a></p>
 </main>
 </body>
 </html>

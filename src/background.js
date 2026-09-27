@@ -2,8 +2,8 @@
  * 外掛的背景程式：負責雲端同步。
  *
  * 為什麼同步放在這裡、不放在每個網頁裡：
- * Gemini、ChatGPT、Claude 可能同時開好幾個分頁，如果每個分頁各自登入、各自換 token，
- * 舊的 token 被重複使用時 Supabase 會當成被盜用而把人登出。
+ * Gemini、ChatGPT、Claude 可能同時開好幾個分頁，如果每個分頁各自連結、各自換 token、各自讀寫
+ * 雲端硬碟上的檔案，很容易互相蓋來蓋去。
  * 所以整個外掛只有這裡這一份負責雲端，面板和小視窗都用訊息請它做事（src/cloud-ext.js）。
  *
  * 它怎麼知道提示詞改了：面板存檔寫進 chrome.storage，這裡聽 onChanged。
@@ -41,44 +41,36 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 /**
- * 社群登入（Google、LINE、Facebook…）：
- *   1. 面板按下去 → 這裡開一個新分頁去那一家登入
- *   2. 登入完，Supabase 把分頁導回網頁版的 ext-login.html?code=…
- *   3. 那一頁的 content script（ext-login.js）把 code 交回來 → 這裡換成登入 → 關掉那個分頁
+ * 連結 Google 雲端硬碟：
+ *   1. 面板按下去 → 這裡開一個新分頁去 Google（選帳號、按允許）
+ *   2. 完成後，Google 把分頁導回網頁版的 ext-login.html?code=…&state=…
+ *   3. 那一頁的 content script（ext-login.js）把 code 交回來 → 這裡換成連結 → 關掉那個分頁
  * 不用 chrome.identity：那個要固定外掛的 ID，已經裝好的外掛換 ID 會讀不到原本的提示詞。
  */
-async function gpnOAuthStart(provider, sender) {
+async function gpnConnectStart(sender) {
   const state = await gpnSync.getState();
-  if (!state.providers.includes(provider)) return { ok: false, error: '這種登入方式還沒有設定好' };
-  const url = await gpnSync.oauthUrl(provider, new URL('ext-login.html', GPN_CLOUD.site).href);
+  if (!state.configured) return { ok: false, error: '雲端同步還沒設定好' };
+  const url = await gpnSync.authUrl(new URL('ext-login.html', GPN_CLOUD.site).href);
   const opener = sender.tab?.id;
   await chrome.tabs.create({ url, ...(opener ? { openerTabId: opener } : {}) });
   return { ok: true, opened: true };
 }
 
-async function gpnOAuthFinish(code, sender) {
-  const r = await gpnSync.finishOAuth(code);
-  // 登入成功就把那個分頁關掉，回到原本的 AI 網站
+async function gpnConnectFinish(code, state, sender) {
+  const r = await gpnSync.finishAuth(code, state);
+  // 連結成功就把那個分頁關掉，回到原本的 AI 網站
   if (r.ok && sender.tab?.id) setTimeout(() => chrome.tabs.remove(sender.tab.id).catch(() => {}), 1500);
   return r;
 }
-
-// 驗證信、重設密碼信的連結一律回到網頁版（外掛沒有網址可以回來）
-const gpnSite = () => GPN_CLOUD.site;
 
 // 面板、小視窗的請求
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (!msg || msg.type !== 'gpn-cloud') return false;
   const ops = {
     state: () => gpnSync.getState(),
-    signIn: () => gpnSync.signIn(msg.email, msg.password),
-    signUp: () => gpnSync.signUp(msg.email, msg.password, gpnSite()),
-    resendConfirm: () => gpnSync.resendConfirm(msg.email, gpnSite()),
-    resetPassword: () => gpnSync.resetPassword(msg.email, gpnSite()),
-    oauthStart: () => gpnOAuthStart(String(msg.provider || ''), sender),
-    oauthFinish: () => gpnOAuthFinish(String(msg.code || ''), sender),
+    connect: () => gpnConnectStart(sender),
+    connectFinish: () => gpnConnectFinish(String(msg.code || ''), String(msg.state || ''), sender),
     signOut: () => gpnSync.signOut({ wipe: !!msg.wipe }),
-    deleteAccount: () => gpnSync.deleteAccount(),
     syncNow: () => gpnSync.syncNow(),
   };
   const run = ops[msg.op];

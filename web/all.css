@@ -1,0 +1,111 @@
+/* ============================================================================
+   「全部提示詞」頁：像記事本一樣的純文字版面。
+   刻意不用卡片、按鈕、收合：每一個字都直接攤在頁面上，「問問 Gemini」和人都一眼讀得到。
+   ========================================================================== */
+:root {
+  color-scheme: light dark;
+  --bg: #f4f3ef;
+  --paper: #ffffff;
+  --text: #1f1f1f;
+  --mute: #666666;
+  --line: #dcdbd5;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131314;
+    --paper: #1c1c1d;
+    --text: #e6e6e6;
+    --mute: #a0a0a0;
+    --line: #3a3a3c;
+  }
+}
+
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", system-ui, sans-serif;
+  font-size: 17px;
+  line-height: 1.8;
+}
+
+/* 上面一條：回到筆記本、依書籤顯示。捲動時黏在最上面 */
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  padding: 10px 20px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+  font-size: 15.5px;
+  line-height: 1.5;
+}
+.back {
+  flex: none;
+  padding: 5px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: none;
+}
+.back:hover { border-color: var(--text); }
+#nav { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+#nav a {
+  padding: 3px 10px;
+  border-radius: 6px;
+  color: var(--text);
+  text-decoration: none;
+}
+#nav a:hover { background: var(--line); }
+#nav a[aria-current="page"] { background: var(--text); color: var(--paper); font-weight: 700; }
+
+/* 紙張 */
+main {
+  max-width: 880px;
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 28px 32px 96px;
+  box-sizing: border-box;
+  background: var(--paper);
+}
+h1 { margin: 0; font-size: 26px; line-height: 1.4; }
+.summary { margin: 4px 0 8px; color: var(--mute); font-size: 15.5px; }
+
+/* 書籤 */
+h2 {
+  margin: 44px 0 4px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--text);
+  font-size: 22px;
+  line-height: 1.4;
+}
+/* 資料夾 */
+h3 { margin: 30px 0 0; font-size: 18.5px; line-height: 1.4; }
+
+/* 一則提示詞：標題一行，下面是完整內容，則與則之間一條虛線 */
+.p { padding: 16px 0 18px; border-bottom: 1px dashed var(--line); }
+.p h4 { margin: 0 0 4px; font-size: 17.5px; line-height: 1.5; }
+.no { color: var(--mute); font-variant-numeric: tabular-nums; }
+.fav { color: #d99a2b; }
+.text {
+  white-space: pre-wrap;           /* 原本的換行、空白照樣顯示 */
+  overflow-wrap: anywhere;
+}
+.empty { color: var(--mute); }
+
+@media (max-width: 640px) {
+  .bar { padding: 8px 12px; }
+  main { padding: 20px 16px 72px; }
+}
+
+/* 印出來也好讀：不要上面那條 */
+@media print {
+  .bar { display: none; }
+  body, main { background: #ffffff; color: #000000; }
+  main { max-width: none; padding: 0; }
+}

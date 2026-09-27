@@ -1,5 +1,5 @@
 /**
- * 常用提示詞 · 網頁版
+ * 特務P · 網頁版
  *
  * 畫面就是外掛在 Gemini 裡點開的那個面板（panel.js 是同一份程式），
  * 只是不用點按鈕打開，直接放在網頁正中間。
@@ -8,8 +8,10 @@
  * 瀏覽器不允許一個網頁去操作另一個網站的內容（同源政策），這是安全機制，
  * 沒有任何繞過方法。所以這裡一律是「點一下複製，再自己貼上」。
  *
- * 資料存在這個瀏覽器（localStorage）；登入帳號後，由 sync.js 和雲端自動同步。
- * 社群登入、驗證信、重設密碼信，最後都會回到這一頁，由最下面那段接手。
+ * 資料存在這個瀏覽器（localStorage）；連結 Google 雲端硬碟後，由 sync.js 自動同步。
+ * 連結時會整頁換到 Google，按完「允許」回到這一頁，由最下面那段接手。
+ *
+ * 筆記本左下角外面的「全部提示詞」會換到 all.html：所有提示詞用純文字列在同一頁（見 all.js）。
  */
 (() => {
   'use strict';
@@ -39,7 +41,7 @@
 
   /* ========== 雲端同步 ========== */
 
-  // 管理員試用開關：網址加 ?try-cloud=1 → 這個瀏覽器先打開帳號功能（cloud-config.js 的 open 還沒打開時用）
+  // 管理員試用開關：網址加 ?try-cloud=1 → 這個瀏覽器先打開雲端同步（cloud-config.js 的 open 還沒打開時用）
   const params = new URLSearchParams(location.search);
   if (params.has('try-cloud')) {
     try {
@@ -77,32 +79,28 @@
   window.addEventListener('focus', pull);
   window.addEventListener('online', () => { lastPull = 0; pull(); });
 
-  /* ---- 登入完、點了信裡的連結之後，都會回到「這一頁」 ----
-     社群登入：換到那一家的登入頁，回來時網址帶著 ?code=…
-     驗證信、重設密碼信：回來時網址帶著 #access_token=…&type=signup／recovery
-     直接雙擊開檔案（file://）時沒辦法被帶回來，所以那時候不顯示社群登入按鈕。 */
-  const here = location.origin + location.pathname;
-  const canSocial = location.protocol === 'https:' || /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+  /* ---- 連結 Google 雲端硬碟：換到 Google，按完「允許」回到這一頁（網址帶著 ?code=…&state=…）----
+     回來的網址要和 Google Cloud 裡登記的一模一樣，所以一律用資料夾網址（不帶 index.html）。
+     直接雙擊開檔案（file://）時 Google 沒辦法帶回來，所以那時候不顯示連結按鈕。 */
+  const here = location.origin + location.pathname.replace(/index\.html$/, '');
+  const canConnect = location.protocol === 'https:' || /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 
   const panel = gpnCreatePanel({
     root,
     standalone: true,
     edition: '網頁版',
+    allPageUrl: 'all.html',
     notice: GpnStore.available() ? '' :
       '這個瀏覽器不能儲存資料（可能是無痕視窗，或設定擋掉了網站儲存空間）。' +
-      '現在新增的提示詞，關掉分頁就會不見。請改用一般視窗開啟，或登入帳號讓它存到雲端。',
+      '現在新增的提示詞，關掉分頁就會不見。請改用一般視窗開啟，或連結 Google 雲端硬碟讓它存到雲端。',
     cloud: {
       ...sync,
-      canSocial,
+      canConnect,
       onState: (cb) => { stateListeners.push(cb); },
-      signInWithProvider: async (provider) => {
-        location.assign(await sync.oauthUrl(provider, here));
+      connect: async () => {
+        location.assign(await sync.authUrl(here));
         return { ok: true, leaving: true };
       },
-      // 信裡的連結要回到這一頁
-      signUp: (email, password) => sync.signUp(email, password, here),
-      resendConfirm: (email) => sync.resendConfirm(email, here),
-      resetPassword: (email) => sync.resetPassword(email, here),
     },
     onUse: async (item) => (await gpnShareCopy(item.content))
       ? { badge: 'Copied' }
@@ -110,40 +108,24 @@
   });
   panel.open();
 
-  const signedIn = (r) => (r.error ? `已登入，但同步失敗：${r.error}`
-    : r.merged ? `已登入。這台原本的 ${r.merged} 則已經合併到雲端`
-    : r.pulled ? `已登入，從雲端載入了 ${r.pulled} 則提示詞`
-    : r.uploaded ? `已登入，這台的 ${r.uploaded} 則已經存到雲端`
-    : '已登入，之後會自動同步');
+  const connected = (r) => (r.error ? `已連結，但同步失敗：${r.error}`
+    : r.merged ? `已連結。這台原本的 ${r.merged} 則已經合併到雲端硬碟`
+    : r.pulled ? `已連結，從雲端硬碟載入了 ${r.pulled} 則提示詞`
+    : r.uploaded ? `已連結，這台的 ${r.uploaded} 則已經存到雲端硬碟`
+    : '已連結 Google 雲端硬碟，之後會自動同步');
 
-  // 社群登入回來
+  // 從 Google 回來
   if (params.has('code') || params.has('error')) {
-    history.replaceState(null, '', here);          // 網址上的 code 用完就拿掉
+    history.replaceState(null, '', here + location.hash);    // 網址上的 code 用完就拿掉
     const err = params.get('error_description') || params.get('error');
+    const fail = (msg) => { panel.openAccount(); panel.toast(msg, true); };
     if (params.get('error') === 'access_denied') {
-      panel.toast('登入沒有完成（按了取消，或沒有同意授權）。想登入時再按一次就好', true);
+      fail('連結沒有完成（按了取消，或沒有按「允許」）。想連結時再按一次就好');
     } else if (err) {
-      panel.toast('登入沒有完成：' + err, true);
+      fail('連結沒有完成：' + err);
     } else {
-      sync.finishOAuth(params.get('code')).then((r) => panel.toast(r.ok ? signedIn(r) : r.error, !r.ok));
+      sync.finishAuth(params.get('code'), params.get('state') || '')
+        .then((r) => (r.ok ? panel.toast(connected(r), !!r.error) : fail(r.error)));
     }
-  }
-
-  // 點了驗證信、重設密碼信的連結回來
-  const hash = location.hash.slice(1);
-  if (/(^|&)(access_token|error|error_code)=/.test(hash)) {
-    history.replaceState(null, '', here);          // token 不要留在網址上
-    sync.adoptFromUrl(hash).then((r) => {
-      if (!r) return;
-      if (!r.ok) { panel.toast(r.error, true); return; }
-      if (r.type === 'recovery') {
-        panel.openAccount();                       // 帳號頁會請他設新密碼
-        panel.toast('已經登入了，請設定新的密碼');
-      } else if (r.type === 'signup') {
-        panel.toast('信箱驗證完成！' + signedIn(r));
-      } else {
-        panel.toast(signedIn(r));
-      }
-    });
   }
 })();

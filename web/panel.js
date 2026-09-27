@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.5.0';
+const GPN_APP_VERSION = '4.7.0';
 
 /**
  * @param {object}   opts
@@ -32,7 +32,9 @@ const GPN_APP_VERSION = '4.5.0';
  * @param {Function} opts.onUse          async (item) => ({ badge?, toast?, bad? })
  * @param {Function} [opts.onOpenChange] (open) => void，外掛用來同步觸發按鈕的狀態
  * @param {string}   [opts.notice]       紙張最上方的紅色提醒（例如網頁版不能存檔）
- * @param {object}   [opts.cloud]        雲端同步：getState / onState / signIn / signUp / signOut / syncNow
+ * @param {string}   [opts.allPageUrl]   「全部提示詞」純文字頁的網址；有給才會出現那顆按鈕（網頁版：all.html）
+ * @param {object}   [opts.cloud]        雲端同步：getState / onState / connect / signOut / syncNow
+ *                                       （canConnect === false：這個環境沒辦法連結，例如直接開檔案的網頁版）
  *                                       （網頁版是 sync.js 本身，外掛是 cloud-ext.js 轉給背景程式）
  */
 function gpnCreatePanel(opts) {
@@ -46,6 +48,7 @@ function gpnCreatePanel(opts) {
     onOpenChange = () => {},
     notice = '',
     cloud = null,
+    allPageUrl = '',
   } = opts;
 
   /* ========== 圖示（SVG，不依賴任何網站的圖示字體） ========== */
@@ -85,25 +88,25 @@ function gpnCreatePanel(opts) {
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>';
   const ICON_CLOUD_OFF =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.35 10.04A7.49 7.49 0 0 0 12 4c-1.48 0-2.85.43-4.01 1.17l1.46 1.46A5.497 5.497 0 0 1 17.5 11v.5H19c1.66 0 3 1.34 3 3 0 1.13-.64 2.11-1.56 2.62l1.45 1.45C23.16 17.16 24 15.68 24 14c0-2.64-2.05-4.78-4.65-4.96zM3 5.27l2.75 2.74C2.56 8.15 0 10.77 0 14c0 3.31 2.69 6 6 6h11.73l2 2L21 20.73 4.27 4 3 5.27zM7.73 10l8 8H6c-2.21 0-4-1.79-4-4s1.79-4 4-4h1.73z"/></svg>';
-  const ICON_PERSON =
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
+
+  /** 條列：「全部提示詞」頁 */
+  const ICON_LIST =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>';
 
   /** 時鐘加倒轉箭頭：「最近使用」 */
   const ICON_HISTORY =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>';
 
+  /** 星號：「我的最愛」（實心＝已加入，空心＝還沒加入） */
+  const ICON_STAR =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>';
+  const ICON_STAR_OUTLINE =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/></svg>';
+
   const ICON_CLOSE =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
 
-  /* 社群登入的品牌圖示：LINE、Facebook、Apple 的圖形取自 Simple Icons（CC0 授權） */
-  const ICON_LINE =
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg>';
-  const ICON_FACEBOOK =
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>';
-  const ICON_APPLE =
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg>';
-
-  /** Google 登入鈕規定要用的彩色 G */
+  /** Google 規定要用的彩色 G（連結雲端硬碟的按鈕） */
   const ICON_GOOGLE =
     '<svg viewBox="0 0 48 48" aria-hidden="true">' +
     '<path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>' +
@@ -155,20 +158,26 @@ function gpnCreatePanel(opts) {
   let backupMode = 'merge';  // 'merge' | 'replace'，預設挑不會弄丟東西的那個
   let impArmed = false, impTimer = 0;
   let cloudState = { configured: false };   // 雲端同步的狀態（見 sync.js）
-  let accountMode = 'signin';               // 帳號頁：'signin' 登入 | 'signup' 註冊
   let wipeArmed = false, wipeTimer = 0;
   /** 對話框開著時雲端送來新資料，先不重畫（免得打到一半的字不見），關掉對話框再畫 */
   let staleWhileLayer = false;
   const ui = {};
 
   /**
-   * 「最近使用」書籤：不在 data.tabs 裡（見 store.js），畫面上固定在最左邊。
-   * 它的 items 就是使用記錄，不能刪、不能改名、不能新增提示詞。
+   * 「最近使用」「我的最愛」兩個固定書籤：不在 data.tabs 裡（見 store.js），
+   * 畫面上固定在最右邊（我的最愛在左、最近使用在右）。
+   * 不能刪、不能改名、不能拖、不能直接新增提示詞（fixed）。
    */
   const recentTab = () => ({
-    id: GPN_RECENT_ID, label: '最近使用', color: 'recent', recent: true, items: data.recent || [],
+    id: GPN_RECENT_ID, label: '最近使用', color: 'recent', fixed: true, recent: true, items: data.recent || [],
   });
-  const tabById = (id) => (id === GPN_RECENT_ID ? recentTab() : data.tabs.find((t) => t.id === id));
+  const favTab = () => ({
+    id: GPN_FAV_ID, label: '我的最愛', color: 'fav', fixed: true, fav: true, items: [],
+  });
+  const tabById = (id) => (id === GPN_RECENT_ID ? recentTab()
+    : id === GPN_FAV_ID ? favTab()
+    : data.tabs.find((t) => t.id === id));
+  const isFav = (id) => (data.favs || []).includes(id);
   const activeTab = () => tabById(data.activeId) || data.tabs[0];
   /** 目前的資料夾；書籤沒開資料夾時是 null */
   const activeFolder = () => {
@@ -197,13 +206,15 @@ function gpnCreatePanel(opts) {
     ui.list = el('div', { class: 'gpn-list', role: 'list' });
     ui.tabs = el('div', { class: 'gpn-tabs', role: 'tablist' });
     ui.tabEls = new Map();        // id → 書籤元素（切換時要重複使用才有動畫）
+    // 面板打開、視窗縮放時，重新判斷固定書籤要不要只留圖示
+    if (typeof ResizeObserver === 'function') new ResizeObserver(() => fitFixedTabs()).observe(ui.tabs);
     ui.hintText = el('span', { class: 'gpn-hint-text' });
     ui.gear = el('button', {
-      class: 'gpn-tab-edit', type: 'button', title: '設定（名稱、顏色、資料夾、帳號、備份）',
+      class: 'gpn-tab-edit', type: 'button', title: '設定（名稱、顏色、資料夾、雲端同步、備份）',
       html: ICON_GEAR,
       onclick: () => openSettings(data.activeId),
     });
-    // 雲端狀態：沒登入時顯示「登入同步」邀請；登入後顯示同步到哪。點了打開帳號頁。
+    // 雲端狀態：沒連結時顯示「雲端同步」邀請；連結後顯示同步到哪。點了打開雲端同步頁。
     ui.cloudIcon = el('span', { class: 'gpn-cloud-icon' });
     ui.cloudText = el('span', { class: 'gpn-cloud-text' });
     ui.cloudBtn = el('button', {
@@ -235,7 +246,7 @@ function gpnCreatePanel(opts) {
         el('div', { class: 'gpn-body' },
           el('nav', { class: 'gpn-folders' }, ui.folderList),
           ui.list),
-        el('div', { class: 'gpn-foot' },
+        ui.foot = el('div', { class: 'gpn-foot' },
           ui.addBtn = el('button', {
             class: 'gpn-add', type: 'button',
             onclick: () => openEditor(data.activeId, activeFolder()?.id ?? null, null),
@@ -249,9 +260,17 @@ function gpnCreatePanel(opts) {
       )
     );
 
+    // 筆記本左下角外面：「全部提示詞」。是一般連結，按了整頁換到純文字的清單頁（網頁版的 all.html）
+    if (allPageUrl) {
+      ui.book.append(el('a', {
+        class: 'gpn-all-link', href: allPageUrl,
+        title: '換到「全部提示詞」頁：所有書籤的提示詞，完整內容用純文字列在同一頁（方便「問問 Gemini」讀）',
+      }, el('span', { class: 'gpn-all-link-icon', html: ICON_LIST }), el('span', { class: 'gpn-all-link-text' }, el('span', { text: '全部' }), el('span', { text: '提示詞' }))));
+    }
+
     ui.overlay = el('div', {
       class: 'gpn-overlay', role: 'dialog', 'aria-modal': standalone ? null : 'true',
-      'aria-label': '常用提示詞',
+      'aria-label': '特務P',
       onmousedown: (e) => { if (!standalone && e.target === ui.overlay) close(); },
     }, ui.book);
 
@@ -283,12 +302,17 @@ function gpnCreatePanel(opts) {
      注意：所有書籤「等寬」，作用中與否不影響寬度——
      改用高度來表現選取狀態，按起來才不會一直位移。 */
   const GPN_TAB_SHARE = { 1: 0.40, 2: 0.60, 3: 0.75, 4: 0.86, 5: 0.90, 6: 0.93, 7: 0.95, 8: 0.96, 9: 0.97 };
+  const GPN_TAB_GAP = 4;          // .gpn-tabs 的 gap
+  const GPN_TAB_ADD_W = 44;       // 「＋」按鈕的寬度＋左邊距
 
   function layoutTabs() {
-    const n = ui.tabEls.size;              // 含最左邊的「最近使用」
+    const n = ui.tabEls.size;              // 含最右邊的「我的最愛」「最近使用」
     if (!n) return;
-    const each = ((GPN_TAB_SHARE[n] ?? 0.97) / n) * 100;
-    for (const [, node] of ui.tabEls) node.style.width = each.toFixed(2) + '%';
+    // 先扣掉書籤之間的空隙和「＋」按鈕，書籤再照比例分剩下的寬度，才不會擠出紙張外
+    const reserve = GPN_TAB_GAP * (n - (ui.addTabBtn ? 0 : 1)) + (ui.addTabBtn ? GPN_TAB_ADD_W : 0);
+    const share = (GPN_TAB_SHARE[n] ?? 0.97) / n;
+    for (const [, node] of ui.tabEls) node.style.width = `calc((100% - ${reserve}px) * ${share.toFixed(4)})`;
+    fitFixedTabs();
   }
 
   /**
@@ -341,20 +365,6 @@ function gpnCreatePanel(opts) {
     ui.tabs.replaceChildren();
     ui.tabEls = new Map();
 
-    // 最左邊固定是「最近使用」：不能刪、不能拖，其他書籤也拖不到它前面
-    const recentOn = tab.id === GPN_RECENT_ID;
-    const recentNode = el('div', {
-      class: 'gpn-tab is-fixed' + (recentOn ? ' is-active' : ''),
-      'data-color': 'recent', 'data-id': GPN_RECENT_ID,
-      onanimationend: () => recentNode.classList.remove('is-popping'),
-    }, el('button', {
-      class: 'gpn-tab-main', type: 'button', role: 'tab',
-      'aria-selected': String(recentOn), title: `最近使用（最近用過的 ${GPN_RECENT_MAX} 則）`,
-      onclick: () => { if (data.activeId !== GPN_RECENT_ID) switchTab(GPN_RECENT_ID); },
-    }, el('span', { class: 'gpn-tab-icon', html: ICON_HISTORY }), '最近使用'));
-    ui.tabEls.set(GPN_RECENT_ID, recentNode);
-    ui.tabs.append(recentNode);
-
     for (const t of data.tabs) {
       const isActive = t.id === tab.id;
 
@@ -375,7 +385,8 @@ function gpnCreatePanel(opts) {
 
       attachHoldDrag({
         handle: main, node, box: ui.tabs, selector: '.gpn-tab:not(.is-fixed)',
-        anchor: () => ui.addTabBtn || null,
+        // 拖到最後面時排在「＋」前面；書籤滿了沒有「＋」，就排在右邊的固定書籤前面
+        anchor: () => ui.addTabBtn || ui.tabEls.get(GPN_FAV_ID),
         vertical: () => false,
         canStart: () => data.tabs.length > 1,
         onDrop: (order) => { data.tabs = reorder(data.tabs, order); persist(); },
@@ -393,8 +404,44 @@ function gpnCreatePanel(opts) {
       : null;
     if (ui.addTabBtn) ui.tabs.append(ui.addTabBtn);
 
+    // 最右邊固定兩個：「我的最愛」「最近使用」。不能刪、不能拖，其他書籤也拖不到它們後面
+    ui.tabs.append(
+      fixedTabNode(GPN_FAV_ID, 'fav', '我的最愛', ICON_STAR,
+        '我的最愛（在提示詞右邊按星號，就會收進這裡）', 'gpn-tab--push'),
+      fixedTabNode(GPN_RECENT_ID, 'recent', '最近使用', ICON_HISTORY,
+        `最近使用（最近用過的 ${GPN_RECENT_MAX} 則）`));
+
     ui.book.setAttribute('data-color', tab.color);
     layoutTabs();
+  }
+
+  function fixedTabNode(id, color, label, icon, title, extraClass = '') {
+    const on = activeTab().id === id;
+    const node = el('div', {
+      class: 'gpn-tab is-fixed' + (extraClass ? ' ' + extraClass : '') + (on ? ' is-active' : ''),
+      'data-color': color, 'data-id': id,
+      onanimationend: () => node.classList.remove('is-popping'),
+    }, el('button', {
+      class: 'gpn-tab-main', type: 'button', role: 'tab', 'aria-selected': String(on),
+      'aria-label': label, title,
+      onclick: () => { if (data.activeId !== id) switchTab(id); },
+    }, el('span', { class: 'gpn-tab-icon', html: icon }), el('span', { class: 'gpn-tab-label', text: label })));
+    ui.tabEls.set(id, node);
+    return node;
+  }
+
+  /**
+   * 書籤很多（或面板很窄）時，固定書籤擠不下「圖示＋文字」：只留圖示，不要變成「★ …」。
+   * 滑鼠移上去還是看得到名稱（title）。
+   */
+  function fitFixedTabs() {
+    for (const id of [GPN_FAV_ID, GPN_RECENT_ID]) {
+      const node = ui.tabEls.get(id);
+      if (!node) continue;
+      node.classList.remove('is-compact');
+      const main = node.firstElementChild;
+      node.classList.toggle('is-compact', main.scrollWidth > main.clientWidth + 1);
+    }
   }
 
   /* ==========================================================================
@@ -471,11 +518,13 @@ function gpnCreatePanel(opts) {
   function renderList() {
     const tab = activeTab();
     if (!tab) return;
-    // 底部按鈕：一般書籤是「新增提示詞」，「最近使用」換成「清除全部使用記錄」
-    ui.addBtn.hidden = !!tab.recent;
+    // 底部按鈕：一般書籤是「新增提示詞」，「最近使用」換成「清除全部使用記錄」，「我的最愛」都沒有
+    ui.addBtn.hidden = !!tab.fixed;
     ui.clearRecentBtn.hidden = !tab.recent;
+    ui.foot.hidden = !!tab.fav;
     disarmClearRecent();
     if (tab.recent) { renderRecent(); return; }
+    if (tab.fav) { renderFavs(); return; }
 
     const folder = activeFolder();
     const list = folder || tab;
@@ -503,7 +552,11 @@ function gpnCreatePanel(opts) {
     for (const item of list.items) ui.list.append(buildCard(item, tab.id, fid));
   }
 
-  function buildCard(item, tabId, fid) {
+  /**
+   * 一則提示詞的卡片：把手、標題、星號（我的最愛）、鉛筆。
+   * from：在「我的最愛」裡顯示時傳「從哪個書籤來的」，拖曳排序改排我的最愛的順序。
+   */
+  function buildCard(item, tabId, fid, from = null) {
     const grip = el('div', {
       class: 'gpn-grip', title: '按住拖曳可調整順序', 'aria-label': '拖曳排序', html: ICON_GRIP,
     });
@@ -514,8 +567,15 @@ function gpnCreatePanel(opts) {
       onclick: () => usePrompt(item, card, tabId, fid),
     },
       el('div', { class: 'gpn-title-text', text: item.title || '(未命名)' }),
-      el('div', { class: 'gpn-title-sub', text: preview(item.content) })
+      el('div', { class: 'gpn-title-sub' },
+        from ? el('span', { class: 'gpn-from', text: from }) : null, preview(item.content))
     );
+
+    const starBtn = el('button', {
+      class: 'gpn-star', type: 'button',
+      onclick: (e) => { e.stopPropagation(); toggleFav(item, starBtn); },
+    });
+    paintStar(starBtn, item);
 
     const editBtn = el('button', {
       class: 'gpn-edit', type: 'button', title: '編輯', 'aria-label': `編輯 ${item.title}`,
@@ -524,9 +584,61 @@ function gpnCreatePanel(opts) {
     });
 
     const card = el('div', { class: 'gpn-card', role: 'listitem', 'data-id': item.id },
-      grip, titleBtn, editBtn);
-    attachDrag(grip, card, tabId, fid);
+      grip, titleBtn, starBtn, editBtn);
+    if (from) attachDrag(grip, card, GPN_FAV_ID, null);
+    else attachDrag(grip, card, tabId, fid);
     return card;
+  }
+
+  function paintStar(btn, item) {
+    const on = isFav(item.id);
+    btn.classList.toggle('is-on', on);
+    btn.innerHTML = on ? ICON_STAR : ICON_STAR_OUTLINE;
+    btn.title = on ? '從「我的最愛」移除' : '加入「我的最愛」';
+    btn.setAttribute('aria-label', `${btn.title}：${item.title}`);
+    btn.setAttribute('aria-pressed', String(on));
+  }
+
+  /* ==========================================================================
+     「我的最愛」：在任何提示詞右邊按星號收進來，集中在一個書籤；可以拖曳排自己的順序。
+     提示詞本身還是留在原本的書籤（見 store.js），在這裡編輯改的就是原本那則。
+     ========================================================================== */
+
+  function toggleFav(item, btn) {
+    const on = isFav(item.id);
+    data.favs = on ? data.favs.filter((x) => x !== item.id) : [...(data.favs || []), item.id];
+    persist();
+    // 在「我的最愛」裡取消：那張卡片直接拿掉；在一般書籤：只換星號，不重畫（捲動位置不會跳）
+    if (activeTab().fav) renderList();
+    else paintStar(btn, item);
+    toast(on ? '已從「我的最愛」移除（提示詞本身還在）' : '已加入「我的最愛」');
+  }
+
+  function renderFavs() {
+    const where = indexItems();
+    const favs = (data.favs || []).map((id) => where.get(id)).filter(Boolean);
+    const n = favs.length;
+    ui.hintText.textContent = n
+      ? `${n} 則　•　` + (standalone ? '點標題複製，再貼到 AI' : '點標題填入輸入框並複製') +
+        '　•　拖曳左側可排序'
+      : '還沒有我的最愛';
+    ui.gear.setAttribute('aria-label', '設定');
+
+    ui.list.replaceChildren();
+    if (!n) {
+      ui.list.append(
+        el('div', { class: 'gpn-empty' },
+          el('div', { class: 'gpn-empty-emoji', text: '⭐' }),
+          el('div', { class: 'gpn-empty-title', text: '還沒有我的最愛' }),
+          el('div', { class: 'gpn-empty-desc', text: '在任何一則提示詞右邊按「☆」，就會收進這裡，不用再到處找' })
+        )
+      );
+      return;
+    }
+    for (const f of favs) {
+      const from = f.tab.label + (f.folder ? ` › ${f.folder.label}` : '');
+      ui.list.append(buildCard(f.it, f.tab.id, f.folder ? f.folder.id : null, from));
+    }
   }
 
   const preview = (c) => {
@@ -757,20 +869,28 @@ function gpnCreatePanel(opts) {
   }
 
   function saveOrder(tabId, fid) {
+    const order = [...ui.list.querySelectorAll('.gpn-card')].map((n) => n.getAttribute('data-id'));
+    if (tabId === GPN_FAV_ID) {
+      // 我的最愛只排自己的順序，提示詞在原本書籤裡的位置不動
+      const rest = (data.favs || []).filter((id) => !order.includes(id));
+      data.favs = [...order, ...rest];
+      persist();
+      return;
+    }
     const list = listOf(tabId, fid);
     if (!list) return;
-    const order = [...ui.list.querySelectorAll('.gpn-card')].map((n) => n.getAttribute('data-id'));
     list.items = reorder(list.items, order);
     persist();
   }
 
   /* ==========================================================================
      長按後拖曳排序：書籤（左右）、資料夾（上下）共用
-     刻意設計成「長按 450ms 才進入拖曳」，一般點選不會誤觸。
+     刻意設計成「長按 250ms 才進入拖曳」，一般點選不會誤觸。
+     （原本是 450ms，使用者覺得要等太久；一般點一下大約 100ms，250ms 仍不會誤觸。）
      按住期間只要移動超過 8px 就取消（視為想點擊或捲動）。
      ========================================================================== */
 
-  const GPN_HOLD_MS = 450;   // 要按多久才進入拖曳
+  const GPN_HOLD_MS = 250;   // 要按多久才進入拖曳
   const GPN_HOLD_SLOP = 8;   // 按住期間允許的手抖範圍(px)
 
   /**
@@ -928,9 +1048,17 @@ function gpnCreatePanel(opts) {
 
     ui.eBody = el('textarea', {
       class: 'gpn-textarea', placeholder: '這裡貼上真正要送給 AI 的完整指令內容…',
-      oninput: () => { ui.eBody.classList.remove('is-bad'); ui.eBodyHint.classList.remove('is-on'); },
+      oninput: () => {
+        ui.eBody.classList.remove('is-bad');
+        ui.eBodyHint.classList.remove('is-on');
+        updateCount();
+      },
     });
     ui.eBodyHint = el('div', { class: 'gpn-hint', text: '請先輸入提示詞內容' });
+    ui.eCount = el('div', {
+      class: 'gpn-count', 'aria-live': 'polite',
+      title: '字數：中文每個字算 1，英文每個單字算 1，標點和空白不算。\n字元：每個字、字母、標點、空白、換行都算 1。',
+    });
 
     // 放在哪裡：可以跨書籤搬。有資料夾的書籤用 optgroup 把資料夾列在底下。
     ui.eWhere = el('select', { class: 'gpn-input gpn-select' });
@@ -944,7 +1072,8 @@ function gpnCreatePanel(opts) {
         ui.eHead,
         el('div', { class: 'gpn-dialog-body' },
           field('按鈕顯示標題', '（卡片上看到的字）', ui.eTitle, ui.eTitleHint),
-          field('實際的 Prompt 內容', '（點標題時用的文字）', ui.eBody, ui.eBodyHint),
+          field('實際的 Prompt 內容', '（點標題時用的文字）', ui.eBody,
+            el('div', { class: 'gpn-under' }, ui.eBodyHint, ui.eCount)),
           field('放在哪裡', '（改這裡就能搬到別的書籤或資料夾）',
             el('div', { class: 'gpn-select-wrap' }, ui.eWhere))
         ),
@@ -955,6 +1084,25 @@ function gpnCreatePanel(opts) {
         )
       )
     );
+  }
+
+  /**
+   * 字數統計，算法和 Word 的「字數」一樣：中日韓文每個字算 1、英文每個單字算 1，標點和空白不算。
+   * 另外附上字元數（什麼都算），給想知道「整段有多長」的人看。
+   */
+  const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/gu;
+  function countWords(text) {
+    const cjk = (text.match(CJK) || []).length;
+    const words = (text.replace(CJK, ' ').match(/[\p{L}\p{N}]+(?:['’._-][\p{L}\p{N}]+)*/gu) || []).length;
+    return cjk + words;
+  }
+
+  function updateCount() {
+    const text = ui.eBody.value;
+    const fmt = (n) => n.toLocaleString('zh-TW');
+    ui.eCount.textContent = text.trim()
+      ? `字數 ${fmt(countWords(text))}　•　字元 ${fmt([...text].length)}`
+      : '字數 0';
   }
 
   function fillWhere(tabId, fid) {
@@ -981,6 +1129,7 @@ function gpnCreatePanel(opts) {
     ui.eHead.textContent = item ? '編輯提示詞' : `在「${list.label}」新增提示詞`;
     ui.eTitle.value = item ? item.title : '';
     ui.eBody.value = item ? item.content : '';
+    updateCount();
     fillWhere(tabId, fid);
     ui.eWhere.dataset.start = ui.eWhere.value;
     ui.eDel.style.display = item ? '' : 'none';
@@ -1048,6 +1197,7 @@ function gpnCreatePanel(opts) {
       const idx = list.items.findIndex((it) => it.id === editing.id);
       if (idx >= 0) list.items.splice(idx, 1);
     }
+    data.favs = (data.favs || []).filter((id) => id !== editing.id);
     persist();
     closeEditor();
     render();
@@ -1071,7 +1221,7 @@ function gpnCreatePanel(opts) {
   }
 
   /* ==========================================================================
-     六、新增書籤（書籤列最右邊的「＋」）
+     六、新增書籤（自己的書籤後面那個「＋」）
      已經存在的書籤要改名、換色、刪除，都在齒輪的設定裡。
      ========================================================================== */
 
@@ -1280,7 +1430,7 @@ function gpnCreatePanel(opts) {
       navItem('tab', ICON_TAB, '名稱與顏色'),
       navItem('folders', ICON_FOLDER, '資料夾', ui.sNavBadge),
       // 沒有雲端功能的地方（例如測試）就不出現這一項
-      cloud ? navItem('account', ICON_PERSON, '帳號與同步') : null,
+      cloud ? navItem('account', ICON_CLOUD_DONE, '雲端同步') : null,
       navItem('backup', ICON_SYNC, '備份與同步'),
     ].filter(Boolean);
     const [navTab, navFolders, ...navAll] = ui.sNavItems;
@@ -1343,7 +1493,7 @@ function gpnCreatePanel(opts) {
       }),
       ui.sSwitch, ui.sConfirm, ui.sFolderNote);
 
-    /* ---- 帳號與同步 ---- */
+    /* ---- 雲端同步 ---- */
     const secAccount = cloud ? buildAccountSection() : null;
 
     /* ---- 備份與同步 ---- */
@@ -1368,17 +1518,17 @@ function gpnCreatePanel(opts) {
   function openSettings(tabId, section = 'tab') {
     const tab = tabById(tabId);
     if (!tab) return;
-    // 「最近使用」沒有名稱、顏色、資料夾可以改，直接打開全部書籤共用的那幾頁
+    // 「最近使用」「我的最愛」沒有名稱、顏色、資料夾可以改，直接打開全部書籤共用的那幾頁
     const hasAccount = !!cloud && !!cloudState.configured;
-    if (tab.recent && (section === 'tab' || section === 'folders')) section = hasAccount ? 'account' : 'backup';
-    if (section === 'account' && !hasAccount) section = tab.recent ? 'backup' : 'tab';
+    if (tab.fixed && (section === 'tab' || section === 'folders')) section = hasAccount ? 'account' : 'backup';
+    if (section === 'account' && !hasAccount) section = tab.fixed ? 'backup' : 'tab';
     settingsTabId = tabId;
     ui.sName.value = tab.label;
     ui.sName.classList.remove('is-bad');
     ui.sNameHint.classList.remove('is-on');
     disarmTabDelete();
     resetBackup();
-    resetAccountForm();
+    resetAccount();
     refreshSettings();
     showSection(section);
     showLayer(ui.settingsLayer);
@@ -1392,9 +1542,6 @@ function gpnCreatePanel(opts) {
     disarmImport();
     disarmWipe();
     hideFolderConfirm();
-    disarmAccountDelete();
-    // 密碼不要留在畫面上
-    if (ui.aPass) { for (const n of [ui.aPass, ui.aPass2, ui.aNew1, ui.aNew2]) n.value = ''; }
   }
 
   function showSection(key) {
@@ -1408,7 +1555,6 @@ function gpnCreatePanel(opts) {
     hideFolderConfirm();
     disarmTabDelete();
     disarmWipe();
-    disarmAccountDelete();
   }
 
   /** 設定視窗裡所有「跟著資料變」的文字，一次更新 */
@@ -1421,9 +1567,9 @@ function gpnCreatePanel(opts) {
       `${gpnCountItems(data)} 則提示詞`;
     ui.settings.setAttribute('data-color', tab.color);
 
-    // 「最近使用」：藏起「這個書籤」那一組（名稱與顏色、資料夾）
-    // 雲端還沒設定好：「帳號與同步」整頁不出現，免得使用者看到一堆給管理員的說明
-    const fixed = !!tab.recent;
+    // 「最近使用」「我的最愛」：藏起「這個書籤」那一組（名稱與顏色、資料夾）
+    // 雲端還沒設定好：「雲端同步」整頁不出現，免得使用者看到一堆給管理員的說明
+    const fixed = !!tab.fixed;
     ui.sNavGroup.hidden = fixed;
     for (const b of ui.sNavItems) {
       const key = b.getAttribute('data-section');
@@ -1458,7 +1604,7 @@ function gpnCreatePanel(opts) {
 
   function onSettingsName() {
     const tab = tabById(settingsTabId);
-    if (!tab || tab.recent) return;
+    if (!tab || tab.fixed) return;
     const label = ui.sName.value.trim();
     ui.sName.classList.toggle('is-bad', !label);
     ui.sNameHint.classList.toggle('is-on', !label);
@@ -1471,7 +1617,7 @@ function gpnCreatePanel(opts) {
 
   function onSettingsColor(color) {
     const tab = tabById(settingsTabId);
-    if (!tab || tab.recent || tab.color === color) return;
+    if (!tab || tab.fixed || tab.color === color) return;
     tab.color = color;
     persist();
     renderTabs();
@@ -1480,7 +1626,7 @@ function gpnCreatePanel(opts) {
 
   function onFolderSwitch() {
     const tab = tabById(settingsTabId);
-    if (!tab || tab.recent) return;
+    if (!tab || tab.fixed) return;
 
     if (!tab.folders) {
       const n = tab.items.length;
@@ -1523,7 +1669,7 @@ function gpnCreatePanel(opts) {
   /** 刪除書籤：會連裡面的提示詞一起刪，所以訊息要講清楚 + 二段式確認 */
   function onTabDelete() {
     const tab = tabById(settingsTabId);
-    if (!tab || tab.recent || data.tabs.length <= 1) return;
+    if (!tab || tab.fixed || data.tabs.length <= 1) return;
 
     if (!tabDelArmed) {
       tabDelArmed = true;
@@ -1549,308 +1695,104 @@ function gpnCreatePanel(opts) {
     if (ui.sDel) disarmButton(ui.sDel, '刪除這個書籤');
   }
 
-  /* ---- 帳號與同步 ----
-     登入同一個帳號，外掛、網頁版、每一台電腦的提示詞就會自動同步（見 sync.js）。
-     沒登入也能照常用，只是資料只存在這一台。
+  /* ---- 雲端同步（Google 雲端硬碟）----
+     連結 Google 帳號，外掛、網頁版、每一台電腦的提示詞就會自動同步（見 sync.js）。
+     提示詞存在使用者「自己的」Google 雲端硬碟裡的一個檔案（GPN_DRIVE_FILE_NAME）。
+     沒連結也能照常用，只是資料只存在這一台。
 
-     會經歷的流程：
-       社群登入：按「用 ○○ 帳號登入」→ 到那一家選帳號 → 回來就登入了（第一次會自動建帳號）
-       Email 註冊：填 Email、密碼 → 收驗證信 → 點信裡的連結 → 回到網頁版就登入了
-       忘記密碼：填 Email → 收「重設密碼」信 → 點連結回到網頁版 → 設新密碼 */
-
-  /** 支援的社群登入。cloud-config.js 的 providers 開了哪幾家，畫面就出現哪幾顆 */
-  const PROVIDERS = {
-    google: { name: 'Google', icon: ICON_GOOGLE },
-    'custom:line': { name: 'LINE', icon: ICON_LINE },
-    facebook: { name: 'Facebook', icon: ICON_FACEBOOK },
-    apple: { name: 'Apple', icon: ICON_APPLE },
-  };
-  const providerName = (p) => PROVIDERS[p]?.name || (p === 'email' || !p ? 'Email' : p);
-  let pendingEmail = '';        // 剛註冊、等著驗證的 Email（「重新寄驗證信」用）
-  let deleteArmed = false, deleteTimer = 0;
+     流程：按「用 Google 帳號連結雲端硬碟」→ 到 Google 選帳號、按「允許」→ 回來就開始同步
+       網頁版：整頁換到 Google，再回到網頁版
+       外掛：另開一個分頁，連結完那個分頁會自己關掉 */
 
   function buildAccountSection() {
-    /* ---- 沒登入：社群登入 ＋ Email 登入／註冊 ---- */
-    ui.aSocial = el('div', { class: 'gpn-social' });
-    ui.aSocialBox = el('div', {},
-      ui.aSocial,
-      el('div', { class: 'gpn-or' }, el('span', { text: '或用 Email 和密碼' })));
-
-    ui.aSignin = el('button', { class: 'gpn-seg is-on', type: 'button', onclick: () => setAccountMode('signin') }, '登入');
-    ui.aSignup = el('button', { class: 'gpn-seg', type: 'button', onclick: () => setAccountMode('signup') }, '註冊新帳號');
-
-    const submitOnEnter = (e) => { if (e.key === 'Enter') { e.preventDefault(); onAccountSubmit(); } };
-    const clearBad = (e) => { e.target.classList.remove('is-bad'); setAccountMsg(''); };
-    ui.aEmail = el('input', {
-      class: 'gpn-input', type: 'email', autocomplete: 'email', placeholder: '例如：name@gmail.com',
-      spellcheck: 'false', oninput: clearBad, onkeydown: submitOnEnter,
-    });
-    ui.aPass = el('input', {
-      class: 'gpn-input', type: 'password', autocomplete: 'current-password',
-      oninput: clearBad, onkeydown: submitOnEnter,
-    });
-    ui.aPass2 = el('input', {
-      class: 'gpn-input', type: 'password', autocomplete: 'new-password',
-      oninput: clearBad, onkeydown: submitOnEnter,
-    });
-    ui.aPass2Field = field('再輸入一次密碼', '（確認沒有打錯）', ui.aPass2);
-    ui.aShow = el('input', {
-      type: 'checkbox',
-      onchange: () => {
-        for (const n of [ui.aPass, ui.aPass2]) n.type = ui.aShow.checked ? 'text' : 'password';
-      },
-    });
-    ui.aPassLabel = el('span', { text: '（至少 6 個字）' });
-    ui.aForgot = el('button', { class: 'gpn-link', type: 'button', onclick: onForgot }, '忘記密碼？');
+    /* ---- 還沒連結 ---- */
+    ui.aConnect = el('button', {
+      class: 'gpn-social-btn', type: 'button', 'data-provider': 'google', onclick: onConnect,
+    }, el('span', { class: 'gpn-social-icon', html: ICON_GOOGLE }), el('span', { text: '用 Google 帳號連結雲端硬碟' }));
+    ui.aNoConnect = el('div', { class: 'gpn-note gpn-note--status is-bad', text:
+      '直接雙擊檔案打開的網頁版沒辦法連結雲端硬碟。請改用網址打開網頁版，或用 Chrome 外掛。' });
     ui.aMsg = el('div', { class: 'gpn-note gpn-note--status', role: 'status' });
-    ui.aResend = el('button', { class: 'gpn-btn2', type: 'button', onclick: onResend }, '📧　重新寄驗證信');
-    ui.aResend.hidden = true;
-    ui.aSubmit = el('button', {
-      class: 'gpn-btn gpn-btn--save gpn-btn--block', type: 'button', onclick: onAccountSubmit,
-    }, '登入');
 
     ui.aOut = el('div', {},
       el('p', { class: 'gpn-lede', text:
-        '登入同一個帳號，外掛、網頁版、每一台電腦的提示詞就會自動同步，換電腦也不怕不見。' +
-        '不登入也能照常用，只是資料只存在這台電腦。' }),
-      ui.aSocialBox,
-      el('div', { class: 'gpn-seg-row gpn-seg-row--top' }, ui.aSignin, ui.aSignup),
-      field('Email', null, ui.aEmail),
-      el('div', { class: 'gpn-field' },
-        el('label', { class: 'gpn-label' }, '密碼', ui.aPassLabel),
-        ui.aPass,
-        el('div', { class: 'gpn-pass-row' },
-          el('label', { class: 'gpn-check' }, ui.aShow, el('span', { text: '顯示密碼' })),
-          ui.aForgot)),
-      ui.aPass2Field,
+        '連結你的 Google 帳號，提示詞會存到你自己的 Google 雲端硬碟，' +
+        '外掛、網頁版、每一台電腦都會自動同步，換電腦也不怕不見。' }),
+      el('div', { class: 'gpn-social' }, ui.aConnect),
+      ui.aNoConnect,
       ui.aMsg,
-      ui.aResend,
-      ui.aSubmit);
+      el('div', { class: 'gpn-note gpn-note--roomy', text:
+        '按下去會到 Google 的畫面：先選要用哪個帳號（公司、個人帳號請選對），再按「允許」。' +
+        '特務P 只碰得到它自己建立的那一個檔案，看不到雲端硬碟裡的其他東西。' }),
+      el('div', { class: 'gpn-note', text: '不連結也能照常用，只是提示詞只存在這台電腦。' }));
 
-    /* ---- 從「重設密碼」信回來：設新密碼 ---- */
-    ui.aNew1 = el('input', { class: 'gpn-input', type: 'password', autocomplete: 'new-password' });
-    ui.aNew2 = el('input', {
-      class: 'gpn-input', type: 'password', autocomplete: 'new-password',
-      onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); onNewPassword(); } },
-    });
-    ui.aNewMsg = el('div', { class: 'gpn-note gpn-note--status', role: 'status' });
-    ui.aNewBtn = el('button', {
-      class: 'gpn-btn gpn-btn--save gpn-btn--block', type: 'button', onclick: onNewPassword,
-    }, '更新密碼');
-    ui.aRecover = el('div', { class: 'gpn-recover' },
-      el('div', { class: 'gpn-label', text: '請設定新的密碼' }),
-      el('div', { class: 'gpn-note', text: '你是從「重設密碼」的信回來的，已經先幫你登入了。' }),
-      field('新密碼', '（至少 6 個字）', ui.aNew1),
-      field('再輸入一次新密碼', null, ui.aNew2),
-      ui.aNewMsg, ui.aNewBtn);
-
-    /* ---- 已登入 ---- */
-    ui.aWhoHow = el('div', { class: 'gpn-note' });
+    /* ---- 已連結 ---- */
     ui.aWho = el('div', { class: 'gpn-account-email' });
     ui.aStatusIcon = el('span', { class: 'gpn-cloud-icon' });
     ui.aStatus = el('span');
     ui.aSyncBtn = el('button', { class: 'gpn-btn2', type: 'button', onclick: onSyncNow }, '⟳　立即同步');
+    ui.aFileLink = el('a', { class: 'gpn-link gpn-file-link', target: '_blank', rel: 'noopener' },
+      '在 Google 雲端硬碟裡查看這個檔案');
     ui.aWipe = el('button', {
       class: 'gpn-btn gpn-btn--del', type: 'button', onclick: () => onSignOut(true),
-    }, '登出並清除這台電腦上的提示詞');
-    ui.aDelete = el('button', {
-      class: 'gpn-btn gpn-btn--del', type: 'button', onclick: onDeleteAccount,
-    }, '刪除我的帳號');
+    }, '中斷連結並清除這台電腦上的提示詞');
 
     ui.aIn = el('div', {},
-      ui.aRecover,
       el('div', { class: 'gpn-account-card' },
-        el('span', { class: 'gpn-account-avatar', html: ICON_PERSON }),
-        el('div', { class: 'gpn-account-info' }, ui.aWhoHow, ui.aWho)),
+        el('span', { class: 'gpn-account-avatar gpn-account-avatar--google', html: ICON_GOOGLE }),
+        el('div', { class: 'gpn-account-info' },
+          el('div', { class: 'gpn-note', text: '已連結 Google 雲端硬碟' }), ui.aWho)),
       el('div', { class: 'gpn-account-status' }, ui.aStatusIcon, ui.aStatus),
       el('div', { class: 'gpn-brow' },
         ui.aSyncBtn,
-        el('button', { class: 'gpn-btn2', type: 'button', onclick: () => onSignOut(false) }, '登出')),
+        el('button', { class: 'gpn-btn2', type: 'button', onclick: () => onSignOut(false) }, '中斷連結')),
       el('div', { class: 'gpn-note', text:
-        '提示詞一改就會自動同步，平常不用按「立即同步」。' +
-        '登出後，這台電腦上的提示詞會留著，只是不再同步。' }),
+        `提示詞存在你的 Google 雲端硬碟，檔名是「${GPN_DRIVE_FILE_NAME}」。` +
+        '一改就會自動同步，平常不用按「立即同步」。' }),
+      ui.aFileLink,
+      el('div', { class: 'gpn-note', text:
+        '中斷連結後，這台電腦上的提示詞、雲端硬碟上的檔案都會留著，只是不再同步。' +
+        '不想用了，中斷連結後到雲端硬碟把那個檔案刪掉就好。' }),
       el('div', { class: 'gpn-danger' },
         el('div', { class: 'gpn-label', text: '在別人的電腦上用完了？' }),
         el('div', { class: 'gpn-note', text:
-          '登出，並把這台電腦上的提示詞清掉，別人就看不到。雲端上的資料不會刪，下次登入就回來了。' }),
-        ui.aWipe),
-      el('div', { class: 'gpn-danger' },
-        el('div', { class: 'gpn-label', text: '不想用了？' }),
-        el('div', { class: 'gpn-note', text:
-          '永久刪除這個帳號，和存在雲端上的所有提示詞、使用記錄。刪了就找不回來。' +
-          '這台電腦上的提示詞會留著。' }),
-        ui.aDelete));
+          '中斷連結，並把這台電腦上的提示詞清掉，別人就看不到。雲端硬碟上的檔案不會刪，下次連結就回來了。' }),
+        ui.aWipe));
 
     return el('section', { class: 'gpn-section', 'data-section': 'account' },
-      el('h3', { text: '帳號與同步' }), ui.aOut, ui.aIn,
+      el('h3', { text: '雲端同步' }), ui.aOut, ui.aIn,
       el('a', {
         class: 'gpn-link gpn-privacy', href: new URL('privacy.html', GPN_CLOUD.site).href,
         target: '_blank', rel: 'noopener',
-      }, '隱私權政策：我們存了什麼、怎麼刪除'));
+      }, '隱私權政策：資料存在哪裡、怎麼刪除'));
   }
 
-  /** 社群登入按鈕：照 cloud-config.js 的 providers 畫出來 */
-  function renderSocial(providers) {
-    const key = providers.join(',');
-    if (ui.aSocial.dataset.key === key) return;
-    ui.aSocial.dataset.key = key;
-    ui.aSocial.replaceChildren(...providers.filter((p) => PROVIDERS[p]).map((p) => el('button', {
-      class: 'gpn-social-btn', type: 'button', 'data-provider': p.replace('custom:', ''),
-      onclick: (e) => onSocial(p, e.currentTarget),
-    }, el('span', { class: 'gpn-social-icon', html: PROVIDERS[p].icon }),
-       el('span', { text: `用 ${PROVIDERS[p].name} 帳號登入` }))));
-  }
-
-  function setAccountMode(mode) {
-    accountMode = mode;
-    const up = mode === 'signup';
-    ui.aSignin.classList.toggle('is-on', !up);
-    ui.aSignup.classList.toggle('is-on', up);
-    ui.aPass2Field.hidden = !up;
-    ui.aPassLabel.hidden = !up;
-    ui.aForgot.hidden = up;
-    ui.aPass.autocomplete = up ? 'new-password' : 'current-password';
-    ui.aSubmit.textContent = up ? '註冊' : '登入';
-    ui.aResend.hidden = true;
-    setAccountMsg('');
-  }
-
-  function resetAccountForm() {
+  function resetAccount() {
     if (!ui.aOut) return;
-    for (const n of [ui.aPass, ui.aPass2, ui.aNew1, ui.aNew2]) n.value = '';
-    ui.aShow.checked = false;
-    for (const n of [ui.aPass, ui.aPass2]) n.type = 'password';
-    for (const n of [ui.aEmail, ui.aPass, ui.aPass2]) n.classList.remove('is-bad');
-    setAccountMode('signin');
+    setAccountMsg('');
     disarmWipe();
-    disarmAccountDelete();
     refreshAccount();
   }
 
   function focusAccount() {
-    if (ui.aOut && !ui.aOut.hidden) (ui.aEmail.value ? ui.aPass : ui.aEmail).focus();
-    else if (ui.aRecover && !ui.aRecover.hidden) ui.aNew1.focus();
+    if (ui.aOut && !ui.aOut.hidden && !ui.aConnect.hidden) ui.aConnect.focus();
   }
 
-  function setAccountMsg(msg, kind = 'bad', node = ui.aMsg) {
-    node.textContent = msg;
-    node.classList.toggle('is-bad', !!msg && kind === 'bad');
-    node.classList.toggle('is-ok', !!msg && kind === 'ok');
+  function setAccountMsg(msg, kind = 'bad') {
+    ui.aMsg.textContent = msg;
+    ui.aMsg.classList.toggle('is-bad', !!msg && kind === 'bad');
+    ui.aMsg.classList.toggle('is-ok', !!msg && kind === 'ok');
   }
 
-  const emailOk = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
-
-  async function onAccountSubmit() {
-    if (ui.aSubmit.disabled) return;
-    const email = ui.aEmail.value.trim();
-    const pw = ui.aPass.value;
-    const up = accountMode === 'signup';
-
-    // 先在這裡擋掉常見的打錯，不必等雲端回覆
-    const bad = (node, msg) => { node.classList.add('is-bad'); node.focus(); setAccountMsg(msg); };
-    if (!emailOk(email)) return bad(ui.aEmail, '請輸入正確的 Email');
-    if (!pw) return bad(ui.aPass, '請輸入密碼');
-    if (up && pw.length < 6) return bad(ui.aPass, '密碼至少要 6 個字');
-    if (up && pw !== ui.aPass2.value) return bad(ui.aPass2, '兩次輸入的密碼不一樣');
-
-    const label = ui.aSubmit.textContent;
-    ui.aSubmit.disabled = true;
-    ui.aSubmit.textContent = up ? '註冊中…' : '登入中…';
+  /** 連結雲端硬碟：網頁版會整頁換到 Google；外掛會另開一個分頁，連結完自己關掉 */
+  async function onConnect() {
+    ui.aConnect.disabled = true;
     setAccountMsg('');
-    ui.aResend.hidden = true;
-    const r = await (up ? cloud.signUp(email, pw) : cloud.signIn(email, pw));
-    ui.aSubmit.disabled = false;
-    ui.aSubmit.textContent = label;
-
-    if (!r || !r.ok) {
-      setAccountMsg(r?.error || '登入失敗，請再試一次');
-      if (r?.unconfirmed) { pendingEmail = email; ui.aResend.hidden = false; }
-      return;
-    }
-    if (r.needConfirm) {
-      // 註冊成功，但要先到信箱點驗證連結
-      pendingEmail = email;
-      setAccountMode('signin');
-      ui.aPass.value = '';
-      setAccountMsg(`註冊成功！驗證信已經寄到 ${email}。請打開那封信，按「確認我的信箱」` +
-        (cloud.linksOpenWeb
-          ? '。驗證完，回到這裡輸入密碼、按「登入」就好。'
-          : '，就會回到網頁版並自動登入。') +
-        '（找不到信的話看一下垃圾郵件）', 'ok');
-      ui.aResend.hidden = false;
-      return;
-    }
-
-    ui.aPass.value = '';
-    ui.aPass2.value = '';
-    folderId = null;
-    toast(signedInMessage(r), !!r.error);
-    refreshCloud(await cloud.getState());
-  }
-
-  /** 登入成功後要跟他說的話（依這次同步的結果） */
-  function signedInMessage(r) {
-    return r.error ? `已登入，但同步失敗：${r.error}`
-      : r.merged ? `已登入。這台原本的 ${r.merged} 則已經合併到雲端`
-      : r.pulled ? `已登入，從雲端載入了 ${r.pulled} 則提示詞`
-      : r.uploaded ? `已登入，這台的 ${r.uploaded} 則已經存到雲端`
-      : '已登入，之後會自動同步';
-  }
-
-  async function onResend() {
-    const email = pendingEmail || ui.aEmail.value.trim();
-    if (!emailOk(email)) { setAccountMsg('請先在上面輸入註冊時用的 Email'); return; }
-    ui.aResend.disabled = true;
-    const r = await cloud.resendConfirm(email);
-    ui.aResend.disabled = false;
-    setAccountMsg(r?.ok ? `已經重新寄到 ${email}，請到信箱看看（也看一下垃圾郵件）。`
-      : (r?.error || '寄不出去，請稍後再試'), r?.ok ? 'ok' : 'bad');
-  }
-
-  async function onForgot() {
-    const email = ui.aEmail.value.trim();
-    if (!emailOk(email)) {
-      ui.aEmail.classList.add('is-bad');
-      ui.aEmail.focus();
-      setAccountMsg('請先在上面輸入你註冊時用的 Email，再按「忘記密碼？」');
-      return;
-    }
-    ui.aForgot.disabled = true;
-    const r = await cloud.resetPassword(email);
-    ui.aForgot.disabled = false;
-    setAccountMsg(r?.ok
-      ? `如果 ${email} 有註冊過，我們已經寄出「重設密碼」的信。請打開那封信按連結，` +
-        (cloud.linksOpenWeb
-          ? '會打開網頁版讓你設新密碼；設好之後，回到這裡用新密碼登入。'
-          : '會回到網頁版讓你設新密碼。')
-      : (r?.error || '寄不出去，請稍後再試'), r?.ok ? 'ok' : 'bad');
-  }
-
-  async function onNewPassword() {
-    const pw = ui.aNew1.value;
-    if (pw.length < 6) { setAccountMsg('密碼至少要 6 個字', 'bad', ui.aNewMsg); ui.aNew1.focus(); return; }
-    if (pw !== ui.aNew2.value) { setAccountMsg('兩次輸入的密碼不一樣', 'bad', ui.aNewMsg); ui.aNew2.focus(); return; }
-    ui.aNewBtn.disabled = true;
-    const r = await cloud.updatePassword(pw);
-    ui.aNewBtn.disabled = false;
-    if (!r?.ok) { setAccountMsg(r?.error || '更新失敗，請再試一次', 'bad', ui.aNewMsg); return; }
-    ui.aNew1.value = '';
-    ui.aNew2.value = '';
-    setAccountMsg('', 'ok', ui.aNewMsg);
-    toast('密碼已經更新，之後請用新密碼登入');
-    refreshCloud(await cloud.getState());
-  }
-
-  /** 社群登入：網頁版會直接換到那一家的登入頁；外掛會另開一個分頁，登入完自己關掉 */
-  async function onSocial(provider, btn) {
-    btn.disabled = true;
-    setAccountMsg('');
-    const r = await cloud.signInWithProvider(provider);
-    btn.disabled = false;
-    if (!r || !r.ok) { setAccountMsg(r?.error || '沒辦法開始登入，請稍後再試'); return; }
+    const r = await cloud.connect();
+    ui.aConnect.disabled = false;
+    if (!r || !r.ok) { setAccountMsg(r?.error || '沒辦法開始連結，請稍後再試'); return; }
     if (r.opened) {
-      setAccountMsg(`已經開了一個新分頁，請在那裡用 ${providerName(provider)} 登入；` +
-        '登入完那個分頁會自動關掉，回到這裡就好。', 'ok');
+      setAccountMsg('已經開了一個新分頁：請在那裡選 Google 帳號、按「允許」。' +
+        '完成後那個分頁會自動關掉，回到這裡就好。', 'ok');
     }
   }
 
@@ -1861,11 +1803,11 @@ function gpnCreatePanel(opts) {
     toast(r?.error ? r.error : '已同步', !!r?.error);
   }
 
-  /** 登出。wipe＝連這台的提示詞一起清掉，要按兩次 */
+  /** 中斷連結。wipe＝連這台的提示詞一起清掉，要按兩次 */
   async function onSignOut(wipe) {
     if (wipe && !wipeArmed) {
       wipeArmed = true;
-      armButton(ui.aWipe, '確定清除這台的提示詞並登出？再按一次');
+      armButton(ui.aWipe, '確定清除這台的提示詞並中斷連結？再按一次');
       clearTimeout(wipeTimer);
       wipeTimer = setTimeout(disarmWipe, 5000);
       return;
@@ -1873,39 +1815,15 @@ function gpnCreatePanel(opts) {
     disarmWipe();
     await cloud.signOut({ wipe });
     folderId = null;
-    toast(wipe ? '已登出，這台電腦上的提示詞也清掉了'
-               : '已登出。這台的提示詞還在，只是不會再同步');
+    toast(wipe ? '已中斷連結，這台電腦上的提示詞也清掉了'
+               : '已中斷連結。這台的提示詞還在，只是不會再同步');
     refreshCloud(await cloud.getState());
   }
 
   function disarmWipe() {
     clearTimeout(wipeTimer);
     wipeArmed = false;
-    if (ui.aWipe) disarmButton(ui.aWipe, '登出並清除這台電腦上的提示詞');
-  }
-
-  /** 刪除帳號：永久刪除，按兩次 */
-  async function onDeleteAccount() {
-    if (!deleteArmed) {
-      deleteArmed = true;
-      armButton(ui.aDelete, '確定永久刪除帳號和雲端上的提示詞？再按一次');
-      clearTimeout(deleteTimer);
-      deleteTimer = setTimeout(disarmAccountDelete, 6000);
-      return;
-    }
-    disarmAccountDelete();
-    ui.aDelete.disabled = true;
-    const r = await cloud.deleteAccount();
-    ui.aDelete.disabled = false;
-    if (!r?.ok) { toast(r?.error || '刪除失敗，請稍後再試', true); return; }
-    toast('帳號已經刪除。這台電腦上的提示詞還在，只是不會再同步');
-    refreshCloud(await cloud.getState());
-  }
-
-  function disarmAccountDelete() {
-    clearTimeout(deleteTimer);
-    deleteArmed = false;
-    if (ui.aDelete) disarmButton(ui.aDelete, '刪除我的帳號');
+    if (ui.aWipe) disarmButton(ui.aWipe, '中斷連結並清除這台電腦上的提示詞');
   }
 
   /** 「剛剛」「5 分鐘前」「14:32」 */
@@ -1920,10 +1838,10 @@ function gpnCreatePanel(opts) {
     return `${day}${p(d.getHours())}:${p(d.getMinutes())}`;
   }
 
-  /** 狀態 → 圖示、短字（放主畫面）、長句（放帳號頁） */
+  /** 狀態 → 圖示、短字（放主畫面）、長句（放雲端同步頁） */
   function describeCloud(s) {
     if (!s.signedIn) {
-      return { icon: ICON_CLOUD_OFF, short: '登入同步', long: '', kind: 'invite' };
+      return { icon: ICON_CLOUD_OFF, short: '雲端同步', long: '', kind: 'invite' };
     }
     if (s.phase === 'syncing') {
       return { icon: ICON_SYNC, short: '同步中', long: '同步中…', kind: 'busy' };
@@ -1952,8 +1870,8 @@ function gpnCreatePanel(opts) {
     ui.cloudIcon.innerHTML = d.icon;
     ui.cloudText.textContent = d.short;
     ui.cloudBtn.title = st.signedIn
-      ? `${st.email || providerName(st.provider) + ' 帳號'}　${d.long || d.short}（點一下看帳號）`
-      : '登入帳號，每台電腦的提示詞就會自動同步';
+      ? `${st.email || 'Google 雲端硬碟'}　${d.long || d.short}（點一下看雲端同步）`
+      : '連結 Google 雲端硬碟，每台電腦的提示詞就會自動同步';
 
     refreshAccount();
   }
@@ -1963,24 +1881,22 @@ function gpnCreatePanel(opts) {
     const st = cloudState;
     ui.aOut.hidden = !st.configured || !!st.signedIn;
     ui.aIn.hidden = !st.configured || !st.signedIn;
-
-    // 社群登入：後台開好了哪幾家（st.providers），而且這個環境做得到（直接開檔案的網頁版就不行）
-    const providers = cloud.canSocial === false ? [] : (st.providers || []);
-    renderSocial(providers);
-    ui.aSocialBox.hidden = !providers.length;
+    // 直接開檔案（file://）的網頁版，Google 沒辦法把人帶回來
+    ui.aConnect.hidden = cloud.canConnect === false;
+    ui.aNoConnect.hidden = cloud.canConnect !== false;
 
     if (!st.signedIn) {
-      // 登入過期之類的訊息，第一次顯示在表單上
+      // 連結失效之類的訊息，第一次顯示在這裡
       if (st.message && !ui.aMsg.textContent) setAccountMsg(st.message);
       return;
     }
     const d = describeCloud(st);
-    ui.aRecover.hidden = !st.recovery;
-    ui.aWhoHow.textContent = `已登入（用 ${providerName(st.provider)} 帳號）`;
-    ui.aWho.textContent = st.email || `${providerName(st.provider)} 帳號`;
+    ui.aWho.textContent = st.email || 'Google 帳號';
     ui.aStatusIcon.innerHTML = d.icon;
     ui.aStatus.textContent = d.long;
     ui.aStatus.parentElement.setAttribute('data-kind', d.kind);
+    ui.aFileLink.hidden = !st.fileId;
+    if (st.fileId) ui.aFileLink.href = `https://drive.google.com/file/d/${encodeURIComponent(st.fileId)}/view`;
   }
 
   /* ---- 備份與同步 ----
@@ -2056,7 +1972,7 @@ function gpnCreatePanel(opts) {
       el('h3', { text: '備份與同步' }),
       el('p', { class: 'gpn-lede', text:
         '所有書籤一起備份成一個檔案或一段代碼：可以額外留一份以防萬一，或把提示詞分享給別人。' +
-        '（登入帳號的話，每台電腦會自動同步，不需要靠這裡搬。）' }),
+        '（連結 Google 雲端硬碟的話，每台電腦會自動同步，不需要靠這裡搬。）' }),
       field('① 把資料帶出去', '（給另一台電腦、外掛或網頁版用）', outRow, ui.bStats),
       el('div', { class: 'gpn-sep' }),
       field('② 把資料帶回來', '（貼上代碼，或選一個備份檔）',
@@ -2153,9 +2069,8 @@ function gpnCreatePanel(opts) {
       data = r.data;
       msg = r.added ? `已加入 ${r.added} 則提示詞` : '沒有新的提示詞，資料維持原樣';
     } else {
-      const recent = data.recent;          // 使用記錄是自己的，不跟著備份換掉
-      data = gpnNormalize(parsed.data);
-      data.recent = recent;
+      // 使用記錄、我的最愛是自己的，不跟著備份換掉（我的最愛只留備份裡還找得到的那幾則）
+      data = gpnNormalize({ ...parsed.data, recent: data.recent, favs: data.favs });
       msg = `已匯入 ${gpnCountItems(data)} 則提示詞`;
     }
     folderId = null;
@@ -2249,7 +2164,7 @@ function gpnCreatePanel(opts) {
   }
 
   // toast：網頁版從登入、驗證信回來時，用它顯示結果
-  // openAccount：從「重設密碼」信回來時，直接打開帳號頁讓他設新密碼
+  // openAccount：打開「雲端同步」那一頁（網頁版連結失敗回來時用）
   return {
     open, close, isOpen, toast,
     openAccount: () => { if (cloud && cloudState.configured) openSettings(data.activeId, 'account'); },

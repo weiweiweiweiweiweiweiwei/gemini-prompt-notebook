@@ -1,5 +1,5 @@
 /**
- * 常用提示詞筆記本 — 外掛主程式 (v4)
+ * 特務P（常用提示詞筆記本）— 外掛主程式 (v4)
  *
  * 架構：
  *   觸發按鈕 → Light DOM，注入各站輸入框工具列，複製原生 icon button 的 class
@@ -246,9 +246,9 @@
     const btn = el('button', {
       class: 'gpn-trigger-btn ' + (bare ? 'gpn-bare ' : '') + cls,
       type: 'button',
-      'aria-label': '常用提示詞',
+      'aria-label': '特務P：常用提示詞',
       'aria-haspopup': 'dialog',
-      title: '常用提示詞',
+      title: '特務P：常用提示詞',
       html: ICON_BOOKMARK,
       onclick: (e) => { e.preventDefault(); e.stopPropagation(); openModal(); },
     });
@@ -300,7 +300,7 @@
     root.adoptedStyleSheets = [sheet];
     root.append(el('button', {
       class: 'gpn-fab', type: 'button',
-      'aria-label': '常用提示詞', 'aria-haspopup': 'dialog', title: '常用提示詞',
+      'aria-label': '特務P：常用提示詞', 'aria-haspopup': 'dialog', title: '特務P：常用提示詞',
       html: ICON_BOOKMARK,
       onclick: (e) => { e.preventDefault(); openModal(); },
     }));
@@ -374,7 +374,7 @@
     try {
       await loadSheet();
     } catch (err) {
-      console.error('[常用提示詞] 樣式載入失敗，面板不會顯示：', err);
+      console.error('[特務P] 樣式載入失敗，面板不會顯示：', err);
       return;
     }
 
