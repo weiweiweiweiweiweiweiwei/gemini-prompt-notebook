@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<title>特務P 使用情境影片</title>
+<!--
+  使用情境影片的「舞台」：1920×1080 的一個畫面，用真正的面板程式（../web/panel.js、styles.css）
+  放在一個簡化的 AI 聊天視窗裡，再由 stage.js 控制游標、鏡頭和字幕。
+
+  直接用瀏覽器打開 → 即時播放（預覽用）。
+  render.js 會加上 ?render 打開 → 時間改由它一格一格推進，錄成 mp4（見 README.md）。
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=block">
+<link rel="stylesheet" href="stage.css">
+<!-- 一定要在所有程式之前：錄影模式要先換掉時間相關的函式 -->
+<script src="vtime.js"></script>
+</head>
+<body>
+
+<div id="stage">
+  <div id="bg"><i class="blob b1"></i><i class="blob b2"></i><i class="blob b3"></i></div>
+
+  <!-- 鏡頭：裡面的東西會跟著縮放、移動 -->
+  <div id="world">
+    <div id="win">
+      <div class="win-bar">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <div class="win-addr"><svg viewBox="0 0 24 24"><path d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm-3 8V7a3 3 0 0 1 6 0v3H9z"/></svg>AI 聊天</div>
+      </div>
+      <div class="win-body">
+        <aside class="side">
+          <div class="side-new">＋　新對話</div>
+          <i class="side-row" style="width:78%"></i>
+          <i class="side-row" style="width:62%"></i>
+          <i class="side-row" style="width:70%"></i>
+          <i class="side-row" style="width:54%"></i>
+          <i class="side-row" style="width:66%"></i>
+        </aside>
+        <main class="chat">
+          <h1 class="hello"><span>嗨，今天想做什麼？</span></h1>
+          <div class="composer" id="composer">
+            <div class="composer-text" id="composerText"><span class="ph">問問 AI</span></div>
+            <div class="composer-row">
+              <button class="icon-btn" type="button" aria-label="加入檔案"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button>
+              <button class="icon-btn gpn-trigger-btn" id="trigger" type="button" aria-label="特務P"><svg viewBox="0 0 24 24"><path d="M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2zm0 15l-5-2.18L7 18V5h10v13z"/></svg></button>
+              <span class="grow"></span>
+              <button class="send-btn" id="send" type="button" aria-label="送出"><svg viewBox="0 0 24 24"><path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/></svg></button>
+            </div>
+          </div>
+        </main>
+        <!-- 面板的 Shadow DOM 掛在這裡；.win-body 有 transform，面板的 position:fixed 會以它為準 -->
+        <div id="panelHost" class="gpn-modal-host" data-theme="light"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 片頭／片尾的標誌 -->
+  <div id="logo" class="logo">
+    <div class="logo-badge">
+      <svg viewBox="0 0 128 128" aria-hidden="true">
+        <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#4f8ef7"/><stop offset="1" stop-color="#9a6cf0"/></linearGradient></defs>
+        <rect width="128" height="128" rx="30" fill="url(#lg)"/>
+        <path class="spark1" fill="#fff" d="M50 18c2.6 17 9.8 24.3 27 27-17.2 2.7-24.4 10-27 27-2.6-17-9.8-24.3-27-27 17.2-2.7 24.4-10 27-27z" transform="translate(4 12)"/>
+        <path class="spark2" fill="#fff" d="M92 74c1.4 8.6 5 12.3 13.6 13.6C97 89 93.4 92.7 92 101.3c-1.4-8.6-5-12.3-13.6-13.7C87 86.3 90.6 82.6 92 74z"/>
+      </svg>
+    </div>
+    <div class="logo-text">
+      <div class="logo-name">特務P</div>
+      <div class="logo-sub">你的 AI 提示詞小抄</div>
+    </div>
+    <i class="pop p1"></i><i class="pop p2"></i><i class="pop p3"></i><i class="pop p4"></i><i class="pop p5"></i>
+  </div>
+
+  <!-- 支援的網站、雲端同步 -->
+  <div id="sites">
+    <div class="chips">
+      <span class="chip"><i style="background:#4f8ef7"></i>Gemini</span>
+      <span class="chip"><i style="background:#10a37f"></i>ChatGPT</span>
+      <span class="chip"><i style="background:#d97757"></i>Claude</span>
+    </div>
+    <div class="cloud">
+      <div class="cloud-icon">
+        <svg viewBox="0 0 24 24"><path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>
+        <svg class="cloud-arrow" viewBox="0 0 24 24"><path d="M12 6l-5 5h3v5h4v-5h3z"/></svg>
+      </div>
+      <div class="cloud-text">連結 Google 雲端硬碟<br>每台電腦自動同步</div>
+    </div>
+  </div>
+
+  <div id="outro">
+    <div class="outro-line">免安裝的網頁版，打開就能用</div>
+    <div class="outro-url">weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook</div>
+  </div>
+
+  <div id="caption"><span></span></div>
+  <div id="cursor"><i class="ring"></i><i class="dot"></i></div>
+</div>
+
+<!-- 字型是分段下載的：先把影片裡會出現的字全部排一次，錄影途中才不會突然換字型 -->
+<div id="glyphs" aria-hidden="true"></div>
+
+<script src="../web/store.js"></script>
+<script src="../web/share.js"></script>
+<script src="../web/backgrounds.js"></script>
+<script src="../web/panel.js"></script>
+<script src="stage.js"></script>
+</body>
+</html>

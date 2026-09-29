@@ -14,3 +14,7 @@ desktop.ini
 *.crx
 *.pem
 dist/
+
+# 使用情境影片（promo/）：套件和錄出來的檔案不進 git
+promo/node_modules/
+promo/out/
