@@ -307,11 +307,12 @@ function gpnCreateSync(o) {
 
   /**
    * 資料的指紋：看書籤、內容、最近使用記錄和我的最愛；「目前選哪個書籤」這種畫面狀態不算改動。
-   * 我的最愛是空的就不算進去：沒用過這個功能的人，指紋和舊版算出來的一樣，更新後不會多同步一次。
+   * 我的最愛、符號是空的就不算進去：沒用過這些功能的人，指紋和舊版算出來的一樣，更新後不會多同步一次。
    */
   function hashDoc(d) {
     const parts = [d.tabs, d.recent || []];
     if (d.favs?.length) parts.push(d.favs);
+    if (Object.keys(d.marks || {}).length || d.markTypes?.length) parts.push(d.marks || {}, d.markTypes || []);
     const s = JSON.stringify(parts);
     let h = 0x811c9dc5;
     for (let i = 0; i < s.length; i++) {
@@ -324,6 +325,7 @@ function gpnCreateSync(o) {
   /** 雲端來的資料不要把這台「正在看哪個書籤」也蓋掉 */
   function keepActive(doc, local) {
     if (local.activeId === GPN_RECENT_ID || local.activeId === GPN_FAV_ID ||
+        (doc.markTypes || []).includes(gpnMarkOfTab(local.activeId)) ||
         doc.tabs.some((t) => t.id === local.activeId)) {
       doc.activeId = local.activeId;
     }
@@ -645,7 +647,10 @@ function gpnFlatten(d) {
       for (const it of l.items) items.set(it.id, { title: it.title, content: it.content, at: t.id + '\u0000' + fid });
     }
   }
-  return { tabOrder: d.tabs.map((t) => t.id), tabs, folders, items, lists, favs: d.favs || [], recent: d.recent || [] };
+  return {
+    tabOrder: d.tabs.map((t) => t.id), tabs, folders, items, lists,
+    favs: d.favs || [], marks: d.marks || {}, markTypes: d.markTypes || [], recent: d.recent || [],
+  };
 }
 
 /**
@@ -775,10 +780,29 @@ function gpnMerge3(base, local, cloud) {
     });
   };
 
-  // 我的最愛：一邊取消就取消、一邊加了就加
-  const bF = new Set(B.favs), lF = new Set(L.favs), cF = new Set(C.favs);
-  const favs = gpnMergeOrder(B.favs, L.favs, C.favs)
-    .filter((id) => items.has(id) && (bF.has(id) ? lF.has(id) && cF.has(id) : lF.has(id) || cF.has(id)));
+  // 我的最愛、每一種符號、使用中的符號種類：一邊拿掉就拿掉、一邊加了就加
+  const mergeSet = (b, l, c) => {
+    const bS = new Set(b), lS = new Set(l), cS = new Set(c);
+    return gpnMergeOrder(b, l, c).filter((x) => (bS.has(x) ? lS.has(x) && cS.has(x) : lS.has(x) || cS.has(x)));
+  };
+  const favs = mergeSet(B.favs, L.favs, C.favs).filter((id) => items.has(id));
+  const marks = {};
+  for (const m of GPN_MARKS) {
+    const ids = mergeSet(B.marks[m] || [], L.marks[m] || [], C.marks[m] || []).filter((id) => items.has(id));
+    if (m !== GPN_MARK_FAV && ids.length) marks[m] = ids;
+  }
+  // 一則只能有一種符號：兩邊各換成不同的，以這台為主
+  const markLists = [favs, ...Object.values(marks)];
+  const localMark = (id) => gpnMarkOf(L, id);
+  for (const list of markLists) {
+    const m = list === favs ? GPN_MARK_FAV : Object.keys(marks).find((k) => marks[k] === list);
+    for (let i = list.length - 1; i >= 0; i--) {
+      const id = list[i];
+      const dup = markLists.some((other) => other !== list && other.includes(id));
+      if (dup && localMark(id) && localMark(id) !== m) list.splice(i, 1);
+    }
+  }
+  const markTypes = mergeSet(B.markTypes, L.markTypes, C.markTypes);
 
   // 最近使用：兩邊合在一起、同一則取最近那次；一邊移除（或清空）了、之後也沒再用過的就拿掉
   const recent = new Map();
@@ -803,5 +827,7 @@ function gpnMerge3(base, local, cloud) {
     }),
     recent: [...recent.values()],
     favs,
+    marks,
+    markTypes,
   });
 }

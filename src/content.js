@@ -206,6 +206,34 @@
     return true;
   }
 
+  /**
+   * 卡片「⋯ → 開啟 Gemini／ChatGPT」開的新分頁：面板先把提示詞放在 chrome.storage（GPN_PENDING_FILL，見 panel.js），
+   * 這裡一載入就拿走，等輸入框出現再填進去（不會送出）。只收一分鐘內、指定給這一站的，拿了就刪，
+   * 所以同時開著的其他 Gemini 分頁不會被填到。
+   */
+  async function takePendingFill() {
+    let p = null;
+    try {
+      p = (await chrome.storage.local.get(GPN_PENDING_FILL))[GPN_PENDING_FILL];
+      if (!p || p.site !== SITE.id) return;
+      await chrome.storage.local.remove(GPN_PENDING_FILL);
+    } catch { return; }
+    if (Date.now() - p.at > 60_000 || !p.text) return;
+
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const until = Date.now() + 20_000;
+    while (!findEditor() && Date.now() < until) await wait(300);
+    if (!findEditor()) return;
+    // 輸入框剛出現時網站還在初始化（ChatGPT 的 React 會重畫一次），太早填會被清掉：等一下，填完再檢查一次
+    await wait(600);
+    for (let i = 0; i < 3; i++) {
+      fillPrompt(p.text);
+      await wait(900);
+      const ed = findEditor();
+      if (ed && (ed.value ?? ed.textContent).trim()) return;
+    }
+  }
+
   /** 點提示詞：先複製（保險），再填進輸入框。面板不關，方便連續挑。 */
   async function usePrompt(item) {
     const copied = await gpnShareCopy(item.content);
@@ -381,6 +409,7 @@
     buildPanel();
     mountTrigger();
     syncFab();
+    takePendingFill();
 
     let t = 0;
     new MutationObserver(() => {

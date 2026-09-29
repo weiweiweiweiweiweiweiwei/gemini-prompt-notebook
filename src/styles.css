@@ -212,6 +212,8 @@ button { cursor: pointer; }
 [data-color="teal"]   { --accent: var(--c-teal-accent); }
 [data-color="recent"] { --accent: var(--c-recent-accent); }
 [data-color="fav"]    { --accent: var(--c-fav-accent); }
+/* 符號書籤（設定 → 星號）：顏色是那個符號自己的顏色，由 panel.js 設 --mark-accent */
+[data-color="mark"]   { --accent: var(--mark-accent, var(--c-fav-accent)); }
 
 /* ---------- 遮罩 ---------- */
 .gpn-overlay {
@@ -393,6 +395,15 @@ button { cursor: pointer; }
 .gpn-tab.is-fixed .gpn-tab-icon { margin-right: 0; }
 .gpn-tab.is-fixed .gpn-tab-icon svg { width: 21px; height: 21px; }
 .gpn-tab.is-fixed:not(.is-active) .gpn-tab-main { padding-bottom: 0; }
+/* 符號書籤（在「我的最愛」左邊）：比我的最愛、最近使用再窄一點（要和 panel.js 的 GPN_TAB_MARK_W 一致） */
+.gpn-tab.is-mark { width: 50px; }
+.gpn-tab.is-mark .gpn-tab-icon svg { width: 20px; height: 20px; }
+/* 書籤很多又開了好幾種符號、放不下時（panel.js 的 layoutTabs 判斷）：只有圖示的那幾個縮窄 */
+.gpn-tabs.is-crowded .gpn-tab { min-width: 44px; }
+.gpn-tabs.is-crowded .gpn-tab.is-fixed { width: 44px; }
+.gpn-tabs.is-crowded .gpn-tab.is-mark { width: 40px; }
+.gpn-tabs.is-crowded .gpn-tab.is-fixed .gpn-tab-icon svg { width: 19px; height: 19px; }
+.gpn-tabs.is-crowded .gpn-tab-main { padding-left: 6px; padding-right: 6px; }
 
 /* 新增書籤 */
 .gpn-tab-add {
@@ -487,6 +498,7 @@ button { cursor: pointer; }
   scrollbar-color: var(--outline-strong) transparent;
 }
 .gpn-folder {
+  position: relative;              /* 鉛筆疊在數量的位置上 */
   flex: none;
   display: flex;
   align-items: stretch;
@@ -555,15 +567,31 @@ button { cursor: pointer; }
   font-weight: 600;
   color: var(--text-mute);
 }
+/* 鉛筆：平常藏起來、右邊顯示數量；滑鼠移到這一格（或用鍵盤移到這一格）時，數量的位置換成鉛筆 */
 .gpn-folder-edit {
-  flex: none;
-  width: 36px;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 0 12px 12px 0;
   color: var(--text-mute);
-  transition: background-color .14s ease, color .14s ease;
+  opacity: 0;
+  pointer-events: none;
+  transition: background-color .14s ease, color .14s ease, opacity .12s ease;
+}
+.gpn-folder:hover .gpn-folder-edit, .gpn-folder:has(:focus-visible) .gpn-folder-edit { opacity: 1; pointer-events: auto; }
+.gpn-folder:hover .gpn-folder-count, .gpn-folder:has(:focus-visible) .gpn-folder-count { visibility: hidden; }
+/* 拖曳排序時不要冒出鉛筆 */
+.gpn-folder-list.is-reordering .gpn-folder-edit { opacity: 0; pointer-events: none; }
+.gpn-folder-list.is-reordering .gpn-folder-count { visibility: visible; }
+/* 觸控螢幕沒有「滑鼠移上去」：選中的那一格一直顯示鉛筆（以前的做法） */
+@media (hover: none) {
+  .gpn-folder.is-active .gpn-folder-edit { opacity: 1; pointer-events: auto; }
+  .gpn-folder.is-active .gpn-folder-count { visibility: hidden; }
 }
 .gpn-folder-edit:hover { background: var(--hover); color: var(--text); }
 .gpn-folder-edit:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
@@ -680,7 +708,7 @@ button { cursor: pointer; }
 .gpn-card {
   position: relative;               /* 複製動畫要蓋在上面 */
   display: grid;
-  grid-template-columns: 40px 1fr 46px 52px;   /* 把手、標題、星號、鉛筆 */
+  grid-template-columns: 40px 1fr 44px 46px 46px;   /* 把手、標題、星號、鉛筆、⋯ */
   align-items: stretch;
   flex: none;
   min-height: 68px;
@@ -693,6 +721,8 @@ button { cursor: pointer; }
   transition: box-shadow .16s ease, border-color .16s ease, transform .16s ease;
 }
 .gpn-card:hover { border-color: var(--outline-strong); }
+/* 「⋯」選單開著的那張卡片 */
+.gpn-card.has-menu { border-color: var(--outline-strong); }
 .gpn-card.is-dragging {
   border-color: var(--primary);
   box-shadow: 0 10px 22px rgba(0,0,0,.34);
@@ -806,13 +836,67 @@ button { cursor: pointer; }
 .gpn-edit {
   display: flex; align-items: center; justify-content: center;
   color: var(--text-mute);
-  border-radius: 0 16px 16px 0;
   border-left: 1px solid var(--outline);
   transition: background-color .16s ease, color .16s ease;
 }
+/* 最近使用的卡片沒有「⋯」，最右邊的是 ×，圓角給它 */
+.gpn-card--recent .gpn-edit { border-radius: 0 16px 16px 0; }
 .gpn-edit:hover { background: var(--hover); color: var(--primary); }
 .gpn-edit:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
 .gpn-edit svg { width: 21px; height: 21px; display: block; fill: currentColor; }
+
+/* 「⋯」：用 Gemini、ChatGPT 開啟，或刪除 */
+.gpn-more {
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-mute);
+  border-radius: 0 16px 16px 0;
+  transition: background-color .16s ease, color .16s ease;
+}
+.gpn-more:hover, .gpn-more[aria-expanded="true"] { background: var(--hover); color: var(--text); }
+.gpn-more:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
+.gpn-more svg { width: 22px; height: 22px; display: block; fill: currentColor; }
+
+/* 「⋯」打開的選單：放在筆記本上，位置由 panel.js 的 placeMenu 算 */
+.gpn-menu {
+  position: absolute;
+  z-index: 20;
+  min-width: 250px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--outline);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+  animation: gpn-menu-in .14s cubic-bezier(.2, 0, 0, 1);
+}
+@keyframes gpn-menu-in { from { opacity: 0; transform: translateY(-4px) scale(.98) } }
+.gpn-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 50px;
+  padding: 7px 16px 7px 14px;
+  border-radius: 11px;
+  text-align: left;
+  font-size: 16px;
+  font-weight: 500;
+  transition: background-color .12s ease;
+}
+.gpn-menu-item:hover { background: var(--hover); }
+.gpn-menu-item:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
+.gpn-menu-icon { flex: none; display: flex; color: var(--text-mute); }
+.gpn-menu-icon svg { width: 21px; height: 21px; display: block; fill: currentColor; }
+.gpn-menu-item--ai .gpn-menu-icon { color: var(--primary); }
+.gpn-menu-text { display: flex; flex-direction: column; line-height: 1.3; }
+.gpn-menu-text small { margin-top: 2px; font-size: 13px; font-weight: 400; color: var(--text-mute); }
+.gpn-menu-sep { height: 1px; margin: 5px 10px; background: var(--outline); }
+.gpn-menu-item--del, .gpn-menu-item--del .gpn-menu-icon { color: var(--error); }
+.gpn-menu-item--del.is-confirm { background: var(--error); color: var(--surface); font-weight: 600; }
+.gpn-menu-item--del.is-confirm .gpn-menu-icon { color: var(--surface); }
 
 /* 複製的那一下：把手、時間、標題、星號、鉛筆「全部」一起淡出，只留 "Copied"。
    一定要寫在星號的樣式後面：「.gpn-card:hover .gpn-star」一樣重，寫在前面會被它蓋掉，
@@ -825,6 +909,8 @@ button { cursor: pointer; }
 /* ---------- 空狀態 ---------- */
 .gpn-empty { margin: auto; padding: 24px; text-align: center; color: var(--text-mute); }
 .gpn-empty-emoji { font-size: 40px; line-height: 1; opacity: .9; }
+.gpn-empty-mark { display: flex; justify-content: center; }
+.gpn-empty-mark svg { width: 44px; height: 44px; display: block; }
 .gpn-empty-title { margin-top: 12px; font-size: 18px; font-weight: 600; }
 .gpn-empty-desc  { margin-top: 6px; font-size: 15px; opacity: .78; }
 .gpn-empty-arrow { margin-top: 8px; font-size: 22px; animation: gpn-bounce 1.5s ease-in-out infinite; }
@@ -1161,6 +1247,52 @@ button { cursor: pointer; }
 }
 .gpn-section h3 { margin: 0 0 16px; font-size: 19px; font-weight: 600; }
 .gpn-lede { margin: -6px 0 18px; font-size: 14.5px; line-height: 1.7; color: var(--text-mute); }
+
+/* 設定 → 星號：「使用中」「沒使用」兩排，點一下就移到另一排 */
+.gpn-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 58px;
+  padding: 9px;
+  border-radius: 16px;
+  background: var(--well);
+}
+.gpn-mark-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 40px;
+  padding: 0 13px 0 9px;
+  border: 1px solid var(--outline);
+  border-radius: 20px;
+  background: var(--glass-card);
+  font-size: 14.5px;
+  font-weight: 500;
+  transition: border-color .14s ease, background-color .14s ease, transform .14s ease;
+}
+.gpn-mark-chip:hover { border-color: var(--primary); }
+.gpn-mark-chip:active { transform: scale(.96); }
+.gpn-mark-chip:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.gpn-mark-chip.is-locked { cursor: default; }
+.gpn-mark-chip.is-locked:hover { border-color: var(--outline); }
+.gpn-mark-chip.is-locked:active { transform: none; }
+.gpn-marks--off .gpn-mark-chip { color: var(--text-mute); }
+.gpn-mark-icon { display: flex; }
+.gpn-mark-icon svg { width: 22px; height: 22px; display: block; fill: currentColor; }
+.gpn-mark-n {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--hover);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-mute);
+}
 .gpn-btn--done { margin-left: auto; min-width: 128px; }
 .gpn-btn--block { display: block; width: 100%; margin-top: 16px; }
 
@@ -1570,5 +1702,5 @@ button { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .gpn-book, .gpn-dialog, .gpn-overlay::before, .gpn-edit-layer, .gpn-toast, .gpn-copied,
   .gpn-tab, .gpn-card, .gpn-folder, .gpn-switch, .gpn-switch::after,
-  .gpn-empty-arrow, .gpn-cloud-arrow, .gpn-gear-icon > svg, .gpn-social-btn { animation: none !important; transition: none !important; }
+  .gpn-empty-arrow, .gpn-cloud-arrow, .gpn-gear-icon > svg, .gpn-social-btn, .gpn-menu { animation: none !important; transition: none !important; }
 }

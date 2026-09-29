@@ -22,7 +22,13 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.13.1';
+const GPN_APP_VERSION = '4.14.0';
+
+/**
+ * 卡片「⋯ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
+ * 網頁版沒有 chrome.storage，只能複製後請他自己貼上。
+ */
+const GPN_PENDING_FILL = 'gpn_pending_fill';
 
 /**
  * @param {object}   opts
@@ -109,6 +115,57 @@ function gpnCreatePanel(opts) {
   const ICON_CLOSE =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
 
+  /** 卡片右邊的「⋯」和它的選單：問問 Gemini（閃亮的四角星）、在新分頁開啟、刪除 */
+  const ICON_MORE =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18.5" cy="12" r="2"/></svg>';
+  const ICON_SPARK =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c.6 5.3 4.7 9.4 10 10-5.3.6-9.4 4.7-10 10-.6-5.3-4.7-9.4-10-10 5.3-.6 9.4-4.7 10-10z"/></svg>';
+  const ICON_OPEN =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>';
+  const ICON_DELETE =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
+
+  /**
+   * 星號的長相，照 Gmail：六種顏色的星星，和六種方塊符號（！、»、✓、i、？）。
+   * [形狀, 底色, 符號色]；黃色星星跟著主題的金黃色（和以前「我的最愛」的星星一樣）。
+   * 顏色寫在 style 裡：外面的 .gpn-star svg { fill: currentColor } 蓋不掉。
+   */
+  const MARK_LOOK = {
+    'yellow-star':      ['star', 'var(--c-fav-accent)'],
+    'orange-star':      ['star', '#f28b2c'],
+    'red-star':         ['star', '#e5484d'],
+    'purple-star':      ['star', '#a864d9'],
+    'blue-star':        ['star', '#4a8af4'],
+    'green-star':       ['star', '#2f9e56'],
+    'red-bang':         ['bang', '#e5484d', '#ffffff'],
+    'orange-guillemet': ['guillemet', '#f5a142', '#3b2100'],
+    'yellow-bang':      ['bang', '#f6c342', '#3b2e00'],
+    'green-check':      ['check', '#34a853', '#ffffff'],
+    'blue-info':        ['info', '#5b9cf5', '#0d2447'],
+    'purple-question':  ['question', '#b57be8', '#2a0f40'],
+  };
+  const STAR_PATH = 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z';
+
+  function markIcon(m) {
+    const [shape, bg, fg] = MARK_LOOK[m] || MARK_LOOK[GPN_MARK_FAV];
+    const svg = (inner) => `<svg viewBox="0 0 24 24" aria-hidden="true">${inner}</svg>`;
+    if (shape === 'star') return svg(`<path style="fill:${bg}" d="${STAR_PATH}"/>`);
+    const dot = `style="fill:${fg}"`;
+    const line = `style="fill:none;stroke:${fg}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"`;
+    const glyph = {
+      bang: `<rect ${dot} x="10.7" y="6" width="2.6" height="8.4" rx="1.3"/><circle ${dot} cx="12" cy="17.6" r="1.55"/>`,
+      info: `<circle ${dot} cx="12" cy="7.2" r="1.6"/><rect ${dot} x="10.7" y="10" width="2.6" height="8.2" rx="1.3"/>`,
+      question: `<path ${line} d="M9.3 9.4a2.8 2.8 0 1 1 4.2 2.4c-.9.5-1.5 1.1-1.5 2.1v.4"/><circle ${dot} cx="12" cy="17.7" r="1.5"/>`,
+      check: `<path ${line} d="M7.2 12.4l3.2 3.2 6.4-6.6"/>`,
+      guillemet: `<path ${line} d="M7 8l4 4-4 4M12.5 8l4 4-4 4"/>`,
+    }[shape];
+    return svg(`<rect x="2.5" y="2.5" width="19" height="19" rx="4" style="fill:${bg};stroke:rgba(0,0,0,.2)" stroke-width="1"/>${glyph}`);
+  }
+  /** 書籤上面那條細色帶的顏色 */
+  const markAccent = (m) => (MARK_LOOK[m] || MARK_LOOK[GPN_MARK_FAV])[1];
+  /** 給人看的名稱：黃色星星叫「我的最愛」 */
+  const markLabel = (m) => (m === GPN_MARK_FAV ? '我的最愛' : GPN_MARK_LABELS[m] || '');
+
   /** Google 規定要用的彩色 G（連結雲端硬碟的按鈕） */
   const ICON_GOOGLE =
     '<svg viewBox="0 0 48 48" aria-hidden="true">' +
@@ -176,13 +233,21 @@ function gpnCreatePanel(opts) {
     id: GPN_RECENT_ID, label: '最近使用', color: 'recent', fixed: true, recent: true, items: data.recent || [],
   });
   const favTab = () => ({
-    id: GPN_FAV_ID, label: '我的最愛', color: 'fav', fixed: true, fav: true, items: [],
+    id: GPN_FAV_ID, label: '我的最愛', color: 'fav', fixed: true, mark: GPN_MARK_FAV, items: [],
+  });
+  /** 設定 → 星號 裡「使用中」的其他符號，每一種一個書籤，在「我的最愛」左邊 */
+  const markTab = (m) => ({
+    id: GPN_MARK_TAB + m, label: GPN_MARK_LABELS[m], color: 'mark', fixed: true, mark: m, items: [],
   });
   const tabById = (id) => (id === GPN_RECENT_ID ? recentTab()
     : id === GPN_FAV_ID ? favTab()
+    : (data.markTypes || []).includes(gpnMarkOfTab(id)) ? markTab(gpnMarkOfTab(id))
     : data.tabs.find((t) => t.id === id));
-  const isFav = (id) => (data.favs || []).includes(id);
   const activeTab = () => tabById(data.activeId) || data.tabs[0];
+  /** 這則標了哪種符號（沒有是空字串）；連續點星號時照「黃色星星、再來使用中的順序」輪流換 */
+  const markOf = (id) => gpnMarkOf(data, id);
+  const marksInUse = () => [GPN_MARK_FAV, ...(data.markTypes || [])];
+  const markedIds = (m) => (m === GPN_MARK_FAV ? data.favs : data.marks?.[m]) || [];
   /** 目前的資料夾；書籤沒開資料夾時是 null */
   const activeFolder = () => {
     const tab = activeTab();
@@ -240,6 +305,8 @@ function gpnCreatePanel(opts) {
     ui.list = el('div', { class: 'gpn-list', role: 'list' });
     ui.tabs = el('div', { class: 'gpn-tabs', role: 'tablist' });
     ui.tabEls = new Map();        // id → 書籤元素（切換時要重複使用才有動畫）
+    // 筆記本變寬變窄（拖邊緣、視窗縮放）時，重新決定書籤要不要擠一點（見 layoutTabs）
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => layoutTabs()).observe(ui.tabs);
 
     /* ---- 底部右邊的齒輪：設定 ----
        也兼當雲端同步的狀態燈（見 paintGear）：以前旁邊還有一顆雲朵鈕，狀態都已經整合進設定，就拿掉了。
@@ -285,6 +352,7 @@ function gpnCreatePanel(opts) {
 
     // 左右兩邊可以拖曳調整寬度（見「筆記本寬度」）
     ui.book.append(buildGutter('left'), buildGutter('right'));
+    buildCardMenu();
 
     // 筆記本左下角外面、和「新增提示詞」同高的小圖示：「全部提示詞」。
     // 是一般連結，按了整頁換到純文字的清單頁（網頁版的 all.html）
@@ -383,18 +451,28 @@ function gpnCreatePanel(opts) {
      自己的書籤數量越少就讓它們佔越寬，不要在中間留一大片空白。
      注意：自己的書籤「等寬」，作用中與否不影響寬度——
      改用高度來表現選取狀態，按起來才不會一直位移。
-     最右邊的「我的最愛」「最近使用」只有圖示，寬度固定（見 styles.css 的 .gpn-tab.is-fixed）。 */
+     最右邊的符號、「我的最愛」「最近使用」只有圖示，寬度固定（見 styles.css 的 .gpn-tab.is-fixed）。 */
   const GPN_TAB_SHARE = { 1: 0.40, 2: 0.60, 3: 0.75, 4: 0.86, 5: 0.90, 6: 0.93, 7: 0.95, 8: 0.96 };
   const GPN_TAB_GAP = 4;          // .gpn-tabs 的 gap
   const GPN_TAB_ADD_W = 44;       // 「＋」按鈕的寬度＋左邊距
   const GPN_TAB_FIXED_W = 58;     // 一個固定書籤的寬度（要和 styles.css 的 .gpn-tab.is-fixed 一致）
+  const GPN_TAB_MARK_W = 50;      // 符號書籤窄一點（要和 styles.css 的 .gpn-tab.is-mark 一致）
+
+  const GPN_TAB_MIN_W = 54;       // 自己的書籤最窄多少（styles.css 的 .gpn-tab min-width）
 
   function layoutTabs() {
     const n = data.tabs.length;
     if (!n) return;
-    // 先扣掉空隙、「＋」按鈕和兩個固定書籤，自己的書籤再照比例分剩下的寬度，才不會擠出紙張外
-    const items = n + 2 + (ui.addTabBtn ? 1 : 0);
-    const reserve = GPN_TAB_GAP * (items - 1) + (ui.addTabBtn ? GPN_TAB_ADD_W : 0) + GPN_TAB_FIXED_W * 2;
+    // 先扣掉空隙、「＋」按鈕和固定書籤，自己的書籤再照比例分剩下的寬度，才不會擠出紙張外
+    const marks = (data.markTypes || []).length;
+    const items = n + 2 + marks + (ui.addTabBtn ? 1 : 0);
+    const reserveWith = (fixedW, markW) => GPN_TAB_GAP * (items - 1) + (ui.addTabBtn ? GPN_TAB_ADD_W : 0) +
+      fixedW * 2 + markW * marks;
+    // 書籤很多、又開了好幾種符號（或筆記本拉得很窄）時放不下：只有圖示的那幾個先縮窄
+    const width = parseFloat(getComputedStyle(ui.tabs).width) || 0;
+    const crowded = width > 0 && reserveWith(GPN_TAB_FIXED_W, GPN_TAB_MARK_W) + GPN_TAB_MIN_W * n > width;
+    ui.tabs.classList.toggle('is-crowded', crowded);
+    const reserve = crowded ? reserveWith(44, 40) : reserveWith(GPN_TAB_FIXED_W, GPN_TAB_MARK_W);
     const share = (GPN_TAB_SHARE[n] ?? 0.96) / n;
     for (const t of data.tabs) {
       const node = ui.tabEls.get(t.id);
@@ -409,7 +487,7 @@ function gpnCreatePanel(opts) {
   function updateTabStates(animate = false) {
     const tab = activeTab();
     if (!tab) return;
-    ui.book.setAttribute('data-color', tab.color);
+    paintBookColor(tab);
 
     for (const [id, node] of ui.tabEls) {
       const on = id === tab.id;
@@ -472,7 +550,7 @@ function gpnCreatePanel(opts) {
       attachHoldDrag({
         handle: main, node, box: ui.tabs, selector: '.gpn-tab:not(.is-fixed)',
         // 拖到最後面時排在「＋」前面；書籤滿了沒有「＋」，就排在右邊的固定書籤前面
-        anchor: () => ui.addTabBtn || ui.tabEls.get(GPN_FAV_ID),
+        anchor: () => ui.addTabBtn || ui.tabs.querySelector('.gpn-tab.is-fixed'),
         vertical: () => false,
         canStart: () => data.tabs.length > 1,
         onDrop: (order) => { data.tabs = reorder(data.tabs, order); persist(); },
@@ -490,18 +568,31 @@ function gpnCreatePanel(opts) {
       : null;
     if (ui.addTabBtn) ui.tabs.append(ui.addTabBtn);
 
-    // 最右邊固定兩個：「我的最愛」「最近使用」。不能刪、不能拖，其他書籤也拖不到它們後面
-    ui.tabs.append(
-      fixedTabNode(GPN_FAV_ID, 'fav', '我的最愛', ICON_STAR,
-        '我的最愛（在提示詞右邊按星號，就會收進這裡）', 'gpn-tab--push'),
-      fixedTabNode(GPN_RECENT_ID, 'recent', '最近使用', ICON_HISTORY,
-        `最近使用（最近用過的 ${GPN_RECENT_MAX} 則）`));
+    // 最右邊固定：自己開的符號（設定 → 星號）、「我的最愛」「最近使用」。
+    // 不能刪、不能拖，其他書籤也拖不到它們後面
+    const fixed = (data.markTypes || []).map((m) => {
+      const node = fixedTabNode(GPN_MARK_TAB + m, 'mark', GPN_MARK_LABELS[m], markIcon(m),
+        `${GPN_MARK_LABELS[m]}（連續點提示詞右邊的星號，換到這個符號就會收進這裡）`, 'is-mark');
+      node.style.setProperty('--mark-accent', markAccent(m));
+      return node;
+    });
+    fixed.push(
+      fixedTabNode(GPN_FAV_ID, 'fav', '我的最愛', ICON_STAR, '我的最愛（在提示詞右邊按星號，就會收進這裡）'),
+      fixedTabNode(GPN_RECENT_ID, 'recent', '最近使用', ICON_HISTORY, `最近使用（最近用過的 ${GPN_RECENT_MAX} 則）`));
+    fixed[0].classList.add('gpn-tab--push');
+    ui.tabs.append(...fixed);
 
-    ui.book.setAttribute('data-color', tab.color);
+    paintBookColor(tab);
     layoutTabs();
   }
 
-  /** 固定書籤（我的最愛、最近使用）：只有圖示，名稱放在滑鼠提示和讀螢幕軟體用的 aria-label */
+  /** 筆記本跟著作用中的書籤換重點色；符號書籤的顏色是那個符號的顏色 */
+  function paintBookColor(tab) {
+    ui.book.setAttribute('data-color', tab.color);
+    ui.book.style.setProperty('--mark-accent', tab.color === 'mark' ? markAccent(tab.mark) : '');
+  }
+
+  /** 固定書籤（符號、我的最愛、最近使用）：只有圖示，名稱放在滑鼠提示和讀螢幕軟體用的 aria-label */
   function fixedTabNode(id, color, label, icon, title, extraClass = '') {
     const on = activeTab().id === id;
     const node = el('div', {
@@ -538,18 +629,18 @@ function gpnCreatePanel(opts) {
         onclick: () => switchFolder(f.id),
       },
         el('span', { class: 'gpn-folder-name', text: f.label }),
-        // 選中的那一格把位置讓給鉛筆，數量改在上方提示列看
-        on ? null : el('span', { class: 'gpn-folder-count', text: String(f.items.length) })
+        el('span', { class: 'gpn-folder-count', text: String(f.items.length) })
       );
 
+      // 平常右邊顯示有幾則；滑鼠移到這一格時，數量的位置換成鉛筆（styles.css 的 .gpn-folder:hover）
       const row = el('div', { class: 'gpn-folder' + (on ? ' is-active' : ''), 'data-id': f.id },
         main,
-        on ? el('button', {
+        el('button', {
           class: 'gpn-folder-edit', type: 'button',
           title: '資料夾設定（改名／刪除）', 'aria-label': `資料夾「${f.label}」設定`,
           html: ICON_PENCIL,
           onclick: () => openFolderEditor(f.id),
-        }) : null
+        })
       );
 
       // 和書籤一樣：長按後拖曳排序。欄是直的就上下拖，窄螢幕變成一排時就左右拖。
@@ -591,13 +682,14 @@ function gpnCreatePanel(opts) {
   function renderList() {
     const tab = activeTab();
     if (!tab) return;
-    // 底部按鈕：一般書籤是「新增提示詞」，「最近使用」換成「清除全部使用記錄」，「我的最愛」都沒有
+    closeCardMenu();
+    // 底部按鈕：一般書籤是「新增提示詞」，「最近使用」換成「清除全部使用記錄」，「我的最愛」和符號都沒有
     // （右邊的雲端、設定圖示一直都在）
     ui.addBtn.hidden = !!tab.fixed;
     ui.clearRecentBtn.hidden = !tab.recent;
     disarmClearRecent();
     if (tab.recent) { renderRecent(); return; }
-    if (tab.fav) { renderFavs(); return; }
+    if (tab.mark) { renderMarked(tab.mark); return; }
 
     const folder = activeFolder();
     const list = folder || tab;
@@ -621,10 +713,11 @@ function gpnCreatePanel(opts) {
   }
 
   /**
-   * 一則提示詞的卡片：把手、標題、星號（我的最愛）、鉛筆。
-   * from：在「我的最愛」裡顯示時傳「從哪個書籤來的」，拖曳排序改排我的最愛的順序。
+   * 一則提示詞的卡片：把手、標題、星號（我的最愛和其他符號）、鉛筆、⋯（用 AI 開啟、刪除）。
+   * from：在「我的最愛」或符號書籤裡顯示時傳「從哪個書籤來的」；
+   * sortList：那個書籤的 id，拖曳排序改排它自己的順序，不動提示詞在原本書籤裡的位置。
    */
-  function buildCard(item, tabId, fid, from = null) {
+  function buildCard(item, tabId, fid, from = null, sortList = null) {
     const grip = el('div', {
       class: 'gpn-grip', title: '按住拖曳可調整順序', 'aria-label': '拖曳排序', html: ICON_GRIP,
     });
@@ -641,7 +734,7 @@ function gpnCreatePanel(opts) {
 
     const starBtn = el('button', {
       class: 'gpn-star', type: 'button',
-      onclick: (e) => { e.stopPropagation(); toggleFav(item, starBtn); },
+      onclick: (e) => { e.stopPropagation(); cycleMark(item, starBtn); },
     });
     paintStar(starBtn, item);
 
@@ -651,56 +744,92 @@ function gpnCreatePanel(opts) {
       onclick: (e) => { e.stopPropagation(); openEditor(tabId, fid, item.id); },
     });
 
+    const moreBtn = el('button', {
+      class: 'gpn-more', type: 'button', title: '更多：用 Gemini、ChatGPT 開啟，或刪除',
+      'aria-label': `更多動作：${item.title}`, 'aria-haspopup': 'menu', 'aria-expanded': 'false',
+      html: ICON_MORE,
+      onclick: (e) => { e.stopPropagation(); toggleCardMenu(moreBtn, item, tabId, fid); },
+    });
+
     const card = el('div', { class: 'gpn-card', role: 'listitem', 'data-id': item.id },
-      grip, titleBtn, starBtn, editBtn);
-    if (from) attachDrag(grip, card, GPN_FAV_ID, null);
+      grip, titleBtn, starBtn, editBtn, moreBtn);
+    if (sortList) attachDrag(grip, card, sortList, null);
     else attachDrag(grip, card, tabId, fid);
     return card;
   }
 
   function paintStar(btn, item) {
-    const on = isFav(item.id);
-    btn.classList.toggle('is-on', on);
-    btn.innerHTML = on ? ICON_STAR : ICON_STAR_OUTLINE;
-    btn.title = on ? '從「我的最愛」移除' : '加入「我的最愛」';
+    const m = markOf(item.id);
+    const order = marksInUse();
+    btn.classList.toggle('is-on', !!m);
+    btn.innerHTML = m ? markIcon(m) : ICON_STAR_OUTLINE;
+    // 只用黃色星星（預設）時和以前一樣是開關；開了其他符號，提示「再點一下會變成什麼」
+    const next = m && !order.includes(m) ? '' : order[order.indexOf(m) + 1] || '';
+    btn.title = !m ? '加入「我的最愛」' + (order.length > 1 ? '（連續點可以換成其他符號）' : '')
+      : m === GPN_MARK_FAV && !next ? '從「我的最愛」移除'
+      : `${markLabel(m)}（再點一下：${next ? markLabel(next) : '取消'}）`;
     btn.setAttribute('aria-label', `${btn.title}：${item.title}`);
-    btn.setAttribute('aria-pressed', String(on));
+    btn.setAttribute('aria-pressed', String(!!m));
   }
 
   /* ==========================================================================
-     「我的最愛」：在任何提示詞右邊按星號收進來，集中在一個書籤；可以拖曳排自己的順序。
+     「我的最愛」和其他符號：在任何提示詞右邊按星號收進來，集中在一個書籤；可以拖曳排自己的順序。
+     和 Gmail 的星號一樣，連續點會照設定裡「使用中」的順序換成下一種符號，換完一輪就取消。
      提示詞本身還是留在原本的書籤（見 store.js），在這裡編輯改的就是原本那則。
      ========================================================================== */
 
-  function toggleFav(item, btn) {
-    const on = isFav(item.id);
-    data.favs = on ? data.favs.filter((x) => x !== item.id) : [...(data.favs || []), item.id];
-    persist();
-    // 在「我的最愛」裡取消：那張卡片直接拿掉；在一般書籤：只換星號，不重畫（捲動位置不會跳）
-    if (activeTab().fav) renderList();
-    else paintStar(btn, item);
-    toast(on ? '已從「我的最愛」移除（提示詞本身還在）' : '已加入「我的最愛」');
+  /** 把這則的符號換成 m（空字串＝拿掉）。一則只會有一種符號 */
+  function setMark(id, m) {
+    data.favs = (data.favs || []).filter((x) => x !== id);
+    const marks = {};
+    for (const [k, ids] of Object.entries(data.marks || {})) {
+      const rest = ids.filter((x) => x !== id);
+      if (rest.length) marks[k] = rest;
+    }
+    if (m === GPN_MARK_FAV) data.favs.push(id);
+    else if (m) marks[m] = [...(marks[m] || []), id];
+    data.marks = marks;
   }
 
-  function renderFavs() {
+  function cycleMark(item, btn) {
+    const order = marksInUse();
+    const cur = markOf(item.id);
+    // 標的是已經不用的符號（設定裡移到「沒使用」了）：點一下就拿掉
+    const next = cur && !order.includes(cur) ? '' : order[order.indexOf(cur) + 1] || '';
+    setMark(item.id, next);
+    persist();
+    // 在「我的最愛」、符號書籤裡換掉：那張卡片直接拿掉；在一般書籤：只換星號，不重畫（捲動位置不會跳）
+    if (activeTab().mark) renderList();
+    else paintStar(btn, item);
+    toast(next === GPN_MARK_FAV ? '已加入「我的最愛」'
+      : next ? `已換成「${GPN_MARK_LABELS[next]}」`
+      : cur === GPN_MARK_FAV ? '已從「我的最愛」移除（提示詞本身還在）'
+      : '已拿掉符號（提示詞本身還在）');
+  }
+
+  function renderMarked(m) {
     const where = indexItems();
-    const favs = (data.favs || []).map((id) => where.get(id)).filter(Boolean);
-    const n = favs.length;
+    const found = markedIds(m).map((id) => where.get(id)).filter(Boolean);
 
     ui.list.replaceChildren();
-    if (!n) {
+    if (!found.length) {
+      const fav = m === GPN_MARK_FAV;
       ui.list.append(
         el('div', { class: 'gpn-empty' },
-          el('div', { class: 'gpn-empty-emoji', text: '⭐' }),
-          el('div', { class: 'gpn-empty-title', text: '還沒有我的最愛' }),
-          el('div', { class: 'gpn-empty-desc', text: '在任何一則提示詞右邊按「☆」，就會收進這裡，不用再到處找' })
+          fav ? el('div', { class: 'gpn-empty-emoji', text: '⭐' })
+            : el('div', { class: 'gpn-empty-emoji gpn-empty-mark', html: markIcon(m) }),
+          el('div', { class: 'gpn-empty-title', text: fav ? '還沒有我的最愛' : `還沒有標「${GPN_MARK_LABELS[m]}」的提示詞` }),
+          el('div', { class: 'gpn-empty-desc', text: fav
+            ? '在任何一則提示詞右邊按「☆」，就會收進這裡，不用再到處找'
+            : '連續點提示詞右邊的星號，換到這個符號，就會收進這裡' })
         )
       );
       return;
     }
-    for (const f of favs) {
+    const sortList = m === GPN_MARK_FAV ? GPN_FAV_ID : GPN_MARK_TAB + m;
+    for (const f of found) {
       const from = f.tab.label + (f.folder ? ` › ${f.folder.label}` : '');
-      ui.list.append(buildCard(f.it, f.tab.id, f.folder ? f.folder.id : null, from));
+      ui.list.append(buildCard(f.it, f.tab.id, f.folder ? f.folder.id : null, from, sortList));
     }
   }
 
@@ -867,12 +996,191 @@ function gpnCreatePanel(opts) {
   }
 
   let toastTimer = 0;
-  function toast(msg, bad = false) {
+  /** ms：要停多久；有操作說明、字比較多的訊息給久一點 */
+  function toast(msg, bad = false, ms = 0) {
     ui.toast.textContent = msg;
     ui.toast.classList.toggle('is-bad', bad);
     ui.toast.classList.add('is-on');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => ui.toast.classList.remove('is-on'), bad ? 4200 : 2200);
+    toastTimer = setTimeout(() => ui.toast.classList.remove('is-on'), ms || (bad ? 4200 : 2200));
+  }
+
+  /* ==========================================================================
+     卡片右邊的「⋯」：開啟問問 Gemini、開啟 Gemini、開啟 ChatGPT、刪除
+     選單只有一個，放在筆記本上（不放在卡片裡：卡片的清單會捲動、會切掉超出去的部分），
+     打開時對齊按下去的那顆「⋯」，下面放不下就往上開。
+     ========================================================================== */
+
+  let menuFor = null;                 // 選單目前開在哪一顆「⋯」上
+  let menuDelArmed = false, menuDelTimer = 0;
+
+  const isMac = /mac/i.test(navigator.userAgentData?.platform || navigator.platform || '');
+  /** 「問問 Gemini」是 Chrome 內建的，Chrome 沒有開放任何方法讓網頁或外掛打開它，只能請他按快速鍵 */
+  const ASK_GEMINI_HOW = isMac ? '點 Chrome 右上角的 Gemini 圖示' : '按 Alt＋G';
+  const PASTE_KEY = isMac ? '⌘＋V' : 'Ctrl＋V';
+  const AI_SITES = {
+    gemini:  { label: 'Gemini',  url: 'https://gemini.google.com/app' },
+    chatgpt: { label: 'ChatGPT', url: 'https://chatgpt.com/' },
+  };
+  /** 外掛（AI 網站裡的面板、工具列小視窗）才有 chrome.storage，可以把提示詞交給新分頁自動填入 */
+  const canHandOff = typeof chrome !== 'undefined' && !!chrome.storage?.local;
+
+  function buildCardMenu() {
+    ui.menu = el('div', { class: 'gpn-menu', role: 'menu', hidden: '', onkeydown: onMenuKey });
+    ui.book.append(ui.menu);
+    // 點選單外面就關（點同一顆「⋯」交給它自己的 onclick 關）
+    root.addEventListener('pointerdown', (e) => {
+      if (menuFor && !ui.menu.contains(e.target) && !menuFor.contains(e.target)) closeCardMenu();
+    }, true);
+    ui.list.addEventListener('scroll', () => closeCardMenu(), { passive: true });
+    window.addEventListener('resize', () => closeCardMenu());
+  }
+
+  function toggleCardMenu(btn, item, tabId, fid) {
+    if (menuFor === btn) { closeCardMenu(); return; }
+    closeCardMenu();
+    const card = btn.closest('.gpn-card');
+    const entry = (icon, text, sub, onclick, cls = '') => el('button', {
+      class: 'gpn-menu-item' + cls, type: 'button', role: 'menuitem', onclick,
+    }, el('span', { class: 'gpn-menu-icon', html: icon }),
+      el('span', { class: 'gpn-menu-text' }, el('span', { text }), sub ? el('small', { text: sub }) : null));
+    const open = (site) => () => { closeCardMenu(); openInAI(site, item, card, tabId, fid); };
+
+    ui.menuDel = entry(ICON_DELETE, '刪除', null, () => onMenuDelete(item, tabId, fid), ' gpn-menu-item--del');
+    ui.menu.replaceChildren(
+      entry(ICON_SPARK, '開啟問問 Gemini', `複製後，${ASK_GEMINI_HOW} 打開再貼上`, open('ask'), ' gpn-menu-item--ai'),
+      entry(ICON_OPEN, '開啟 Gemini', canHandOff ? '在新分頁打開，自動填好' : '在新分頁打開', open('gemini')),
+      entry(ICON_OPEN, '開啟 ChatGPT', canHandOff ? '在新分頁打開，自動填好' : '在新分頁打開', open('chatgpt')),
+      el('div', { class: 'gpn-menu-sep', role: 'separator' }),
+      ui.menuDel);
+
+    menuFor = btn;
+    btn.setAttribute('aria-expanded', 'true');
+    card?.classList.add('has-menu');
+    ui.menu.hidden = false;
+    placeMenu(btn);
+    ui.menu.querySelector('.gpn-menu-item').focus({ preventScroll: true });
+  }
+
+  /**
+   * 選單的位置以筆記本為準。網頁版整個放大 140%：畫面上量到的距離要換算回筆記本自己的 px
+   * （和「筆記本寬度」的拖曳同一個算法）。
+   */
+  function placeMenu(btn) {
+    const book = ui.book.getBoundingClientRect();
+    const scale = book.width / parseFloat(getComputedStyle(ui.book).width) || 1;
+    const b = btn.getBoundingClientRect();
+    const h = ui.menu.getBoundingClientRect().height / scale;
+    const bookH = book.height / scale;
+    let top = (b.bottom - book.top) / scale - 2;
+    if (top + h > bookH - 8) top = (b.top - book.top) / scale - h + 2;
+    ui.menu.style.top = `${Math.max(8, top)}px`;
+    ui.menu.style.right = `${Math.max(8, (book.right - b.right) / scale)}px`;
+  }
+
+  function closeCardMenu() {
+    clearTimeout(menuDelTimer);
+    menuDelArmed = false;
+    if (!menuFor) return;
+    menuFor.setAttribute('aria-expanded', 'false');
+    menuFor.closest('.gpn-card')?.classList.remove('has-menu');
+    menuFor = null;
+    ui.menu.hidden = true;
+  }
+
+  /** 選單裡用上下鍵移動 */
+  function onMenuKey(e) {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    const items = [...ui.menu.querySelectorAll('.gpn-menu-item')];
+    const i = items.indexOf(root.activeElement);
+    items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus();
+  }
+
+  /**
+   * 用 AI 開啟：一律先複製（保險）、記進「最近使用」。
+   *   問問 Gemini：只能請他按快速鍵打開、再貼上
+   *   Gemini、ChatGPT：開新分頁。外掛會把提示詞交給新分頁的 content.js 自動填好（不會自動送出）；
+   *                    網頁版做不到（同源政策），請他自己貼上
+   */
+  async function openInAI(site, item, card, tabId, fid) {
+    const copied = await gpnShareCopy(item.content);
+    recordUse(item, tabId, fid);
+
+    if (site === 'ask') {
+      if (!copied) { toast('複製失敗，請點鉛筆打開，再手動選取文字', true); return; }
+      flashCopied(card, 'Copied');
+      toast(`已複製。${ASK_GEMINI_HOW} 打開「問問 Gemini」，再按 ${PASTE_KEY} 貼上`, false, 7000);
+      return;
+    }
+
+    const s = AI_SITES[site];
+    let fills = false;
+    if (canHandOff) {
+      try {
+        await chrome.storage.local.set({ [GPN_PENDING_FILL]: { site, text: item.content, at: Date.now() } });
+        fills = true;
+      } catch { /* 外掛剛更新過、這一頁還是舊的：退回自己貼上 */ }
+    }
+    const w = window.open(s.url, '_blank');
+    if (!w) {
+      toast(`瀏覽器擋住了新分頁，請自己打開 ${s.label}` + (copied ? `，提示詞已複製，按 ${PASTE_KEY} 貼上` : ''), true, 7000);
+      return;
+    }
+    try { w.opener = null; } catch { /* 跨網域時本來就碰不到 */ }
+    toast(fills ? `已在新分頁打開 ${s.label}，提示詞會自動填進輸入框（不會自動送出）`
+      : copied ? `已在新分頁打開 ${s.label}，提示詞已複製，在輸入框按 ${PASTE_KEY} 貼上`
+      : `已在新分頁打開 ${s.label}`, false, 6000);
+  }
+
+  /** 選單裡的「刪除」：和編輯畫面的刪除一樣要按兩次 */
+  function onMenuDelete(item, tabId, fid) {
+    const text = ui.menuDel.querySelector('.gpn-menu-text > span');
+    if (!menuDelArmed) {
+      menuDelArmed = true;
+      ui.menuDel.classList.add('is-confirm');
+      text.textContent = '確定刪除？再按一次';
+      clearTimeout(menuDelTimer);
+      menuDelTimer = setTimeout(() => {
+        menuDelArmed = false;
+        ui.menuDel.classList.remove('is-confirm');
+        text.textContent = '刪除';
+      }, 4000);
+      return;
+    }
+    closeCardMenu();
+    deleteItem(tabId, fid, item.id);
+    toast(`已刪除「${item.title}」`);
+  }
+
+  /** 刪掉一則提示詞（我的最愛、符號裡的也一起拿掉；最近使用記錄留著，會顯示「原本的提示詞已刪除」） */
+  function deleteItem(tabId, fid, id) {
+    const list = listOf(tabId, fid);
+    const idx = list ? list.items.findIndex((it) => it.id === id) : -1;
+    if (idx >= 0) list.items.splice(idx, 1);
+    setMark(id, '');
+    persist();
+    render();
+  }
+
+  /**
+   * 拖曳時跟著滑鼠走：移動、放開都聽「整個視窗」，不聽按下去的那個元素。
+   * 拖曳途中會把元素搬到新位置（insertBefore），Chrome 一搬就取消那個元素的 pointer capture，
+   * 聽元素的話之後的移動、放開都收不到——以前就是這樣：只能移一格就卡住，放開了還浮在半空中。
+   * 回傳「不要再聽了」的函式。
+   */
+  function followPointer(pointerId, onMove, onEnd) {
+    const move = (ev) => { if (ev.pointerId === pointerId) onMove(ev); };
+    const end = (ev) => { if (ev.pointerId === pointerId) { off(); onEnd(ev); } };
+    const off = () => {
+      window.removeEventListener('pointermove', move, true);
+      window.removeEventListener('pointerup', end, true);
+      window.removeEventListener('pointercancel', end, true);
+    };
+    window.addEventListener('pointermove', move, true);
+    window.addEventListener('pointerup', end, true);
+    window.addEventListener('pointercancel', end, true);
+    return off;
   }
 
   /* ========== 卡片上下拖曳排序（按住左邊把手，馬上就能拖） ========== */
@@ -881,12 +1189,12 @@ function gpnCreatePanel(opts) {
     handle.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       e.preventDefault();
+      closeCardMenu();
 
       const list = ui.list;
       let moved = false;
       card.classList.add('is-dragging');
       list.classList.add('is-dragging');
-      try { handle.setPointerCapture(e.pointerId); } catch { /* 沒抓到也能拖 */ }
 
       const onMove = (ev) => {
         moved = true;
@@ -903,16 +1211,11 @@ function gpnCreatePanel(opts) {
         }
       };
       const onUp = () => {
-        handle.removeEventListener('pointermove', onMove);
-        handle.removeEventListener('pointerup', onUp);
-        handle.removeEventListener('pointercancel', onUp);
         card.classList.remove('is-dragging');
         list.classList.remove('is-dragging');
         if (moved) saveOrder(tabId, fid);
       };
-      handle.addEventListener('pointermove', onMove);
-      handle.addEventListener('pointerup', onUp);
-      handle.addEventListener('pointercancel', onUp);
+      followPointer(e.pointerId, onMove, onUp);
     });
   }
 
@@ -926,10 +1229,13 @@ function gpnCreatePanel(opts) {
 
   function saveOrder(tabId, fid) {
     const order = [...ui.list.querySelectorAll('.gpn-card')].map((n) => n.getAttribute('data-id'));
-    if (tabId === GPN_FAV_ID) {
-      // 我的最愛只排自己的順序，提示詞在原本書籤裡的位置不動
-      const rest = (data.favs || []).filter((id) => !order.includes(id));
-      data.favs = [...order, ...rest];
+    const m = tabId === GPN_FAV_ID ? GPN_MARK_FAV : gpnMarkOfTab(tabId);
+    if (m) {
+      // 我的最愛、符號書籤只排自己的順序，提示詞在原本書籤裡的位置不動
+      const ids = markedIds(m);
+      const next = [...order, ...ids.filter((id) => !order.includes(id))];
+      if (m === GPN_MARK_FAV) data.favs = next;
+      else data.marks = { ...data.marks, [m]: next };
       persist();
       return;
     }
@@ -973,9 +1279,9 @@ function gpnCreatePanel(opts) {
 
       function startDrag() {
         dragging = true;
+        closeCardMenu();
         node.classList.add('is-drag');
         box.classList.add('is-reordering');
-        try { handle.setPointerCapture(e.pointerId); } catch { /* 沒抓到也能拖 */ }
       }
 
       const onMove = (ev) => {
@@ -984,7 +1290,7 @@ function gpnCreatePanel(opts) {
           if (Math.abs(ev.clientX - startX) > GPN_HOLD_SLOP ||
               Math.abs(ev.clientY - startY) > GPN_HOLD_SLOP) {
             clearTimeout(holdTimer);
-            cleanup();
+            off();
           }
           return;
         }
@@ -1013,28 +1319,18 @@ function gpnCreatePanel(opts) {
 
       const onUp = () => {
         clearTimeout(holdTimer);
-        if (dragging) {
-          node.classList.remove('is-drag');
-          box.classList.remove('is-reordering');
-          o.onDrop([...box.querySelectorAll(selector)].map((n) => n.getAttribute('data-id')));
-          // 擋掉這次放開後的 click，避免拖完又觸發切換
-          handle.addEventListener('click', swallow, { capture: true, once: true });
-          setTimeout(() => handle.removeEventListener('click', swallow, true), 300);
-        }
-        cleanup();
+        if (!dragging) return;
+        node.classList.remove('is-drag');
+        box.classList.remove('is-reordering');
+        o.onDrop([...box.querySelectorAll(selector)].map((n) => n.getAttribute('data-id')));
+        // 擋掉這次放開後的 click，避免拖完又觸發切換（放開的地方不一定還在原本那顆上，所以擋在整個視窗）
+        window.addEventListener('click', swallow, { capture: true, once: true });
+        setTimeout(() => window.removeEventListener('click', swallow, true), 300);
       };
 
       const swallow = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
 
-      function cleanup() {
-        handle.removeEventListener('pointermove', onMove);
-        handle.removeEventListener('pointerup', onUp);
-        handle.removeEventListener('pointercancel', onUp);
-      }
-
-      handle.addEventListener('pointermove', onMove);
-      handle.addEventListener('pointerup', onUp);
-      handle.addEventListener('pointercancel', onUp);
+      const off = followPointer(e.pointerId, onMove, onUp);
     });
   }
 
@@ -1047,6 +1343,7 @@ function gpnCreatePanel(opts) {
     [ui.editLayer, ui.newTabLayer, ui.folderLayer, ui.settingsLayer].some(layerOpen);
 
   function showLayer(layer) {
+    closeCardMenu();
     layer.classList.add('is-open');
     ui.overlay.classList.add('is-editing');
   }
@@ -1265,15 +1562,9 @@ function gpnCreatePanel(opts) {
       delTimer = setTimeout(disarmDelete, 4000);
       return;
     }
-    const list = listOf(editing.tabId, editing.folderId);
-    if (list) {
-      const idx = list.items.findIndex((it) => it.id === editing.id);
-      if (idx >= 0) list.items.splice(idx, 1);
-    }
-    data.favs = (data.favs || []).filter((id) => id !== editing.id);
-    persist();
+    const { tabId, folderId: fid, id } = editing;
     closeEditor();
-    render();
+    deleteItem(tabId, fid, id);
     toast('已刪除');
   }
 
@@ -1500,6 +1791,7 @@ function gpnCreatePanel(opts) {
     }, el('span', { class: 'gpn-nav-icon', html: icon }), el('span', { class: 'gpn-nav-text', text }));
     ui.sNavItems = [
       navItem('tab', ICON_TAB, '名稱與資料夾'),
+      navItem('marks', ICON_STAR, '星號'),
       // 沒有雲端功能的地方（例如測試）就不出現這一項
       cloud ? navItem('account', ICON_CLOUD_DONE, '雲端同步') : null,
       navItem('backup', ICON_SYNC, '備份'),
@@ -1556,6 +1848,9 @@ function gpnCreatePanel(opts) {
       field('資料夾', null, ui.sSwitch, ui.sConfirm, ui.sFolderNote),
       ui.sDanger);
 
+    /* ---- 星號 ---- */
+    const secMarks = buildMarksSection();
+
     /* ---- 雲端同步 ---- */
     const secAccount = cloud ? buildAccountSection() : null;
 
@@ -1565,7 +1860,7 @@ function gpnCreatePanel(opts) {
     /* ---- 背景 ---- */
     const secLook = standalone ? buildLookSection() : null;
 
-    ui.sSections = [secTab, secAccount, secBackup, secLook].filter(Boolean);
+    ui.sSections = [secTab, secMarks, secAccount, secBackup, secLook].filter(Boolean);
     ui.sBody = el('div', { class: 'gpn-settings-body' }, ...ui.sSections);
 
     ui.settings = el('div', { class: 'gpn-dialog gpn-settings', onmousedown: stop },
@@ -1584,8 +1879,10 @@ function gpnCreatePanel(opts) {
   function openSettings(tabId, section = 'tab') {
     const tab = tabById(tabId);
     if (!tab) return;
-    // 「最近使用」「我的最愛」沒有名稱、顏色、資料夾可以改，直接打開全部書籤共用的那幾頁
+    // 「最近使用」「我的最愛」、符號書籤沒有名稱、顏色、資料夾可以改，直接打開全部書籤共用的那幾頁
+    // （我的最愛、符號書籤打開「星號」）
     const hasAccount = !!cloud && !!cloudState.configured;
+    if (tab.mark && section === 'tab') section = 'marks';
     if (tab.fixed && section === 'tab') section = hasAccount ? 'account' : 'backup';
     if (section === 'account' && !hasAccount) section = tab.fixed ? 'backup' : 'tab';
     settingsTabId = tabId;
@@ -1632,6 +1929,7 @@ function gpnCreatePanel(opts) {
     const folders = gpnCountFolders(data);
     ui.bStats.textContent = `${data.tabs.length} 個書籤、` +
       (folders ? `${folders} 個資料夾、` : '') + `${gpnCountItems(data)} 則提示詞`;
+    refreshMarks();
 
     // 「最近使用」「我的最愛」：藏起「這個書籤」那一組（名稱與資料夾）
     // 雲端還沒設定好：「雲端同步」整頁不出現，免得使用者看到一堆給管理員的說明
@@ -1749,6 +2047,82 @@ function gpnCreatePanel(opts) {
     clearTimeout(tabDelTimer);
     tabDelArmed = false;
     if (ui.sDel) disarmButton(ui.sDel, '刪除這個書籤');
+  }
+
+  /* ---- 星號 ----
+     和 Gmail 的「星號」設定一樣：上面「使用中」、下面「沒使用」。連續點提示詞的星號時，照「使用中」的順序換。
+     Gmail 是用拖的；這裡改成「點一下就移過去」，比較好按。順序就是點進來的順序。
+     黃色星星就是「我的最愛」，固定排第一個、不能移走。其他每用一種，書籤列（我的最愛左邊）就多一個書籤。 */
+
+  function buildMarksSection() {
+    ui.mUse = el('div', { class: 'gpn-marks', role: 'list', 'aria-label': '使用中' });
+    ui.mOff = el('div', { class: 'gpn-marks gpn-marks--off', role: 'list', 'aria-label': '沒使用' });
+    const preset = (text, types) => el('button', {
+      class: 'gpn-btn2', type: 'button', onclick: () => setMarkTypes(types, `已換成「${text}」`),
+    }, text);
+    return el('section', { class: 'gpn-section', 'data-section': 'marks' },
+      el('h3', { text: '星號' }),
+      el('p', { class: 'gpn-lede', text:
+        '和 Gmail 的星號一樣：連續點提示詞右邊的星號，會照「使用中」的順序換成不同的符號，換完一輪就取消。' +
+        '每一種符號在書籤列都有自己的書籤（在「我的最愛」左邊），標了那個符號的提示詞會收在裡面。' }),
+      field('使用中', '（點一下就移到「沒使用」）', ui.mUse),
+      field('沒使用', '（點一下就加到「使用中」的最後面）', ui.mOff),
+      el('div', { class: 'gpn-note', text:
+        `黃色星星就是「我的最愛」，固定排第一個。黃色星星以外最多再用 ${GPN_MAX_MARKS} 種，書籤列才放得下。` +
+        '想換順序的話，先點掉，再照想要的順序一個一個點回來。' }),
+      el('div', { class: 'gpn-sep' }),
+      field('預先設定', '（和 Gmail 一樣）',
+        el('div', { class: 'gpn-brow' },
+          preset('1 顆星', []),
+          preset('4 顆星', ['blue-star', 'green-check', 'red-bang']))));
+  }
+
+  function refreshMarks() {
+    if (!ui.mUse) return;
+    const using = marksInUse();
+    const chip = (m, on) => {
+      const locked = m === GPN_MARK_FAV;
+      const n = markedIds(m).length;
+      return el('button', {
+        class: 'gpn-mark-chip' + (locked ? ' is-locked' : ''), type: 'button', role: 'listitem',
+        title: locked ? '黃色星星就是「我的最愛」，固定排第一個'
+          : (on ? '點一下：移到「沒使用」' : '點一下：加到「使用中」') + (n ? `（現在有 ${n} 則標了這個）` : ''),
+        'aria-disabled': locked ? 'true' : null,
+        onclick: () => { if (!locked) toggleMarkType(m); },
+      },
+        el('span', { class: 'gpn-mark-icon', html: markIcon(m) }),
+        el('span', { text: markLabel(m) }),
+        n ? el('span', { class: 'gpn-mark-n', text: String(n) }) : null);
+    };
+    ui.mUse.replaceChildren(...using.map((m) => chip(m, true)));
+    ui.mOff.replaceChildren(...GPN_MARKS.filter((m) => !using.includes(m)).map((m) => chip(m, false)));
+  }
+
+  function toggleMarkType(m) {
+    const types = data.markTypes || [];
+    if (types.includes(m)) {
+      const n = markedIds(m).length;
+      setMarkTypes(types.filter((x) => x !== m), n
+        ? `已移到「沒使用」。標了「${GPN_MARK_LABELS[m]}」的 ${n} 則還記著，加回來就會再出現`
+        : `已移到「沒使用」，書籤列的「${GPN_MARK_LABELS[m]}」書籤拿掉了`);
+      return;
+    }
+    if (types.length >= GPN_MAX_MARKS) {
+      toast(`黃色星星以外最多用 ${GPN_MAX_MARKS} 種（書籤列才放得下），請先點掉一種`, true);
+      return;
+    }
+    setMarkTypes([...types, m], `已加入「${GPN_MARK_LABELS[m]}」，書籤列多了它的書籤`);
+  }
+
+  function setMarkTypes(types, msg) {
+    data.markTypes = types;
+    // 正在看的符號書籤被拿掉了：改看我的最愛
+    const cur = gpnMarkOfTab(data.activeId);
+    if (cur && !types.includes(cur)) data.activeId = GPN_FAV_ID;
+    persist();
+    render();
+    refreshMarks();
+    toast(msg, false, msg.length > 30 ? 4200 : 0);
   }
 
   /* ---- 雲端同步（Google 雲端硬碟）----
@@ -2295,6 +2669,7 @@ function gpnCreatePanel(opts) {
 
   function close() {
     if (standalone) return;          // 網頁版、工具列小視窗：面板就是整個畫面，不能關
+    closeCardMenu();
     closeEditor();
     closeNewTab();
     closeFolderEditor();
@@ -2306,7 +2681,11 @@ function gpnCreatePanel(opts) {
   function onKeydown(e) {
     if (e.key !== 'Escape' || !isOpen()) return;
 
-    if (layerOpen(ui.settingsLayer)) {
+    if (menuFor) {
+      const btn = menuFor;
+      closeCardMenu();
+      btn.focus();
+    } else if (layerOpen(ui.settingsLayer)) {
       if (!ui.sConfirm.hidden) hideFolderConfirm();
       else closeSettings();
     } else if (layerOpen(ui.folderLayer)) {

@@ -58,6 +58,21 @@ body {
 }
 .back:hover { border-color: var(--text); }
 #nav { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+/* 另存新檔：靠最右邊 */
+.save {
+  flex: none;
+  margin-left: auto;
+  padding: 5px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.save:hover { border-color: var(--text); }
+.save:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
 #nav a {
   padding: 3px 10px;
   border-radius: 6px;

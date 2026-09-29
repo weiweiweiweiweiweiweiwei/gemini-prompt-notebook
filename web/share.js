@@ -16,7 +16,7 @@
  *   ]
  * }
  * 舊版（v2、v3）匯出的備份也都吃得下，見 store.js 的升級規則。
- * 「最近使用」記錄、「我的最愛」不放進備份：那是自己的使用習慣，分享給別人時不該帶過去。
+ * 「最近使用」記錄、「我的最愛」和其他符號不放進備份：那是自己的使用習慣，分享給別人時不該帶過去。
  *
  * 依賴 store.js 的共用資料契約（gpnNormalize、GPN_MAX_* 等），載入順序要在它之後。
  */
@@ -191,8 +191,13 @@ function gpnMergeData(current, incoming) {
 
   // 最近使用記錄：兩邊合在一起，依使用時間排，同一則只留最新那次（備份檔不含記錄，只有雲端同步會帶）
   out.recent = gpnCleanRecent([...(out.recent || []), ...(incoming.recent || [])]);
-  // 我的最愛：兩邊的都留著，這邊的排前面（備份檔不含這個，只有雲端同步會帶）
+  // 我的最愛、其他符號：兩邊的都留著，這邊的排前面（備份檔不含這些，只有雲端同步會帶）
   out.favs = [...(out.favs || []), ...(incoming.favs || []).map((id) => idMap.get(id))];
+  out.marks = { ...(out.marks || {}) };
+  for (const [m, ids] of Object.entries(incoming.marks || {})) {
+    out.marks[m] = [...(out.marks[m] || []), ...ids.map((id) => idMap.get(id))];
+  }
+  out.markTypes = [...(out.markTypes || []), ...(incoming.markTypes || [])];
 
   // 資料夾 id 若和別的書籤裡的撞到，normalize 會自動換一個新的
   return { data: gpnNormalize(out), added, newTabs, newFolders, skipped };

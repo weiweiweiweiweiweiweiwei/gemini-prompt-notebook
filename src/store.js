@@ -13,6 +13,8 @@
  *   ],
  *   recent: [ { id, title, content, usedAt, tabId, folderId } ], // 最近使用記錄
  *   favs: [ 提示詞 id, ... ],                           // 我的最愛（照使用者排的順序）
+ *   marks: { 'purple-question': [ 提示詞 id, ... ] },   // 其他符號（Gmail 那樣的星號），各自的順序
+ *   markTypes: [ 'purple-question', 'blue-info' ],      // 設定裡「使用中」的符號（黃色星星以外）
  * }
  * 一個書籤只會有 items 或 folders 其中一個；有 folders 就代表開了資料夾，
  * 而且至少有一個資料夾。
@@ -30,6 +32,10 @@
  * 「我的最愛」也不是一般的書籤：它只記「哪幾則提示詞被加了星號」（favs，存提示詞的 id），
  * 提示詞本身還是留在原本的書籤裡，所以改了、搬了都不影響；原本那則刪掉了，這裡也就跟著消失。
  * 畫面上它固定在「最近使用」的左邊，id 固定是 GPN_FAV_ID。
+ *
+ * 「符號」和 Gmail 的星號一樣：連續點星號，會照設定裡「使用中」的順序換成別的符號（？、i、！…）。
+ * 黃色星星就是我的最愛；其他每一種都像我的最愛一樣只記 id（marks），
+ * 畫面上在「我的最愛」左邊各有一個書籤（id 是 GPN_MARK_TAB 加上種類）。一則提示詞只會有一種符號。
  */
 
 /* ==== 共用資料契約 開始 ====================================================
@@ -52,6 +58,26 @@ const GPN_COLOR_LABELS = {
   rose: '玫瑰粉', purple: '薰衣草', teal: '湖水綠',
 };
 
+/**
+ * 星號的種類，和 Gmail 的「星號」設定一樣（id 沿用 Gmail 的英文名）。
+ * 黃色星星就是「我的最愛」（存在 favs），固定排第一個；其他的在 marks，
+ * 設定裡「使用中」的（markTypes）連續點星號時會照順序輪流換，每一種在書籤列都有自己的書籤。
+ */
+const GPN_MARKS = [
+  'yellow-star', 'orange-star', 'red-star', 'purple-star', 'blue-star', 'green-star',
+  'red-bang', 'orange-guillemet', 'yellow-bang', 'green-check', 'blue-info', 'purple-question',
+];
+const GPN_MARK_FAV = 'yellow-star';
+const GPN_MARK_LABELS = {
+  'yellow-star': '黃色星星', 'orange-star': '橘色星星', 'red-star': '紅色星星',
+  'purple-star': '紫色星星', 'blue-star': '藍色星星', 'green-star': '綠色星星',
+  'red-bang': '紅色驚嘆號', 'orange-guillemet': '橘色雙箭頭', 'yellow-bang': '黃色驚嘆號',
+  'green-check': '綠色勾勾', 'blue-info': '藍色資訊', 'purple-question': '紫色問號',
+};
+const GPN_MAX_MARKS = 4;                 // 黃色星星以外最多再用幾種（每種在書籤列多一個書籤，太多會擠不下）
+const GPN_MARK_TAB = 't_mark_';          // 符號書籤的 id：t_mark_ 加上種類，例如 t_mark_purple-question
+const gpnMarkOfTab = (id) => (typeof id === 'string' && id.startsWith(GPN_MARK_TAB) ? id.slice(GPN_MARK_TAB.length) : '');
+
 function gpnNewId(prefix = 'p') {
   return prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
 }
@@ -66,6 +92,8 @@ function gpnDefaultData() {
     ],
     recent: [],
     favs: [],
+    marks: {},
+    markTypes: [],
   };
 }
 
@@ -170,17 +198,40 @@ function gpnNormalize(raw) {
   }
 
   // activeId：v2 以後直接用；v1 的 active 是 'favorite' / 'other'
+  // 星號：使用中的種類（黃色星星以外），照使用者排的順序
+  const markTypes = (Array.isArray(raw.markTypes) ? raw.markTypes : [])
+    .filter((m, i, arr) => GPN_MARKS.includes(m) && m !== GPN_MARK_FAV && arr.indexOf(m) === i)
+    .slice(0, GPN_MAX_MARKS);
+
   let activeId = raw.activeId;
   if (!activeId && raw.active) activeId = raw.active === 'other' ? 't_oth' : 't_fav';
-  const fixed = activeId === GPN_RECENT_ID || activeId === GPN_FAV_ID;
+  const fixed = activeId === GPN_RECENT_ID || activeId === GPN_FAV_ID ||
+                markTypes.includes(gpnMarkOfTab(activeId));
   if (!fixed && !tabs.some((t) => t.id === activeId)) activeId = tabs[0].id;
 
   // 我的最愛：只留還存在的提示詞，同一則只留一次
   const favs = (Array.isArray(raw.favs) ? raw.favs : [])
     .filter((id, i, arr) => typeof id === 'string' && itemIds.has(id) && arr.indexOf(id) === i);
 
-  // 最近使用、我的最愛的 id 指向提示詞，本來就會和提示詞的 id 重複，所以不參加上面的「不可重複」檢查
-  return { version: GPN_VERSION, activeId, tabs, recent: gpnCleanRecent(raw.recent), favs };
+  // 其他符號：一則提示詞只會有一種（和 Gmail 一樣），重複的以我的最愛、再來照 GPN_MARKS 的順序為準。
+  // 沒在使用中的種類也留著：只是暫時不顯示那個書籤，加回來就會再出現
+  const taken = new Set(favs);
+  const marks = {};
+  for (const m of GPN_MARKS) {
+    if (m === GPN_MARK_FAV || !Array.isArray(raw.marks?.[m])) continue;
+    const ids = raw.marks[m].filter((id) => typeof id === 'string' && itemIds.has(id) && !taken.has(id) && taken.add(id));
+    if (ids.length) marks[m] = ids;
+  }
+
+  // 最近使用、我的最愛、符號的 id 指向提示詞，本來就會和提示詞的 id 重複，所以不參加上面的「不可重複」檢查
+  return { version: GPN_VERSION, activeId, tabs, recent: gpnCleanRecent(raw.recent), favs, marks, markTypes };
+}
+
+/** 這則提示詞標了哪種符號（黃色星星＝我的最愛），沒有就是空字串 */
+function gpnMarkOf(d, id) {
+  if ((d.favs || []).includes(id)) return GPN_MARK_FAV;
+  for (const [m, ids] of Object.entries(d.marks || {})) if (ids.includes(id)) return m;
+  return '';
 }
 
 /** 書籤裡所有「裝提示詞的清單」：有資料夾就是各個資料夾，沒有就是書籤自己 */
