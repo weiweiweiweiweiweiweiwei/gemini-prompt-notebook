@@ -224,22 +224,32 @@ button { cursor: pointer; }
   align-items: center;
   justify-content: center;
   padding: 24px;
+  pointer-events: auto;
+}
+.gpn-overlay.is-open { display: flex; }
+/* 遮罩的底色和「帶點模糊」放在 ::before，不放在 .gpn-overlay 本身：
+   Chrome 裡有 backdrop-filter（或 opacity < 1、filter）的元素會變成 backdrop root，
+   裡面紙張、卡片、書籤的霧面玻璃就只看得到遮罩裡面，看不到後面的網頁，
+   網頁的字會清清楚楚透過筆記本。所以 .gpn-overlay 本身不能有 backdrop-filter，
+   淡入也只淡這層底，不淡整個 .gpn-overlay。
+   z-index: -1 配上面的 isolation → 畫在筆記本底下；點這層時 e.target 仍是 .gpn-overlay（點外面關閉照舊） */
+.gpn-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
   background: var(--scrim);
   /* 整個畫面的「帶點模糊」：底下的網頁會被霧化，面板才浮得起來 */
   backdrop-filter: blur(var(--scrim-blur)) saturate(115%);
   -webkit-backdrop-filter: blur(var(--scrim-blur)) saturate(115%);
-  pointer-events: auto;
 }
-.gpn-overlay.is-open { display: flex; animation: gpn-fade .18s ease; }
+.gpn-overlay.is-open::before { animation: gpn-fade .18s ease; }
 
-/* 網頁版：面板就是整個網頁，不需要遮罩（背後直接是網頁自己的底色） */
-:host(.gpn-standalone) .gpn-overlay {
-  background: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  animation: none;
-}
+/* 網頁版：面板就是整個網頁，不需要遮罩（背後直接是網頁自己的底色或背景圖） */
+:host(.gpn-standalone) .gpn-overlay::before { content: none; }
 @keyframes gpn-fade { from { opacity: 0 } to { opacity: 1 } }
+/* 編輯層的遮罩淡入改變底色、不改 opacity（理由同上：opacity < 1 時對話框的霧面玻璃會看不到後面） */
+@keyframes gpn-scrim-in { from { background-color: transparent } }
 @keyframes gpn-rise {
   from { opacity: 0; transform: translateY(12px) scale(.985) }
   to   { opacity: 1; transform: none }
@@ -855,7 +865,7 @@ button { cursor: pointer; }
   background: var(--scrim);
   pointer-events: auto;
 }
-.gpn-edit-layer.is-open { display: flex; animation: gpn-fade .16s ease; }
+.gpn-edit-layer.is-open { display: flex; animation: gpn-scrim-in .16s ease; }
 .gpn-dialog {
   width: 560px;
   max-width: calc((100vw - 48px) / var(--gpn-zoom, 1));
@@ -1521,7 +1531,7 @@ button { cursor: pointer; }
     --glass: var(--surface); --glass-soft: var(--surface);
     --glass-card: var(--surface-card); --glass-filter: none;
   }
-  .gpn-overlay, .gpn-paper, .gpn-tab, .gpn-card, .gpn-dialog, .gpn-fab, .gpn-folders,
+  .gpn-overlay::before, .gpn-paper, .gpn-tab, .gpn-card, .gpn-dialog, .gpn-fab, .gpn-folders,
   .gpn-settings-nav {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
@@ -1558,7 +1568,7 @@ button { cursor: pointer; }
   .gpn-folder-add-text { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .gpn-book, .gpn-dialog, .gpn-overlay, .gpn-toast, .gpn-copied,
+  .gpn-book, .gpn-dialog, .gpn-overlay::before, .gpn-edit-layer, .gpn-toast, .gpn-copied,
   .gpn-tab, .gpn-card, .gpn-folder, .gpn-switch, .gpn-switch::after,
   .gpn-empty-arrow, .gpn-cloud-arrow, .gpn-gear-icon > svg, .gpn-social-btn { animation: none !important; transition: none !important; }
 }

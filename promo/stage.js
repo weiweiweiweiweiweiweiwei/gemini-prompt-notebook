@@ -271,18 +271,7 @@
   link.rel = 'stylesheet';
   link.href = '../web/styles.css';
   const cssReady = new Promise((r) => { link.onload = r; link.onerror = r; });
-  // 影片專用的修正：.gpn-overlay 自己有 backdrop-filter，在 Chrome 裡會變成 backdrop root，
-  // 裡面紙張的霧面玻璃就看不到後面的網頁，網頁的字會直接透過來。
-  // 這裡把遮罩的模糊搬到 ::before，紙張的玻璃才有效果。外掛修好之後這段就可以拿掉。
-  const glassFix = document.createElement('style');
-  glassFix.textContent = `
-    .gpn-overlay { backdrop-filter: none; -webkit-backdrop-filter: none; background: none; }
-    .gpn-overlay::before {
-      content: ""; position: absolute; inset: 0; z-index: -1;
-      background: var(--scrim);
-      backdrop-filter: blur(var(--scrim-blur)) saturate(115%);
-    }`;
-  root.append(link, glassFix);
+  root.append(link);
   VT?.addRoot(root);
 
   const trigger = $('#trigger');
