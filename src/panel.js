@@ -22,11 +22,11 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.14.1';
+const GPN_APP_VERSION = '4.14.2';
 
 /**
- * 卡片「⋯ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
- * 網頁版沒有 chrome.storage，只能複製後請他自己貼上。
+ * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
+ * 網頁版沒有 chrome.storage：這台也裝了外掛的話交給外掛的 web-bridge.js 代放，沒有就只能複製後請他自己貼上。
  */
 const GPN_PENDING_FILL = 'gpn_pending_fill';
 
@@ -1024,6 +1024,23 @@ function gpnCreatePanel(opts) {
   };
   /** 外掛（AI 網站裡的面板、工具列小視窗）才有 chrome.storage，可以把提示詞交給新分頁自動填入 */
   const canHandOff = typeof chrome !== 'undefined' && !!chrome.storage?.local;
+  /** 網頁版：這台電腦也裝了外掛的話，外掛的 web-bridge.js 會在 <html> 標上 data-gpn-ext，可以借它代填 */
+  const hasBridge = () => !canHandOff && document.documentElement.hasAttribute('data-gpn-ext');
+  const autoFills = () => canHandOff || hasBridge();
+
+  /** 網頁版把提示詞交給外掛（src/web-bridge.js）；外掛收好了才回 true，等太久當作沒有 */
+  function handOffToExtension(site, text) {
+    return new Promise((resolve) => {
+      const id = Math.random().toString(36).slice(2);
+      const done = (ok) => { window.removeEventListener('message', onReply); clearTimeout(timer); resolve(ok); };
+      const onReply = (e) => {
+        if (e.source === window && e.data?.type === 'gpn-pending-fill-ok' && e.data.id === id) done(!!e.data.ok);
+      };
+      const timer = setTimeout(() => done(false), 800);
+      window.addEventListener('message', onReply);
+      window.postMessage({ type: 'gpn-pending-fill', id, site, text }, location.origin);
+    });
+  }
 
   function buildCardMenu() {
     ui.menu = el('div', { class: 'gpn-menu', role: 'menu', hidden: '', onkeydown: onMenuKey });
@@ -1049,8 +1066,8 @@ function gpnCreatePanel(opts) {
     ui.menuDel = entry(ICON_DELETE, '刪除', null, () => onMenuDelete(item, tabId, fid), ' gpn-menu-item--del');
     ui.menu.replaceChildren(
       entry(ICON_SPARK, '開啟問問 Gemini', `複製後，${ASK_GEMINI_HOW} 打開再貼上`, open('ask'), ' gpn-menu-item--ai'),
-      entry(ICON_OPEN, '開啟 Gemini', canHandOff ? '在新分頁打開，自動填好' : '在新分頁打開', open('gemini')),
-      entry(ICON_OPEN, '開啟 ChatGPT', canHandOff ? '在新分頁打開，自動填好' : '在新分頁打開', open('chatgpt')),
+      entry(ICON_OPEN, '開啟 Gemini', autoFills() ? '在新分頁打開，自動填好' : '在新分頁打開', open('gemini')),
+      entry(ICON_OPEN, '開啟 ChatGPT', autoFills() ? '在新分頁打開，自動填好' : '在新分頁打開', open('chatgpt')),
       el('div', { class: 'gpn-menu-sep', role: 'separator' }),
       ui.menuDel);
 
@@ -1101,7 +1118,7 @@ function gpnCreatePanel(opts) {
    * 用 AI 開啟：一律先複製（保險）、記進「最近使用」。
    *   問問 Gemini：只能請他按快速鍵打開、再貼上
    *   Gemini、ChatGPT：開新分頁。外掛會把提示詞交給新分頁的 content.js 自動填好（不會自動送出）；
-   *                    網頁版做不到（同源政策），請他自己貼上
+   *                    網頁版自己做不到（同源政策）：這台也裝了外掛就借外掛代填，沒有就請他自己貼上
    */
   async function openInAI(site, item, card, tabId, fid) {
     const copied = await gpnShareCopy(item.content);
@@ -1121,6 +1138,8 @@ function gpnCreatePanel(opts) {
         await chrome.storage.local.set({ [GPN_PENDING_FILL]: { site, text: item.content, at: Date.now() } });
         fills = true;
       } catch { /* 外掛剛更新過、這一頁還是舊的：退回自己貼上 */ }
+    } else if (hasBridge()) {
+      fills = await handOffToExtension(site, item.content);
     }
     const w = window.open(s.url, '_blank');
     if (!w) {
