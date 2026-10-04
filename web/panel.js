@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.14.3';
+const GPN_APP_VERSION = '4.15.0';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -115,11 +115,9 @@ function gpnCreatePanel(opts) {
   const ICON_CLOSE =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
 
-  /** 卡片右邊的「⋯」和它的選單：問問 Gemini（閃亮的四角星）、在新分頁開啟、刪除 */
+  /** 卡片右邊的「⋮」和它的選單：在新分頁開啟、刪除 */
   const ICON_MORE =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5.5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="18.5" r="2"/></svg>';
-  const ICON_SPARK =
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c.6 5.3 4.7 9.4 10 10-5.3.6-9.4 4.7-10 10-.6-5.3-4.7-9.4-10-10 5.3-.6 9.4-4.7 10-10z"/></svg>';
   const ICON_OPEN =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>';
   const ICON_DELETE =
@@ -1015,8 +1013,6 @@ function gpnCreatePanel(opts) {
   let menuDelArmed = false, menuDelTimer = 0;
 
   const isMac = /mac/i.test(navigator.userAgentData?.platform || navigator.platform || '');
-  /** 「問問 Gemini」是 Chrome 內建的，Chrome 沒有開放任何方法讓網頁或外掛打開它，只能請他按快速鍵 */
-  const ASK_GEMINI_HOW = isMac ? '點 Chrome 右上角的 Gemini 圖示' : '按 Alt＋G';
   const PASTE_KEY = isMac ? '⌘＋V' : 'Ctrl＋V';
   const AI_SITES = {
     gemini:  { label: 'Gemini',  url: 'https://gemini.google.com/app' },
@@ -1065,7 +1061,6 @@ function gpnCreatePanel(opts) {
 
     ui.menuDel = entry(ICON_DELETE, '刪除', null, () => onMenuDelete(item, tabId, fid), ' gpn-menu-item--del');
     ui.menu.replaceChildren(
-      entry(ICON_SPARK, '開啟問問 Gemini', `複製後，${ASK_GEMINI_HOW} 打開再貼上`, open('ask'), ' gpn-menu-item--ai'),
       entry(ICON_OPEN, '開啟 Gemini', autoFills() ? '在新分頁打開，自動填好' : '在新分頁打開', open('gemini')),
       entry(ICON_OPEN, '開啟 ChatGPT', autoFills() ? '在新分頁打開，自動填好' : '在新分頁打開', open('chatgpt')),
       el('div', { class: 'gpn-menu-sep', role: 'separator' }),
@@ -1116,20 +1111,12 @@ function gpnCreatePanel(opts) {
 
   /**
    * 用 AI 開啟：一律先複製（保險）、記進「最近使用」。
-   *   問問 Gemini：只能請他按快速鍵打開、再貼上
    *   Gemini、ChatGPT：開新分頁。外掛會把提示詞交給新分頁的 content.js 自動填好（不會自動送出）；
    *                    網頁版自己做不到（同源政策）：這台也裝了外掛就借外掛代填，沒有就請他自己貼上
    */
   async function openInAI(site, item, card, tabId, fid) {
     const copied = await gpnShareCopy(item.content);
     recordUse(item, tabId, fid);
-
-    if (site === 'ask') {
-      if (!copied) { toast('複製失敗，請點鉛筆打開，再手動選取文字', true); return; }
-      flashCopied(card, 'Copied');
-      toast(`已複製。${ASK_GEMINI_HOW} 打開「問問 Gemini」，再按 ${PASTE_KEY} 貼上`, false, 7000);
-      return;
-    }
 
     const s = AI_SITES[site];
     let fills = false;
@@ -2425,7 +2412,7 @@ function gpnCreatePanel(opts) {
       el('div', { class: 'gpn-brow' },
         el('button', {
           class: 'gpn-btn2', type: 'button',
-          onclick: () => { gpnDownloadExport(data); toast('備份檔已開始下載'); },
+          onclick: onDownloadBackup,
         }, '⬇　下載備份檔')),
       ui.bStats,
       el('div', { class: 'gpn-sep' }),
@@ -2436,6 +2423,39 @@ function gpnCreatePanel(opts) {
         ui.bNote,
         ui.bImport)
     );
+  }
+
+  /**
+   * 下載備份檔：提示詞，加上我的最愛、星號、使用記錄、這台的背景（換電腦時全部跟著過去）。
+   * 有連結 Google 雲端硬碟的話，檔名帶帳號（apple@gmail.com → 特務P_apple_日期.json），看得出是誰的。
+   */
+  async function onDownloadBackup() {
+    const [bg, wallpaper] = await Promise.all([prefs.get(GPN_BG_KEY), prefs.get(GPN_WALLPAPER_KEY)]);
+    const email = cloudState.signedIn ? cloudState.email || '' : '';
+    gpnDownloadExport(data, { email, look: { bg: bg || (wallpaper ? 'custom' : 'default'), wallpaper: wallpaper || null } });
+    toast('備份檔已開始下載');
+  }
+
+  /**
+   * 備份檔裡的背景：完全取代就照備份換；合併的話，這台已經自己選了背景就不動。
+   * 回傳有沒有換。
+   */
+  async function importLook(look, replace) {
+    if (!look) return false;
+    const cur = await prefs.get(GPN_BG_KEY);
+    if (!replace && cur && cur !== 'default') return false;
+    if (look.wallpaper) {
+      if (!(await prefs.set(GPN_WALLPAPER_KEY, look.wallpaper))) return false;   // 存不下就算了
+      hasCustomBg = true;
+    }
+    const bg = look.bg === 'custom' && !look.wallpaper ? 'default' : look.bg;
+    if (bg === (cur || 'default') && !look.wallpaper) return false;
+    await prefs.set(GPN_BG_KEY, bg);
+    if (standalone) {
+      await applyBackground(bg);
+      renderBgTiles();
+    }
+    return true;
   }
 
   function setBackupMode(mode) {
@@ -2469,16 +2489,24 @@ function gpnCreatePanel(opts) {
     }
 
     ui.bImport.hidden = false;
+    // 備份裡還有哪些自己的東西（4.15.0 以前的備份沒有）
+    const extras = [
+      parsed.markedCount ? `${parsed.markedCount} 則我的最愛和星號` : '',
+      parsed.recentCount ? `${parsed.recentCount} 筆使用記錄` : '',
+      parsed.look && parsed.look.bg !== 'default' ? '背景' : '',
+    ].filter(Boolean).join('、');
     if (backupMode === 'merge') {
       const p = gpnPreviewMerge(data, parsed.data);
       ui.bNote.classList.add('is-ok');
-      ui.bNote.textContent = p.added
+      ui.bNote.textContent = (p.added
         ? `會加入 ${p.added} 則新的提示詞` + (p.skipped ? `，${p.skipped} 則已經有了` : '')
-        : `${parsed.itemCount} 則都已經有了，不會有變化`;
+        : `${parsed.itemCount} 則都已經有了`) +
+        (extras ? `；另外也會合併：${extras}` : (p.added ? '' : '，不會有變化'));
     } else {
       const have = gpnCountItems(data);
       ui.bNote.classList.add('is-bad');
-      ui.bNote.textContent = `現有的 ${have} 則會換成備份裡的 ${parsed.itemCount} 則`;
+      ui.bNote.textContent = `現有的 ${have} 則會換成備份裡的 ${parsed.itemCount} 則` +
+        (extras ? `，${extras}也換成備份裡的` : '');
     }
     return parsed;
   }
@@ -2497,15 +2525,21 @@ function gpnCreatePanel(opts) {
     }
 
     let msg;
-    if (backupMode === 'merge') {
+    const replace = backupMode === 'replace';
+    if (!replace) {
       const r = gpnMergeData(data, parsed.data);
       data = r.data;
-      msg = r.added ? `已加入 ${r.added} 則提示詞` : '沒有新的提示詞，資料維持原樣';
+      msg = r.added ? `已加入 ${r.added} 則提示詞` : '沒有新的提示詞';
+    } else if (parsed.personal) {
+      // 新的備份有我的最愛、星號、使用記錄：一起換成備份裡的
+      data = gpnNormalize(parsed.data);
+      msg = `已匯入 ${gpnCountItems(data)} 則提示詞`;
     } else {
-      // 使用記錄、我的最愛是自己的，不跟著備份換掉（我的最愛只留備份裡還找得到的那幾則）
-      data = gpnNormalize({ ...parsed.data, recent: data.recent, favs: data.favs });
+      // 舊的備份沒有這些：留著這台的（我的最愛、星號只留備份裡還找得到的那幾則）
+      data = gpnNormalize({ ...parsed.data, recent: data.recent, favs: data.favs, marks: data.marks, markTypes: data.markTypes });
       msg = `已匯入 ${gpnCountItems(data)} 則提示詞`;
     }
+    if (await importLook(parsed.look, replace)) msg += '，背景也換好了';
     folderId = null;
     await persist();
     closeSettings();          // 關掉設定，讓他直接看到匯入的結果

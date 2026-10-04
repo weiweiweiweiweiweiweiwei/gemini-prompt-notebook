@@ -15,8 +15,12 @@
  *     { id, label, color, folders: [ { id, label, items: [ ... ] } ] },   // 有資料夾
  *   ]
  * }
- * 舊版（v2、v3）匯出的備份也都吃得下，見 store.js 的升級規則。
- * 「最近使用」記錄、「我的最愛」和其他符號不放進備份：那是自己的使用習慣，分享給別人時不該帶過去。
+ * 另外還有（4.15.0 起）：
+ *   favs、marks、markTypes   我的最愛、其他符號（星號）、設定裡使用中的符號
+ *   recent                   最近使用記錄
+ *   look: { bg, wallpaper }  背景：選了哪一張；自己上傳的圖（data: 網址）
+ * 換電腦時這些都要跟著過去，不然新電腦只剩提示詞，我的最愛、星號、使用記錄全是空的。
+ * 舊版（v2、v3、沒有上面這些欄位的）匯出的備份也都吃得下，見 store.js 的升級規則。
  *
  * 依賴 store.js 的共用資料契約（gpnNormalize、GPN_MAX_* 等），載入順序要在它之後。
  */
@@ -37,8 +41,8 @@ function gpnDecodeShare(code) {
 
 /* ========== 匯出 ========================================================== */
 
-/** 把目前的資料包成可匯出的物件 */
-function gpnBuildExport(data) {
+/** 把目前的資料包成可匯出的物件。look：這台電腦的背景（{ bg, wallpaper }，沒有就不放） */
+function gpnBuildExport(data, look = null) {
   const items = (list) => list.map((i) => ({ id: i.id, title: i.title, content: i.content }));
   return {
     app: GPN_SHARE_APP,
@@ -50,24 +54,35 @@ function gpnBuildExport(data) {
           folders: t.folders.map((f) => ({ id: f.id, label: f.label, items: items(f.items) })),
         }
       : { id: t.id, label: t.label, color: t.color, items: items(t.items) })),
+    favs: data.favs || [],
+    marks: data.marks || {},
+    markTypes: data.markTypes || [],
+    recent: data.recent || [],
+    ...(look && look.bg ? { look } : {}),
   };
 }
 
-function gpnExportFileName() {
+/**
+ * 備份檔名。有連結 Google 雲端硬碟時，用帳號 @ 前面那段，一看就知道是哪個帳號的：
+ *   apple@gmail.com → 特務P_apple_20261004.json；沒連結 → 特務P-備份-20261004.json
+ */
+function gpnExportFileName(email = '') {
   const d = new Date();
   const p = (n) => String(n).padStart(2, '0');
-  return `特務P-備份-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}.json`;
+  const day = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`;
+  const who = String(email).split('@')[0].replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 40);
+  return who ? `特務P_${who}_${day}.json` : `特務P-備份-${day}.json`;
 }
 
-/** 觸發瀏覽器下載一個 .json 備份檔 */
-function gpnDownloadExport(data) {
-  const blob = new Blob([JSON.stringify(gpnBuildExport(data), null, 2)], {
+/** 觸發瀏覽器下載一個 .json 備份檔。email：連結的 Google 帳號（取檔名用）；look：背景 */
+function gpnDownloadExport(data, { email = '', look = null } = {}) {
+  const blob = new Blob([JSON.stringify(gpnBuildExport(data, look), null, 2)], {
     type: 'application/json;charset=utf-8',
   });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = gpnExportFileName();
+  a.download = gpnExportFileName(email);
   document.body.append(a);
   a.click();
   a.remove();
@@ -100,13 +115,25 @@ function gpnParseImport(raw) {
 
   // 交給共用的 normalize 修成合法結構（缺欄位、壞資料都會被補好）。
   // version 要一起傳：v3 的備份要靠它才認得出來。
-  const data = gpnNormalize({ version: obj.version, tabs: obj.tabs, activeId: obj.tabs[0]?.id });
+  const data = gpnNormalize({
+    version: obj.version, tabs: obj.tabs, activeId: obj.tabs[0]?.id,
+    favs: obj.favs, marks: obj.marks, markTypes: obj.markTypes, recent: obj.recent,
+  });
   const itemCount = gpnCountItems(data);
   if (!itemCount) return { ok: false, error: '這份備份裡一則提示詞都沒有' };
 
+  // 4.15.0 以前的備份沒有我的最愛、星號、使用記錄：完全取代時，這台原本的要留著
+  const personal = ['favs', 'marks', 'markTypes', 'recent'].some((k) => k in obj);
+  const markedCount = data.favs.length + Object.values(data.marks).reduce((n, ids) => n + ids.length, 0);
+  // 背景：只收認得的值，上傳的圖一定要是圖片的 data: 網址
+  const look = obj.look && typeof obj.look.bg === 'string'
+    ? { bg: obj.look.bg.slice(0, 40), wallpaper: /^data:image\//.test(String(obj.look.wallpaper || '')) ? obj.look.wallpaper : null }
+    : null;
+
   return {
-    ok: true, data,
+    ok: true, data, personal, look,
     tabCount: data.tabs.length, folderCount: gpnCountFolders(data), itemCount,
+    markedCount, recentCount: data.recent.length,
   };
 }
 
@@ -189,9 +216,13 @@ function gpnMergeData(current, incoming) {
     }
   }
 
-  // 最近使用記錄：兩邊合在一起，依使用時間排，同一則只留最新那次（備份檔不含記錄，只有雲端同步會帶）
-  out.recent = gpnCleanRecent([...(out.recent || []), ...(incoming.recent || [])]);
-  // 我的最愛、其他符號：兩邊的都留著，這邊的排前面（備份檔不含這些，只有雲端同步會帶）
+  // 最近使用記錄：兩邊合在一起，依使用時間排，同一則只留最新那次。
+  // 對方的記錄指向對方的提示詞 id，加進來的提示詞換了新 id，要跟著換才找得到
+  out.recent = gpnCleanRecent([
+    ...(out.recent || []),
+    ...(incoming.recent || []).map((r) => ({ ...r, id: idMap.get(r.id) || r.id })),
+  ]);
+  // 我的最愛、其他符號：兩邊的都留著，這邊的排前面
   out.favs = [...(out.favs || []), ...(incoming.favs || []).map((id) => idMap.get(id))];
   out.marks = { ...(out.marks || {}) };
   for (const [m, ids] of Object.entries(incoming.marks || {})) {

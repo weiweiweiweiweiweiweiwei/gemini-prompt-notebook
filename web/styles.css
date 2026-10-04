@@ -836,7 +836,6 @@ button { cursor: pointer; }
 .gpn-edit {
   display: flex; align-items: center; justify-content: center;
   color: var(--text-mute);
-  border-left: 1px solid var(--outline);
   transition: background-color .16s ease, color .16s ease;
 }
 /* 最近使用的卡片沒有「⋯」，最右邊的是 ×，圓角給它 */
@@ -890,7 +889,6 @@ button { cursor: pointer; }
 .gpn-menu-item:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
 .gpn-menu-icon { flex: none; display: flex; color: var(--text-mute); }
 .gpn-menu-icon svg { width: 21px; height: 21px; display: block; fill: currentColor; }
-.gpn-menu-item--ai .gpn-menu-icon { color: var(--primary); }
 .gpn-menu-text { display: flex; flex-direction: column; line-height: 1.3; }
 .gpn-menu-text small { margin-top: 2px; font-size: 13px; font-weight: 400; color: var(--text-mute); }
 .gpn-menu-sep { height: 1px; margin: 5px 10px; background: var(--outline); }
