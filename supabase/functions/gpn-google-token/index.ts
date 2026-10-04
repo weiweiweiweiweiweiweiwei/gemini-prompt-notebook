@@ -8,9 +8,10 @@
  * 它做的事只有：收到 code 或 refresh token → 加上密鑰轉給 Google → 把 Google 的回覆原樣交回。
  * 不碰雲端硬碟、不保存任何東西、不記錄 token。
  *
+ * 放在和 flowstudy 共用的 Supabase 專案裡，所以函式名稱和密鑰名稱都加了 gpn／GPN_ 開頭，不會和它的設定撞到。
  * 需要在 Supabase 後台 → Edge Functions → Secrets 設定：
- *   GOOGLE_CLIENT_ID      OAuth 用戶端 ID（和 cloud-config.js 的 clientId 一樣）
- *   GOOGLE_CLIENT_SECRET  OAuth 用戶端密鑰
+ *   GPN_GOOGLE_CLIENT_ID      OAuth 用戶端 ID（和 cloud-config.js 的 clientId 一樣）
+ *   GPN_GOOGLE_CLIENT_SECRET  OAuth 用戶端密鑰
  *
  * 部署時關掉 JWT 驗證（verify_jwt = false）：呼叫的人還沒登入，而且網頁版用的新式公開金鑰
  * （sb_publishable_）不是 JWT。安全性靠 Google 本身——沒有有效的 code／refresh token，換不到任何東西。
@@ -33,10 +34,10 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   if (req.method !== 'POST') return reply({ error: 'method_not_allowed' }, 405);
 
-  const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
-  const secret = Deno.env.get('GOOGLE_CLIENT_SECRET');
+  const clientId = Deno.env.get('GPN_GOOGLE_CLIENT_ID');
+  const secret = Deno.env.get('GPN_GOOGLE_CLIENT_SECRET');
   if (!clientId || !secret) {
-    return reply({ error: 'server_not_configured', error_description: 'GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET not set' }, 500);
+    return reply({ error: 'server_not_configured', error_description: 'GPN_GOOGLE_CLIENT_ID / GPN_GOOGLE_CLIENT_SECRET not set' }, 500);
   }
 
   let body: Record<string, unknown>;

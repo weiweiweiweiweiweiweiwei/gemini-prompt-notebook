@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "特務P",
-  "version": "4.14.2",
+  "version": "4.14.3",
   "description": "在 Gemini、ChatGPT、Claude 的輸入框工具列加入原生風格的「特務P」常用提示詞按鈕，點一下就能把常用 Prompt 填進輸入框。",
   "permissions": ["storage"],
   "host_permissions": [

@@ -334,16 +334,20 @@
 ```
 瀏覽器（外掛／網頁版） ──提示詞──▶ 使用者自己的 Google 雲端硬碟
         │
-        └─ 只有「換登入憑證」這一步 ──▶ token 中繼（Supabase Edge Function：google-token）──▶ Google
+        └─ 只有「換登入憑證」這一步 ──▶ token 中繼（Supabase Edge Function：gpn-google-token）──▶ Google
 ```
 
 Google 規定換登入憑證（token）要附 **用戶端密鑰**，密鑰不能放在網頁或外掛裡，所以放在 token 中繼上。
-中繼只轉交 token，不碰雲端硬碟、不保存任何東西（程式在 `supabase/functions/google-token/index.ts`）。
+中繼只轉交 token，不碰雲端硬碟、不保存任何東西（程式在 `supabase/functions/gpn-google-token/index.ts`）。
+
+> 2026-10：原本特務P 自己的 Supabase 專案刪掉了，中繼改放在 **flowstudy** 專案（`algdqnztwyrcxuxqnzyp`）。
+> 為了不和 flowstudy 自己的設定撞到，函式叫 `gpn-google-token`、密鑰叫 `GPN_GOOGLE_CLIENT_ID`／`GPN_GOOGLE_CLIENT_SECRET`。
+> **刪掉 flowstudy 專案，特務P 的雲端同步就會停**（畫面會顯示「連不上同步伺服器」）。
 
 目前的設定（`src/cloud-config.js`）：
 
 - `clientId`：沿用原本 Supabase Google 登入的那個 OAuth 用戶端（`179560802326-…apps.googleusercontent.com`）
-- `tokenUrl`：`https://jsgvyxbkvszvhkrpbvjy.supabase.co/functions/v1/google-token`（已部署，JWT 驗證關閉）
+- `tokenUrl`：`https://algdqnztwyrcxuxqnzyp.supabase.co/functions/v1/gpn-google-token`（放在 flowstudy 專案，已部署，JWT 驗證關閉）
 - `open`：`false`（下面都設好、自己試過之後才改成 `true`）
 
 #### ① Google Cloud Console（和原本 Google 登入是同一個專案、同一個 OAuth 用戶端）
@@ -366,8 +370,8 @@ Google 規定換登入憑證（token）要附 **用戶端密鑰**，密鑰不能
 
 | Name | Value |
 |---|---|
-| `GOOGLE_CLIENT_ID` | 和 `cloud-config.js` 的 `clientId` 一樣 |
-| `GOOGLE_CLIENT_SECRET` | 上一步抄下來的 Client secret |
+| `GPN_GOOGLE_CLIENT_ID` | 和 `cloud-config.js` 的 `clientId` 一樣 |
+| `GPN_GOOGLE_CLIENT_SECRET` | 上一步抄下來的 Client secret |
 
 左邊的 **Name** 欄照抄上面的名稱，右邊的 **Value** 欄才填內容（不要把用戶端 ID 填進 Name）。
 設好之後不用重新部署。Google 現在只在建立時顯示一次完整的 Client secret，
@@ -484,7 +488,7 @@ web/
 presets/
   chatgpt-99-prompts.json            可以直接匯入的 99 個提示詞
 supabase/
-  functions/google-token/index.ts   token 中繼（Supabase Edge Function），見「雲端同步的設定」
+  functions/gpn-google-token/index.ts   token 中繼（Supabase Edge Function，放在 flowstudy 專案），見「雲端同步的設定」
 tools/
   checksync.py         檢查 src/ 和 web/ 的共用程式碼有沒有分岔
 .github/workflows/

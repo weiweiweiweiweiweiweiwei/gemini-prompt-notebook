@@ -5,7 +5,7 @@
  *   它本來就會出現在每個人登入時的網址上，放在公開的網站上是正常的。
  *   千萬不要把「用戶端密鑰」（client secret）放在這裡——它放在 tokenUrl 那個中繼的後台設定裡。
  *
- * tokenUrl：換 token 用的中繼（supabase/functions/google-token）。
+ * tokenUrl：換 token 用的中繼（supabase/functions/gpn-google-token，放在和 flowstudy 共用的 Supabase 專案）。
  *   Google 規定換 token 要附用戶端密鑰，網頁和外掛藏不住密鑰，所以由它代換。
  *   它只轉交 token，提示詞不會經過它（提示詞直接在瀏覽器和 Google 雲端硬碟之間傳）。
  *
@@ -21,7 +21,7 @@
  */
 const GPN_CLOUD = {
   clientId: '179560802326-nrdhcrs4r84dltajila7er82ae9nqn67.apps.googleusercontent.com',
-  tokenUrl: 'https://jsgvyxbkvszvhkrpbvjy.supabase.co/functions/v1/google-token',
+  tokenUrl: 'https://algdqnztwyrcxuxqnzyp.supabase.co/functions/v1/gpn-google-token',
   open: true,
   site: 'https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/',
 };

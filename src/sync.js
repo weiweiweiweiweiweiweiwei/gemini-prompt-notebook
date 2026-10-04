@@ -14,7 +14,7 @@
  * 登入（OAuth，授權碼＋PKCE）：
  *   1. 帶著一組只有這裡知道的密語（verifier）去 Google 登入、同意存取雲端硬碟
  *   2. 回來時網址帶著 code；拿 code＋密語，透過 config.tokenUrl 換成 token
- *   3. tokenUrl 是一個很小的中繼（supabase/functions/google-token）：
+ *   3. tokenUrl 是一個很小的中繼（supabase/functions/gpn-google-token）：
  *      Google 規定換 token 要附「用戶端密鑰」，密鑰不能放在網頁或外掛裡，所以放在那裡。
  *      它只轉交 token，不碰雲端硬碟、也不保存任何東西。
  *   access token 一小時就過期，用 refresh token 換新的（一樣經過中繼），使用者不會感覺到。
@@ -123,7 +123,8 @@ function gpnCreateSync(o) {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
     } catch {
-      throw offlineError();
+      // 網路是好的卻連不到：中繼本身不見了或掛了（例如 Supabase 專案被刪掉），不要說成「沒網路」
+      throw Object.assign(offlineError(), { relay: true });
     }
     let json = null;
     try { json = await res.json(); } catch { /* 不是 JSON 就算了 */ }
@@ -288,6 +289,9 @@ function gpnCreateSync(o) {
 
   /** 錯誤 → 給人看的中文 */
   function explain(e) {
+    if (e?.offline && e.relay && navigator.onLine !== false) {
+      return '連不上同步伺服器（網路是好的），會自動再試；一直這樣請通知管理員';
+    }
     if (e?.offline) return '連不上網路，恢復連線後會自動同步';
     const s = `${e?.code || ''} ${e?.message || ''}`;
     if (/invalid_grant/i.test(s)) return '登入逾時了，請再按一次連結';
