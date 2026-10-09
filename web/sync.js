@@ -563,7 +563,7 @@ function gpnCreateSync(o) {
       client_id: config.clientId,
       redirect_uri: redirectTo,
       response_type: 'code',
-      scope: `openid email ${GPN_DRIVE_SCOPE}`,
+      scope: `openid email profile ${GPN_DRIVE_SCOPE}`,   // profile：拿 Google 頭像
       access_type: 'offline',             // 要拿 refresh token，一小時後才不用重新登入
       prompt: 'select_account consent',   // 每次都讓他選帳號（公司／個人帳號才不會連錯）
       include_granted_scopes: 'true',
