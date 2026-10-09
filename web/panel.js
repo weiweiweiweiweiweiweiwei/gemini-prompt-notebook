@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.15.0';
+const GPN_APP_VERSION = '4.16.0';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -163,6 +163,10 @@ function gpnCreatePanel(opts) {
   const markAccent = (m) => (MARK_LOOK[m] || MARK_LOOK[GPN_MARK_FAV])[1];
   /** 給人看的名稱：黃色星星叫「我的最愛」 */
   const markLabel = (m) => (m === GPN_MARK_FAV ? '我的最愛' : GPN_MARK_LABELS[m] || '');
+
+  /** 特務P 的 logo（戴紳士帽的 P，和網頁版的 web/logo.svg 同一筆畫）：登入畫面用 */
+  const ICON_LOGO =
+    '<svg viewBox="200 140 1660 1460" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="80" stroke-linecap="round" stroke-linejoin="round"><path d="M570 635 L735 285 C760 232 782 212 822 222 C880 236 955 276 1012 280 C1068 283 1150 228 1196 210 C1232 197 1252 212 1268 240 L1340 385"/><path d="M1455 640 C1570 600 1720 562 1762 520 C1795 486 1745 466 1650 467 C1500 470 1350 500 1200 526 C950 570 700 612 520 662 C380 702 245 762 268 815 C290 862 420 842 560 815 C800 770 1050 724 1215 724 C1405 726 1508 805 1500 925 C1490 1085 1250 1152 950 1180 C912 1184 902 1205 902 1240 L902 1390 C902 1470 800 1522 720 1525 C640 1528 595 1478 595 1420 L595 895"/></g></svg>';
 
   /** Google 規定要用的彩色 G（連結雲端硬碟的按鈕） */
   const ICON_GOOGLE =
@@ -315,6 +319,13 @@ function gpnCreatePanel(opts) {
       onclick: () => openSettings(data.activeId, ui.gear.getAttribute('data-alert') ? 'account' : 'tab'),
     }, ui.gearIcon, el('span', { class: 'gpn-gear-dot', 'aria-hidden': 'true' }));
 
+    /* ---- 齒輪左邊：登入中的 Google 帳號頭像 ----
+       有兩個帳號時一眼看得出現在是哪一個。和齒輪一樣大、排在同一列，點了打開「雲端同步」。 */
+    ui.avatar = el('button', {
+      class: 'gpn-tool gpn-avatar', type: 'button', hidden: '',
+      onclick: () => openSettings(data.activeId, 'account'),
+    });
+
     /* ---- 資料夾欄（寬的時候在左邊直排，窄的時候變成上面一排） ---- */
     ui.folderList = el('div', {
       class: 'gpn-folder-list', role: 'tablist', 'aria-label': '資料夾',
@@ -343,7 +354,7 @@ function gpnCreatePanel(opts) {
             class: 'gpn-add gpn-add--quiet', type: 'button', hidden: '',
             onclick: onClearRecent,
           }, '清除全部使用記錄'),
-          el('div', { class: 'gpn-tools' }, ui.gear)
+          el('div', { class: 'gpn-tools' }, ui.avatar, ui.gear)
         )
       )
     );
@@ -367,6 +378,12 @@ function gpnCreatePanel(opts) {
       'aria-label': '特務P',
       onmousedown: (e) => { if (!standalone && e.target === ui.overlay) close(); },
     }, ui.book);
+    // 雲端的狀態還沒拿到之前先別露出筆記本（不然沒登入的人會先閃一下內容），最多等 3 秒
+    if (cloud) {
+      buildGate();
+      ui.overlay.classList.add('is-waiting');
+      setTimeout(() => ui.overlay.classList.remove('is-waiting'), 3000);
+    }
 
     ui.toast = el('div', { class: 'gpn-toast', role: 'status' });
 
@@ -1597,7 +1614,7 @@ function gpnCreatePanel(opts) {
 
   function buildNewTabLayer() {
     ui.nName = el('input', {
-      class: 'gpn-input', type: 'text', maxlength: '8', placeholder: '例如：工作',
+      class: 'gpn-input', type: 'text', maxlength: String(GPN_MAX_LABEL), placeholder: '例如：工作',
       oninput: () => { ui.nName.classList.remove('is-bad'); ui.nNameHint.classList.remove('is-on'); },
       onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); onNewTabSave(); } },
     });
@@ -1817,7 +1834,7 @@ function gpnCreatePanel(opts) {
 
     /* ---- 名稱與資料夾（這個書籤）：名稱 → 顏色 → 資料夾開關 → 最下面是刪除書籤 ---- */
     ui.sName = el('input', {
-      class: 'gpn-input', type: 'text', maxlength: '8', placeholder: '例如：工作',
+      class: 'gpn-input', type: 'text', maxlength: String(GPN_MAX_LABEL), placeholder: '例如：工作',
       oninput: onSettingsName,
       onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); ui.sName.blur(); } },
     });
@@ -2159,7 +2176,7 @@ function gpnCreatePanel(opts) {
       el('div', { class: 'gpn-note gpn-note--roomy', text:
         '按下去會到 Google 的畫面：先選要用哪個帳號（公司、個人帳號請選對），再按「允許」。' +
         '特務P 只碰得到它自己建立的那一個檔案，看不到雲端硬碟裡的其他東西。' }),
-      el('div', { class: 'gpn-note', text: '不連結也能照常用，只是提示詞只存在這台電腦。' }));
+      el('div', { class: 'gpn-note', text: '要登入才能使用特務P。' }));
 
     /* ---- 已連結 ---- */
     ui.aWho = el('div', { class: 'gpn-account-email' });
@@ -2168,31 +2185,26 @@ function gpnCreatePanel(opts) {
     ui.aSyncBtn = el('button', { class: 'gpn-btn2', type: 'button', onclick: onSyncNow }, '⟳　立即同步');
     ui.aFileLink = el('a', { class: 'gpn-link gpn-file-link', target: '_blank', rel: 'noopener' },
       '在 Google 雲端硬碟裡查看這個檔案');
-    ui.aWipe = el('button', {
-      class: 'gpn-btn gpn-btn--del', type: 'button', onclick: () => onSignOut(true),
-    }, '中斷連結並清除這台電腦上的提示詞');
+    ui.aSignOut = el('button', { class: 'gpn-btn2', type: 'button', onclick: onSignOut }, '登出');
+    ui.aFace = el('span', { class: 'gpn-account-avatar' });
+    ui.aPhotoNote = el('div', { class: 'gpn-note', hidden: '', text:
+      '想在這裡和筆記本右下角看到 Google 頭像的話，登出再登入一次就有了。' });
 
     ui.aIn = el('div', {},
       el('div', { class: 'gpn-account-card' },
-        el('span', { class: 'gpn-account-avatar gpn-account-avatar--google', html: ICON_GOOGLE }),
+        ui.aFace,
         el('div', { class: 'gpn-account-info' },
-          el('div', { class: 'gpn-note', text: '已連結 Google 雲端硬碟' }), ui.aWho)),
+          el('div', { class: 'gpn-note', text: '已登入（提示詞存在 Google 雲端硬碟）' }), ui.aWho)),
+      ui.aPhotoNote,
       el('div', { class: 'gpn-account-status' }, ui.aStatusIcon, ui.aStatus),
-      el('div', { class: 'gpn-brow' },
-        ui.aSyncBtn,
-        el('button', { class: 'gpn-btn2', type: 'button', onclick: () => onSignOut(false) }, '中斷連結')),
+      el('div', { class: 'gpn-brow' }, ui.aSyncBtn, ui.aSignOut),
       el('div', { class: 'gpn-note', text:
         `提示詞存在你的 Google 雲端硬碟，檔名是「${GPN_DRIVE_FILE_NAME}」。` +
         '一改就會自動同步，平常不用按「立即同步」。' }),
       ui.aFileLink,
       el('div', { class: 'gpn-note', text:
-        '中斷連結後，這台電腦上的提示詞、雲端硬碟上的檔案都會留著，只是不再同步。' +
-        '不想用了，中斷連結後到雲端硬碟把那個檔案刪掉就好。' }),
-      el('div', { class: 'gpn-danger' },
-        el('div', { class: 'gpn-label', text: '在別人的電腦上用完了？' }),
-        el('div', { class: 'gpn-note', text:
-          '中斷連結，並把這台電腦上的提示詞清掉，別人就看不到。雲端硬碟上的檔案不會刪，下次連結就回來了。' }),
-        ui.aWipe));
+        '登出後，這台電腦上的提示詞會清掉、要再登入才看得到；雲端硬碟上的都還在，' +
+        '在哪一台電腦登入同一個帳號，看到的都是雲端上的那一份。' }));
 
     return el('section', { class: 'gpn-section', 'data-section': 'account' },
       el('h3', { text: '雲端同步' }), ui.aOut, ui.aIn,
@@ -2207,6 +2219,101 @@ function gpnCreatePanel(opts) {
     setAccountMsg('');
     disarmWipe();
     refreshAccount();
+  }
+
+  /* ---- 登入畫面 ----
+     一定要登入才能用（4.16.0 起）：沒登入時整本筆記本換成這個畫面，像 LINE 一樣。
+     以前不登入也能用，結果「中斷連結 → 在這台亂改 → 再登入」，改壞的會蓋進雲端；
+     現在提示詞只在登入時出現，雲端上的那一份才是正本（見 sync.js 的「登入」）。 */
+
+  function buildGate() {
+    ui.gateBtn = el('button', {
+      class: 'gpn-social-btn gpn-gate-btn', type: 'button', 'data-provider': 'google', onclick: onGateLogin,
+    }, el('span', { class: 'gpn-social-icon', html: ICON_GOOGLE }), el('span', { text: '用 Google 帳號登入' }));
+    ui.gateMsg = el('div', { class: 'gpn-note gpn-note--status', role: 'status' });
+    ui.gateNoConnect = el('div', { class: 'gpn-note gpn-note--status is-bad', hidden: '', text:
+      '直接雙擊檔案打開的網頁版沒辦法登入。請改用網址打開網頁版，或用 Chrome 外掛。' });
+    ui.gate = el('div', { class: 'gpn-gate', hidden: '', role: 'region', 'aria-label': '登入特務P' },
+      el('div', { class: 'gpn-gate-logo', html: ICON_LOGO }),
+      el('h1', { class: 'gpn-gate-title', text: '特務P' }),
+      el('p', { class: 'gpn-gate-lede', text:
+        '請先用 Google 帳號登入。提示詞存在你自己的 Google 雲端硬碟，' +
+        '換一台電腦登入同一個帳號，看到的就是同一份。' }),
+      ui.gateBtn, ui.gateNoConnect, ui.gateMsg,
+      el('div', { class: 'gpn-note gpn-gate-note', text:
+        '按下去會到 Google 的畫面：選要用哪個帳號，再按「允許」。' +
+        '特務P 只碰得到它自己建立的檔案，看不到雲端硬碟裡的其他東西。' }),
+      el('a', {
+        class: 'gpn-link gpn-gate-privacy', href: new URL('privacy.html', GPN_CLOUD.site).href,
+        target: '_blank', rel: 'noopener',
+      }, '隱私權政策'));
+    ui.overlay.append(ui.gate);
+  }
+
+  async function onGateLogin() {
+    ui.gateBtn.disabled = true;
+    ui.gateMsg.textContent = '';
+    ui.gateMsg.classList.remove('is-bad', 'is-ok');
+    const r = await cloud.connect();
+    ui.gateBtn.disabled = false;
+    if (!r || !r.ok) {
+      ui.gateMsg.textContent = r?.error || '沒辦法開始登入，請稍後再試';
+      ui.gateMsg.classList.add('is-bad');
+    } else if (r.opened) {
+      ui.gateMsg.textContent = '已經開了一個新分頁：請在那裡選 Google 帳號、按「允許」。完成後回到這裡就好。';
+      ui.gateMsg.classList.add('is-ok');
+    }
+  }
+
+  /** 沒登入就只顯示登入畫面；登出的那一刻，正在開的對話框、選單一起關掉 */
+  function paintGate() {
+    if (!ui.gate) return;
+    const gated = !!cloud && !!cloudState.configured && cloudState.signedIn === false;
+    const was = !ui.gate.hidden;
+    ui.gate.hidden = !gated;
+    ui.book.hidden = gated;
+    ui.overlay.classList.toggle('is-gated', gated);
+    if (gated) {
+      closeCardMenu();
+      closeEditor();
+      closeNewTab();
+      closeFolderEditor();
+      closeSettings();
+      ui.gateNoConnect.hidden = cloud.canConnect !== false;
+      ui.gateBtn.hidden = cloud.canConnect === false;
+      if (cloudState.message && !ui.gateMsg.textContent) {
+        ui.gateMsg.textContent = cloudState.message;
+        ui.gateMsg.classList.add('is-bad');
+      }
+    } else if (was) {
+      // 剛登入：畫一次雲端拉下來的內容
+      ui.gateMsg.textContent = '';
+      folderId = null;
+      render();
+      syncLook();
+    }
+  }
+
+  /** 頭像：有 Google 大頭貼就用，沒有（舊的登入、載不到圖）就用 Email 第一個字 */
+  function paintFace(node, st) {
+    const letter = () => {
+      node.replaceChildren(el('span', { class: 'gpn-face-letter', text: (st.email || '?').charAt(0).toUpperCase() }));
+    };
+    if (node._face === `${st.picture}|${st.email}`) return;
+    node._face = `${st.picture}|${st.email}`;
+    if (!st.picture) { letter(); return; }
+    const img = el('img', { class: 'gpn-face-img', alt: '', referrerpolicy: 'no-referrer', src: st.picture });
+    img.addEventListener('error', letter, { once: true });
+    node.replaceChildren(img);
+  }
+
+  function paintAvatar(st) {
+    const on = !!cloud && !!st.configured && !!st.signedIn;
+    ui.avatar.hidden = !on;
+    if (!on) return;
+    paintFace(ui.avatar, st);
+    ui.avatar.title = `已登入：${st.email || 'Google 帳號'}（點一下看雲端同步、登出）`;
+    ui.avatar.setAttribute('aria-label', ui.avatar.title);
   }
 
   function focusAccount() {
@@ -2239,27 +2346,34 @@ function gpnCreatePanel(opts) {
     toast(r?.error ? r.error : '已同步', !!r?.error);
   }
 
-  /** 中斷連結。wipe＝連這台的提示詞一起清掉，要按兩次 */
-  async function onSignOut(wipe) {
-    if (wipe && !wipeArmed) {
-      wipeArmed = true;
-      armButton(ui.aWipe, '確定清除這台的提示詞並中斷連結？再按一次');
-      clearTimeout(wipeTimer);
-      wipeTimer = setTimeout(disarmWipe, 5000);
-      return;
+  /**
+   * 登出：先把還沒送出的送上雲端，再清掉這台的提示詞，回到登入畫面。
+   * 送不上去（沒網路）的話，登出會讓那些修改不見，所以先講清楚、要再按一次。
+   */
+  async function onSignOut() {
+    if (!wipeArmed) {
+      ui.aSignOut.disabled = true;
+      const r = await cloud.syncNow();
+      ui.aSignOut.disabled = false;
+      if (r?.error) {
+        wipeArmed = true;
+        armButton(ui.aSignOut, '還有修改沒送上雲端，現在登出會不見。確定登出？再按一次');
+        clearTimeout(wipeTimer);
+        wipeTimer = setTimeout(disarmWipe, 6000);
+        return;
+      }
     }
     disarmWipe();
-    await cloud.signOut({ wipe });
+    await cloud.signOut({ wipe: true });
     folderId = null;
-    toast(wipe ? '已中斷連結，這台電腦上的提示詞也清掉了'
-               : '已中斷連結。這台的提示詞還在，只是不會再同步');
     refreshCloud(await cloud.getState());
+    toast('已登出。這台電腦上的提示詞清掉了，雲端上的都還在，再登入就回來');
   }
 
   function disarmWipe() {
     clearTimeout(wipeTimer);
     wipeArmed = false;
-    if (ui.aWipe) disarmButton(ui.aWipe, '中斷連結並清除這台電腦上的提示詞');
+    if (ui.aSignOut) disarmButton(ui.aSignOut, '登出');
   }
 
   /** 「剛剛」「5 分鐘前」「14:32」 */
@@ -2297,8 +2411,12 @@ function gpnCreatePanel(opts) {
 
   function refreshCloud(s) {
     if (s) cloudState = s;
+    ui.overlay.classList.remove('is-waiting');
+    paintGate();
     paintGear(cloudState);
+    paintAvatar(cloudState);
     refreshAccount();
+    if (cloudState.signedIn && cloudState.phase === 'idle') retryWallpaper();
   }
 
   /**
@@ -2356,6 +2474,8 @@ function gpnCreatePanel(opts) {
     }
     const d = describeCloud(st);
     ui.aWho.textContent = st.email || 'Google 帳號';
+    paintFace(ui.aFace, st);
+    ui.aPhotoNote.hidden = !!st.picture;
     ui.aStatusIcon.innerHTML = d.icon;
     ui.aStatus.textContent = d.long;
     ui.aStatus.parentElement.setAttribute('data-kind', d.kind);
@@ -2415,6 +2535,7 @@ function gpnCreatePanel(opts) {
           onclick: onDownloadBackup,
         }, '⬇　下載備份檔')),
       ui.bStats,
+      ui.bPrelogin = el('div', { class: 'gpn-prelogin', hidden: '' }),
       el('div', { class: 'gpn-sep' }),
       field('匯入備份檔', null,
         el('div', { class: 'gpn-brow' }, ui.bPick),
@@ -2430,32 +2551,56 @@ function gpnCreatePanel(opts) {
    * 有連結 Google 雲端硬碟的話，檔名帶帳號（apple@gmail.com → 特務P_apple_日期.json），看得出是誰的。
    */
   async function onDownloadBackup() {
-    const [bg, wallpaper] = await Promise.all([prefs.get(GPN_BG_KEY), prefs.get(GPN_WALLPAPER_KEY)]);
+    const look = gpnCleanLook(data.look);
+    const wallpaper = look.bg === 'custom' ? await prefs.get(GPN_WALLPAPER_KEY) : null;
     const email = cloudState.signedIn ? cloudState.email || '' : '';
-    gpnDownloadExport(data, { email, look: { bg: bg || (wallpaper ? 'custom' : 'default'), wallpaper: wallpaper || null } });
+    gpnDownloadExport(data, { email, look: { bg: look.bg, wallpaper: wallpaper || null } });
     toast('備份檔已開始下載');
   }
 
   /**
-   * 備份檔裡的背景：完全取代就照備份換；合併的話，這台已經自己選了背景就不動。
-   * 回傳有沒有換。
+   * 備份檔裡的背景：完全取代就照備份換；合併的話，已經自己選了背景就不動。
+   * 換了就寫進 data.look（跟著同步），上傳的圖另外送上雲端。回傳有沒有換。
    */
   async function importLook(look, replace) {
     if (!look) return false;
-    const cur = await prefs.get(GPN_BG_KEY);
-    if (!replace && cur && cur !== 'default') return false;
-    if (look.wallpaper) {
+    const cur = gpnCleanLook(data.look);
+    if (!replace && cur.bg !== 'default') return false;
+    let wid = '';
+    if (look.bg === 'custom') {
+      if (!look.wallpaper) return false;
+      wid = wallpaperId(look.wallpaper);
       if (!(await prefs.set(GPN_WALLPAPER_KEY, look.wallpaper))) return false;   // 存不下就算了
+      await prefs.set(GPN_WALLPAPER_ID_KEY, wid);
       hasCustomBg = true;
+      uploadWallpaper(wid, look.wallpaper);
     }
-    const bg = look.bg === 'custom' && !look.wallpaper ? 'default' : look.bg;
-    if (bg === (cur || 'default') && !look.wallpaper) return false;
-    await prefs.set(GPN_BG_KEY, bg);
-    if (standalone) {
-      await applyBackground(bg);
-      renderBgTiles();
-    }
+    const next = gpnCleanLook({ bg: look.bg, wallpaper: wid });
+    if (JSON.stringify(next) === JSON.stringify(cur)) return false;
+    data.look = next;
     return true;
+  }
+
+  /** 登入時被雲端換掉的「這台原本的提示詞」（見 sync.js）：留一個下載的地方，萬一要找回來 */
+  async function refreshPrelogin() {
+    if (!ui.bPrelogin) return;
+    const p = await prefs.get('gpn_prelogin_v1');
+    const n = p?.data ? gpnCountItems(gpnNormalize(p.data)) : 0;
+    ui.bPrelogin.hidden = !n;
+    if (!n) return;
+    const d = new Date(p.at);
+    ui.bPrelogin.replaceChildren(
+      el('div', { class: 'gpn-note', text:
+        `${d.getMonth() + 1}/${d.getDate()} 登入時，這台電腦原本的 ${n} 則提示詞換成了雲端上的。原本的另外留了一份：` }),
+      el('div', { class: 'gpn-brow' },
+        el('button', {
+          class: 'gpn-btn2', type: 'button',
+          onclick: () => { gpnDownloadExport(gpnNormalize(p.data)); toast('已開始下載登入前的提示詞'); },
+        }, '⬇　下載登入前的提示詞'),
+        el('button', {
+          class: 'gpn-btn2', type: 'button',
+          onclick: async () => { await prefs.remove('gpn_prelogin_v1'); refreshPrelogin(); toast('已刪掉這份舊資料'); },
+        }, '不需要了，刪掉')));
   }
 
   function setBackupMode(mode) {
@@ -2523,6 +2668,7 @@ function gpnCreatePanel(opts) {
       impTimer = setTimeout(disarmImport, 6000);
       return;
     }
+    const keepLook = data.look;
 
     let msg;
     const replace = backupMode === 'replace';
@@ -2539,9 +2685,11 @@ function gpnCreatePanel(opts) {
       data = gpnNormalize({ ...parsed.data, recent: data.recent, favs: data.favs, marks: data.marks, markTypes: data.markTypes });
       msg = `已匯入 ${gpnCountItems(data)} 則提示詞`;
     }
+    data.look = keepLook;                       // 背景交給 importLook 決定
     if (await importLook(parsed.look, replace)) msg += '，背景也換好了';
     folderId = null;
     await persist();
+    syncLook();
     closeSettings();          // 關掉設定，讓他直接看到匯入的結果
     render();
     toast(msg);
@@ -2556,20 +2704,101 @@ function gpnCreatePanel(opts) {
   function resetBackup() {
     backupFile = null;
     setBackupMode('merge');          // 每次都從最安全的選項開始
+    refreshPrelogin();
   }
 
-  /* ---- 背景（只有網頁版、工具列小視窗）----
+  /* ---- 背景（只有網頁版、工具列小視窗顯示）----
      筆記本是霧面玻璃，背後的圖會模糊地透出來。可以選：
        預設光暈（網頁本身的 page.css）、內建的幾張（backgrounds.js 用 canvas 畫的）、自己上傳的桌布。
-     記在這台電腦（prefs），不會同步、也不放進備份：
-       gpn_bg         選了哪一張（'default'、內建的 id、'custom'）
-       gpn_wallpaper  上傳的圖（先縮成最長邊 1920px 的 JPG） */
+     4.16.0 起跟著帳號同步：選了哪一張存在 data.look（見 store.js），換電腦登入背景也一樣。
+     上傳的圖太大，不放進筆記本：這台留一份（prefs），雲端硬碟另外存一個檔案（sync.js 的 putWallpaper），
+     data.look.wallpaper 只記代號，別台代號對不上才去下載。
+       gpn_wallpaper          上傳的圖（先縮成最長邊 1920px 的 JPG）
+       gpn_wallpaper_id       這台手上那張圖的代號
+       gpn_wallpaper_unsent   上傳失敗（沒網路）的圖的代號，連上了再補傳
+       gpn_bg                 4.16.0 以前「這台選了哪一張」，只在第一次升級時搬進 data.look */
   const GPN_BG_KEY = 'gpn_bg';
   const GPN_WALLPAPER_KEY = 'gpn_wallpaper';
+  const GPN_WALLPAPER_ID_KEY = 'gpn_wallpaper_id';
+  const GPN_WALLPAPER_UNSENT_KEY = 'gpn_wallpaper_unsent';
   const bgPresets = typeof GPN_BACKGROUNDS !== 'undefined' ? GPN_BACKGROUNDS : [];
   let bgChoice = 'default';
   let bgUrl = '';            // 目前套用中的圖（blob: 網址）
+  let bgApplied = '';        // 目前畫面上的背景（bg|wallpaper），一樣就不重畫
   let hasCustomBg = false;
+  let lookBusy = false;
+
+  /** 圖的代號：內容一樣代號就一樣 */
+  function wallpaperId(dataUrl) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < dataUrl.length; i++) {
+      h ^= dataUrl.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return 'w' + h.toString(36) + dataUrl.length.toString(36);
+  }
+
+  /** 上傳的圖送上雲端；沒登入或失敗就記著，連上了再補（retryWallpaper） */
+  async function uploadWallpaper(wid, url) {
+    const r = cloud?.putWallpaper && cloudState.signedIn ? await cloud.putWallpaper(wid, url) : null;
+    if (r?.ok) await prefs.remove(GPN_WALLPAPER_UNSENT_KEY);
+    else await prefs.set(GPN_WALLPAPER_UNSENT_KEY, wid);
+  }
+
+  async function retryWallpaper() {
+    if (lookBusy) return;
+    const wid = await prefs.get(GPN_WALLPAPER_UNSENT_KEY);
+    if (!wid) return;
+    const [mine, url] = await Promise.all([prefs.get(GPN_WALLPAPER_ID_KEY), prefs.get(GPN_WALLPAPER_KEY)]);
+    if (mine !== wid || !url) { await prefs.remove(GPN_WALLPAPER_UNSENT_KEY); return; }
+    lookBusy = true;
+    try { await uploadWallpaper(wid, url); } finally { lookBusy = false; }
+  }
+
+  /**
+   * 照 data.look 換背景（別台換了、剛登入、匯入了）。
+   * 選的是別台上傳的圖、這台還沒有：先去雲端下載，下載到之前維持原本的背景。
+   */
+  async function syncLook() {
+    if (!standalone) return;
+    const want = gpnCleanLook(data.look);
+    if (want.bg === 'custom') {
+      const [mine, url] = await Promise.all([prefs.get(GPN_WALLPAPER_ID_KEY), prefs.get(GPN_WALLPAPER_KEY)]);
+      if (mine !== want.wallpaper || !url) {
+        if (!cloud?.getWallpaper || !cloudState.signedIn || lookBusy) return;
+        lookBusy = true;
+        let r = null;
+        try { r = await cloud.getWallpaper(want.wallpaper); } finally { lookBusy = false; }
+        if (!r?.ok || !r.dataUrl) return;
+        if (!(await prefs.set(GPN_WALLPAPER_KEY, r.dataUrl))) return;
+        await prefs.set(GPN_WALLPAPER_ID_KEY, want.wallpaper);
+        hasCustomBg = true;
+        renderBgTiles();
+      }
+    }
+    const key = want.bg + '|' + want.wallpaper;
+    if (key === bgApplied) return;
+    bgApplied = key;
+    await applyBackground(want.bg);
+  }
+
+  /** 4.16.0 以前背景只記在這台：第一次升級時搬進 data.look，之後就跟著帳號同步 */
+  async function migrateLook() {
+    if (!standalone || (await prefs.get('gpn_look_migrated'))) return;
+    await prefs.set('gpn_look_migrated', true);
+    const [bg, url] = await Promise.all([prefs.get(GPN_BG_KEY), prefs.get(GPN_WALLPAPER_KEY)]);
+    const old = bg || (url ? 'custom' : 'default');
+    if (old === 'default' || gpnCleanLook(data.look).bg !== 'default') return;
+    let wid = '';
+    if (old === 'custom') {
+      if (!url) return;
+      wid = wallpaperId(url);
+      await prefs.set(GPN_WALLPAPER_ID_KEY, wid);
+      uploadWallpaper(wid, url);
+    }
+    data.look = gpnCleanLook({ bg: old, wallpaper: wid });
+    persist();
+  }
 
   function buildLookSection() {
     ui.lFile = el('input', { type: 'file', accept: 'image/*', class: 'gpn-file', onchange: onPickWallpaper });
@@ -2578,7 +2807,7 @@ function gpnCreatePanel(opts) {
       el('h3', { text: '背景' }),
       ui.lGrid,
       ui.lFile,
-      el('div', { class: 'gpn-note', text: '上傳的圖片只存在這台電腦，不會同步' }));
+      el('div', { class: 'gpn-note', text: '背景跟著帳號同步：換一台電腦登入，背景也一樣（上傳的圖也會存到你的 Google 雲端硬碟）' }));
   }
 
   /** 背景的縮圖格子：預設光暈、內建的幾張、自己上傳的（有的話），最後一格是「上傳圖片」 */
@@ -2667,8 +2896,10 @@ function gpnCreatePanel(opts) {
   }
 
   async function chooseBackground(id) {
-    await applyBackground(id);
-    await prefs.set(GPN_BG_KEY, bgChoice);
+    const wallpaper = id === 'custom' ? (await prefs.get(GPN_WALLPAPER_ID_KEY)) || '' : '';
+    data.look = gpnCleanLook({ bg: id, wallpaper });
+    persist();
+    await syncLook();
   }
 
   /** 縮小成最長邊 1920px 的 JPG（data: 網址）；手機拍的原圖動輒好幾 MB，原樣存會塞爆儲存空間 */
@@ -2698,10 +2929,14 @@ function gpnCreatePanel(opts) {
       toast('這台電腦的儲存空間不夠，存不下這張圖', true);
       return;
     }
+    const wid = wallpaperId(url);
+    await prefs.set(GPN_WALLPAPER_ID_KEY, wid);
     hasCustomBg = true;
+    bgApplied = '';                     // 同樣是「我的圖片」，但換了一張：要重畫
     await chooseBackground('custom');
     renderBgTiles();
     toast('已換成新的背景');
+    uploadWallpaper(wid, url);
   }
 
   /* ==========================================================================
@@ -2712,7 +2947,9 @@ function gpnCreatePanel(opts) {
 
   async function open() {
     data = await GpnStore.load();
+    await migrateLook();
     render();
+    syncLook();
     ui.overlay.classList.add('is-open');
     revealActiveFolder();
     onOpenChange(true);
@@ -2763,16 +3000,16 @@ function gpnCreatePanel(opts) {
   document.addEventListener('keydown', onKeydown, true);
   prefs.get(GPN_BOOK_W_KEY).then((w) => { if (w > 0) setBookWidth(w); });
   if (standalone) {
-    Promise.all([prefs.get(GPN_BG_KEY), prefs.get(GPN_WALLPAPER_KEY)]).then(([id, custom]) => {
+    prefs.get(GPN_WALLPAPER_KEY).then((custom) => {
       hasCustomBg = !!custom;
       renderBgTiles();
-      applyBackground(id || (custom ? 'custom' : 'default'));   // 4.11.0 只有上傳，沒有 gpn_bg
     });
   }
 
   // 其他分頁或雲端改了資料時同步過來；正在編輯就先別動畫面，免得打到一半的字不見
   GpnStore.onExternalChange((fresh) => {
     data = fresh;
+    syncLook();                 // 別台換了背景
     if (!isOpen()) return;
     if (anyLayerOpen()) {
       staleWhileLayer = true;
@@ -2793,6 +3030,7 @@ function gpnCreatePanel(opts) {
   // openAccount：打開「雲端同步」那一頁（網頁版連結失敗回來時用）
   return {
     open, close, isOpen, toast,
-    openAccount: () => { if (cloud && cloudState.configured) openSettings(data.activeId, 'account'); },
+    // 還沒登入時畫面就是登入畫面，不用另外打開設定
+    openAccount: () => { if (cloud && cloudState.configured && cloudState.signedIn) openSettings(data.activeId, 'account'); },
   };
 }

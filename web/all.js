@@ -39,7 +39,7 @@
   };
   const markTag = (m) => (m === GPN_MARK_FAV ? '★' : `〔${GPN_MARK_LABELS[m]}〕`);
 
-  function render() {
+  let render = function () {
     const want = decodeURIComponent(location.hash.slice(1));
     const only = data.tabs.find((t) => t.id === want) || null;
     const total = gpnCountItems(data);
@@ -168,5 +168,18 @@
     };
     pull();
     document.addEventListener('visibilitychange', () => { if (!document.hidden) pull(); });
+
+    // 一定要登入才能用（4.16.0 起）：沒登入就不列出這台留著的任何東西，請他回筆記本登入
+    sync.getState().then((st) => {
+      if (st.signedIn) return;
+      $('nav').replaceChildren();
+      $('save').hidden = true;
+      $('title').textContent = '特務P：全部提示詞';
+      $('summary').textContent = '要先登入才看得到提示詞。';
+      const back = el('a', 'back', '← 回到筆記本登入');
+      back.href = './';
+      $('list').replaceChildren(el('p', 'empty', '請回到筆記本，用 Google 帳號登入後再打開這一頁。'), back);
+      render = () => {};
+    });
   }
 })();

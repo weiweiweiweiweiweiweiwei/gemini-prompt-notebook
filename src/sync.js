@@ -29,10 +29,12 @@
  *     新增、刪除、修改、搬移、排序都保留，刪掉的不會再跑回來；同一則兩邊都改了，以這台為主。
  *   - 同步要花一兩秒，這段時間使用者又改了東西：寫進這台之前再看一次，把他新做的合併進去，
  *     不會被同步到一半的舊內容蓋掉；同步完馬上再送一次。
- *   - 這台電腦第一次連結：
- *       這台的資料從沒屬於過任何帳號 → 和雲端合併（第一次用雲端時，原本的提示詞不會不見）
- *       這台的資料屬於另一個帳號   → 不合併，直接換成這個帳號的雲端資料（不會把別人的資料帶過去）
- *     第一次沒有共同的起點，所以用「備份 → 合併」那一套（gpnMergeData）：以雲端為底，把這台多的加進去。
+ *   - 登入（4.16.0 起一定要登入才能用）：一律以雲端為準。
+ *       雲端已經有筆記本 → 這台換成雲端的樣子（這台原本的另外留一份 GPN_PRELOGIN_KEY，設定 → 備份 下載得到）
+ *       雲端還沒有       → 第一次用：把這台的傳上去
+ *     以前是「和雲端合併」，結果中斷連結後在這台亂改、再登入，改壞的會蓋進雲端。
+ *     同一個帳號只是登入過期、重新登入：這台還記得上次同步的進度，照平常的三方合併，沒送出的修改不會不見。
+ *   - 登出：先把還沒送出的送上去，再清掉這台的提示詞（雲端硬碟上的都還在，再登入就回來）。
  *   雲端硬碟沒有「版本對了才准寫」這種保護，所以寫入前先看一次版本號；
  *   兩台在同一瞬間存檔才可能互蓋，而且雲端硬碟本身會留舊版本，救得回來。
  *
@@ -45,6 +47,7 @@ const GPN_SESSION_KEY = 'gpn_gdrive_session_v1';   // 登入狀態（token、Ema
 const GPN_SYNC_KEY = 'gpn_gdrive_sync_v1';         // 同步進度（雲端檔案、版本、上次同步的內容指紋）
 const GPN_PKCE_KEY = 'gpn_gdrive_pkce_v1';         // 登入途中的密語
 const GPN_BASE_KEY = 'gpn_gdrive_base_v1';         // 上次同步好的內容（三方合併的共同起點）
+const GPN_PRELOGIN_KEY = 'gpn_prelogin_v1';        // 登入時被雲端換掉的「這台原本的提示詞」（設定 → 備份 可以下載）
 /** 改用 Google 雲端硬碟之前（Supabase 時代）留下的登入資料，用不到了，啟動時清掉 */
 const GPN_OLD_KEYS = ['gpn_session_v1', 'gpn_sync_v1', 'gpn_pkce_v1'];
 
@@ -75,7 +78,7 @@ function gpnCreateSync(o) {
   let meta = { ...EMPTY_META };
   let state = {
     configured,
-    signedIn: false, email: '',
+    signedIn: false, email: '', picture: '',
     fileId: '',           // 雲端硬碟上那個檔案（畫面上「在雲端硬碟查看」用）
     phase: 'idle',        // idle | syncing | offline | error
     pending: false,       // 這台有改過、還沒送上雲端
@@ -99,7 +102,7 @@ function gpnCreateSync(o) {
     session = (await kv.get(GPN_SESSION_KEY)) || null;
     meta = { ...EMPTY_META, ...((await kv.get(GPN_SYNC_KEY)) || {}) };
     setState({
-      signedIn: !!session, email: session?.email || '',
+      signedIn: !!session, email: session?.email || '', picture: session?.picture || '',
       fileId: meta.fileId || '', lastSyncAt: meta.lastSyncAt || 0,
     });
   })();
@@ -162,8 +165,12 @@ function gpnCreateSync(o) {
     if (!session.refresh_token) return expired();
     try {
       const r = await tokenCall({ refresh_token: session.refresh_token });
+      // 換新 token 時 Google 也會附上最新的頭像（4.16.0 以前登入的沒有，重新登入一次才有）
+      const who = readIdToken(r.id_token);
+      if (who.picture && who.picture !== session.picture) setState({ picture: who.picture });
       await saveSession({
         ...session,
+        ...(who.picture ? { picture: who.picture } : {}),
         access_token: r.access_token,
         expires_at: Date.now() + (Number(r.expires_in) || 3600) * 1000,
         ...(r.refresh_token ? { refresh_token: r.refresh_token } : {}),
@@ -178,8 +185,8 @@ function gpnCreateSync(o) {
 
   async function expired() {
     await saveSession(null);
-    setState({ signedIn: false, email: '', phase: 'idle', pending: false,
-      message: '和 Google 雲端硬碟的連結已經失效，請重新連結' });
+    setState({ signedIn: false, email: '', picture: '', phase: 'idle', pending: false,
+      message: '登入已經過期，請重新登入' });
     throw Object.assign(new Error('expired'), { auth: true });
   }
 
@@ -201,6 +208,13 @@ function gpnCreateSync(o) {
     if (res.status === 401 && retry) {
       await accessToken(true);
       return drive(path, { method, body, type, as }, false);
+    }
+    if (as === 'dataurl' && res.ok) {
+      // 圖片：轉成 data: 網址（背景程式裡沒有 FileReader 也能用）
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      return `data:${res.headers.get('content-type') || 'image/jpeg'};base64,${btoa(bin)}`;
     }
     const text = await res.text();
     if (!res.ok) {
@@ -317,6 +331,7 @@ function gpnCreateSync(o) {
     const parts = [d.tabs, d.recent || []];
     if (d.favs?.length) parts.push(d.favs);
     if (Object.keys(d.marks || {}).length || d.markTypes?.length) parts.push(d.marks || {}, d.markTypes || []);
+    if (d.look && d.look.bg && d.look.bg !== 'default') parts.push(d.look);
     const s = JSON.stringify(parts);
     let h = 0x811c9dc5;
     for (let i = 0; i < s.length; i++) {
@@ -381,13 +396,13 @@ function gpnCreateSync(o) {
     meta = { ...EMPTY_META, ...((await kv.get(GPN_SYNC_KEY)) || {}) };
     session = (await kv.get(GPN_SESSION_KEY)) || null;
     if (!session) {
-      setState({ signedIn: false, email: '' });
+      setState({ signedIn: false, email: '', picture: '' });
       return {};
     }
-    if (!state.signedIn) setState({ signedIn: true, email: session.email || '' });
+    if (!state.signedIn) setState({ signedIn: true, email: session.email || '', picture: session.picture || '' });
 
     let local = gpnNormalize(await readLocal());
-    const adopt = meta.adopt;              // 'merge' | 'replace'（只在剛連結時有）
+    const adopt = meta.adopt;              // 'cloud' | 'replace'（只在剛登入時有；舊版留下的可能是 'merge'）
     delete meta.adopt;
     const note = {};
     synced = null;
@@ -427,7 +442,12 @@ function gpnCreateSync(o) {
         }
       }
       if (cloud && firstHere) {
-        if (adopt === 'replace' || !gpnCountItems(local)) {
+        if (adopt === 'cloud' && gpnCountItems(local) && hashDoc(local) !== hashDoc(cloud)) {
+          // 以雲端為準，這台原本的另外留一份，萬一要找回來（設定 → 備份）
+          await kv.set(GPN_PRELOGIN_KEY, { at: Date.now(), data: local });
+          note.replaced = gpnCountItems(local);
+        }
+        if (adopt === 'replace' || adopt === 'cloud' || !gpnCountItems(local)) {
           await apply(cloud, file.version, local);
           note.pulled = gpnCountItems(cloud);
         } else {
@@ -543,7 +563,7 @@ function gpnCreateSync(o) {
       client_id: config.clientId,
       redirect_uri: redirectTo,
       response_type: 'code',
-      scope: `openid email ${GPN_DRIVE_SCOPE}`,
+      scope: `openid email profile ${GPN_DRIVE_SCOPE}`,   // profile：拿 Google 頭像
       access_type: 'offline',             // 要拿 refresh token，一小時後才不用重新登入
       prompt: 'select_account consent',   // 每次都讓他選帳號（公司／個人帳號才不會連錯）
       include_granted_scopes: 'true',
@@ -580,6 +600,7 @@ function gpnCreateSync(o) {
       refresh_token: r.refresh_token || '',
       expires_at: Date.now() + (Number(r.expires_in) || 3600) * 1000,
       email: who.email || '',
+      picture: who.picture || '',
       sub: who.sub || who.email || 'google',
     };
 
@@ -587,14 +608,14 @@ function gpnCreateSync(o) {
       await saveSession(s);
       meta = { ...EMPTY_META, ...((await kv.get(GPN_SYNC_KEY)) || {}) };
       if (meta.userId !== s.sub) {
-        // 換了一個帳號（或第一次連結）：從頭同步。
-        // meta.userId 是空的 = 這台的資料從來沒屬於過任何帳號 → 和雲端合併
-        meta = { ...EMPTY_META, userId: s.sub, adopt: meta.userId ? 'replace' : 'merge' };
+        // 換了一個帳號（或第一次登入）：從頭同步，以雲端為準。
+        // meta.userId 是空的 = 這台的資料從來沒屬於過任何帳號 → 雲端沒有筆記本的話，把這台的傳上去
+        meta = { ...EMPTY_META, userId: s.sub, adopt: meta.userId ? 'replace' : 'cloud' };
         await saveMeta();
         await kv.remove(GPN_BASE_KEY);
       }
     });
-    setState({ signedIn: true, email: s.email, message: '' });
+    setState({ signedIn: true, email: s.email, picture: s.picture, message: '' });
     const note = await syncNow();
     return { ok: true, ...note };
   }
@@ -617,8 +638,64 @@ function gpnCreateSync(o) {
         await kv.remove(GPN_BASE_KEY);
       }
     });
-    setState({ signedIn: false, email: '', phase: 'idle', pending: false, message: '' });
+    setState({ signedIn: false, email: '', picture: '', phase: 'idle', pending: false, message: '' });
     return { ok: true };
+  }
+
+  /* ========== 背景圖 ==========
+     自己上傳的背景圖很大（幾百 KB），不放進筆記本（那樣每改一則提示詞都要傳一次圖）。
+     另外存一個檔案「特務P 背景圖」，appProperties 的 wid 記著是哪一張；筆記本裡只記代號（look.wallpaper）。
+     別台看到代號和自己手上的不一樣，才來下載。 */
+
+  const WALLPAPER_Q = "appProperties has { key='gpnWallpaper' and value='1' } and trashed = false";
+
+  async function wallpaperFile() {
+    const r = await drive('/drive/v3/files?' + new URLSearchParams({
+      q: WALLPAPER_Q, spaces: 'drive', orderBy: 'modifiedTime desc', fields: 'files(id,appProperties)', pageSize: '1',
+    }));
+    return (r.files || [])[0] || null;
+  }
+
+  /** 上傳背景圖（data: 網址）。id 是這張圖的代號 */
+  async function putWallpaper(id, dataUrl) {
+    await ready;
+    if (!session) return { ok: false, error: '還沒登入' };
+    try {
+      const [head, b64] = String(dataUrl).split(',');
+      const mime = (/^data:([^;,]+)/.exec(head) || [])[1] || 'image/jpeg';
+      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const f = await wallpaperFile();
+      const info = f ? { appProperties: { wid: id } } : {
+        name: '特務P 背景圖', mimeType: mime,
+        description: '特務P 的背景圖，由特務P 自動同步。',
+        appProperties: { gpnWallpaper: '1', wid: id },
+      };
+      const boundary = 'gpn_' + Math.random().toString(36).slice(2);
+      const body = new Blob([
+        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(info)}\r\n` +
+        `--${boundary}\r\nContent-Type: ${mime}\r\n\r\n`, bytes, `\r\n--${boundary}--`]);
+      await drive(f ? `/upload/drive/v3/files/${encodeURIComponent(f.id)}?uploadType=multipart&fields=id`
+                    : '/upload/drive/v3/files?uploadType=multipart&fields=id', {
+        method: f ? 'PATCH' : 'POST', type: `multipart/related; boundary=${boundary}`, body,
+      });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: explain(e) };
+    }
+  }
+
+  /** 下載代號是 id 的背景圖，回傳 { ok, dataUrl }；雲端上的不是這一張就回 ok: false */
+  async function getWallpaper(id) {
+    await ready;
+    if (!session) return { ok: false };
+    try {
+      const f = await wallpaperFile();
+      if (!f || f.appProperties?.wid !== id) return { ok: false };
+      const r = await drive(`/drive/v3/files/${encodeURIComponent(f.id)}?alt=media`, { as: 'dataurl' });
+      return { ok: true, dataUrl: r };
+    } catch (e) {
+      return { ok: false, error: explain(e) };
+    }
   }
 
   async function getState() {
@@ -626,7 +703,7 @@ function gpnCreateSync(o) {
     return { ...state };
   }
 
-  return { getState, syncNow, markDirty, flush, authUrl, finishAuth, signOut };
+  return { getState, syncNow, markDirty, flush, authUrl, finishAuth, signOut, putWallpaper, getWallpaper };
 }
 
 /* ========== 三方合併 ==========================================================
@@ -653,7 +730,7 @@ function gpnFlatten(d) {
   }
   return {
     tabOrder: d.tabs.map((t) => t.id), tabs, folders, items, lists,
-    favs: d.favs || [], marks: d.marks || {}, markTypes: d.markTypes || [], recent: d.recent || [],
+    favs: d.favs || [], marks: d.marks || {}, markTypes: d.markTypes || [], recent: d.recent || [], look: d.look,
   };
 }
 
@@ -807,6 +884,9 @@ function gpnMerge3(base, local, cloud) {
     }
   }
   const markTypes = mergeSet(B.markTypes, L.markTypes, C.markTypes);
+  // 背景：誰換過就用誰的（兩邊都換了以這台為主）
+  const same = (a, b) => JSON.stringify(gpnCleanLook(a)) === JSON.stringify(gpnCleanLook(b));
+  const look = same(L.look, B.look) ? C.look : L.look;
 
   // 最近使用：兩邊合在一起、同一則取最近那次；一邊移除（或清空）了、之後也沒再用過的就拿掉
   const recent = new Map();
@@ -833,5 +913,6 @@ function gpnMerge3(base, local, cloud) {
     favs,
     marks,
     markTypes,
+    look,
   });
 }

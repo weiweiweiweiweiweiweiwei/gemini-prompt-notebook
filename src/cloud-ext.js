@@ -1,6 +1,6 @@
 /**
  * 外掛裡的面板、工具列小視窗用的「雲端」：自己不連線，全部請背景程式（background.js）做。
- * 提供給 panel.js 的介面和網頁版一樣：getState / onState / connect / signOut / syncNow
+ * 提供給 panel.js 的介面和網頁版一樣：getState / onState / connect / signOut / syncNow / putWallpaper / getWallpaper
  */
 function gpnExtensionCloud() {
   'use strict';
@@ -49,5 +49,8 @@ function gpnExtensionCloud() {
     connect: () => send('connect'),
     signOut: (opts = {}) => send('signOut', { wipe: !!opts.wipe }),
     syncNow: () => send('syncNow'),
+    /** 背景圖另外存在雲端硬碟的一個檔案（見 sync.js） */
+    putWallpaper: (id, dataUrl) => send('putWallpaper', { id, dataUrl }),
+    getWallpaper: (id) => send('getWallpaper', { id }),
   };
 }

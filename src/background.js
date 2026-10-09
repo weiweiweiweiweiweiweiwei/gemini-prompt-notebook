@@ -72,6 +72,8 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     connectFinish: () => gpnConnectFinish(String(msg.code || ''), String(msg.state || ''), sender),
     signOut: () => gpnSync.signOut({ wipe: !!msg.wipe }),
     syncNow: () => gpnSync.syncNow(),
+    putWallpaper: () => gpnSync.putWallpaper(String(msg.id || ''), String(msg.dataUrl || '')),
+    getWallpaper: () => gpnSync.getWallpaper(String(msg.id || '')),
   };
   const run = ops[msg.op];
   if (!run) return false;

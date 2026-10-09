@@ -15,6 +15,7 @@
  *   favs: [ 提示詞 id, ... ],                           // 我的最愛（照使用者排的順序）
  *   marks: { 'purple-question': [ 提示詞 id, ... ] },   // 其他符號（Gmail 那樣的星號），各自的順序
  *   markTypes: [ 'purple-question', 'blue-info' ],      // 設定裡「使用中」的符號（黃色星星以外）
+ *   look: { bg: 'aurora', wallpaper: '' },              // 背景：選了哪一張；自己上傳的圖的代號（圖本身另外存）
  * }
  * 一個書籤只會有 items 或 folders 其中一個；有 folders 就代表開了資料夾，
  * 而且至少有一個資料夾。
@@ -48,6 +49,7 @@ const GPN_KEY = 'gpn_data_v1';          // 沿用同一個 key，才能讀到舊
 const GPN_VERSION = 4;
 const GPN_MAX_TABS = 8;                  // 太多書籤會擠不下，設一個上限
 const GPN_MAX_FOLDERS = 12;              // 每個書籤最多幾個資料夾
+const GPN_MAX_LABEL = 100;               // 書籤名稱的上限只是防呆（不限字數，太長的畫面上用「…」）
 const GPN_DEFAULT_FOLDER = '一般';        // 書籤剛開啟資料夾時，原本的提示詞放在這裡
 const GPN_RECENT_ID = 't_recent';        // 「最近使用」書籤的 id（固定、不能刪）
 const GPN_RECENT_MAX = 50;               // 最近使用最多記幾筆
@@ -94,7 +96,19 @@ function gpnDefaultData() {
     favs: [],
     marks: {},
     markTypes: [],
+    look: { bg: 'default', wallpaper: '' },
   };
+}
+
+/**
+ * 背景（設定 → 背景）：跟著帳號同步，換電腦登入背景也一樣。
+ *   bg         'default'、內建背景的 id（backgrounds.js）、或 'custom'（自己上傳的圖）
+ *   wallpaper  上傳的圖的代號（圖很大，不放在這裡：存在雲端硬碟另一個檔案，見 sync.js 的 putWallpaper）
+ */
+function gpnCleanLook(l) {
+  const bg = typeof l?.bg === 'string' && l.bg ? l.bg.slice(0, 40) : 'default';
+  const wallpaper = bg === 'custom' && typeof l?.wallpaper === 'string' ? l.wallpaper.slice(0, 40) : '';
+  return { bg, wallpaper };
 }
 
 /** 整理最近使用記錄：新的在前、同一則只留最新那次、最多 GPN_RECENT_MAX 筆 */
@@ -133,7 +147,7 @@ function gpnCleanTab(t, version) {
   const id = typeof t.id === 'string' && t.id ? t.id : gpnNewId('t');
   const base = {
     id,
-    label: String(t.label ?? '未命名').slice(0, 12) || '未命名',
+    label: String(t.label ?? '未命名').slice(0, GPN_MAX_LABEL) || '未命名',
     color: GPN_COLORS.includes(t.color) ? t.color : 'amber',
   };
 
@@ -224,7 +238,10 @@ function gpnNormalize(raw) {
   }
 
   // 最近使用、我的最愛、符號的 id 指向提示詞，本來就會和提示詞的 id 重複，所以不參加上面的「不可重複」檢查
-  return { version: GPN_VERSION, activeId, tabs, recent: gpnCleanRecent(raw.recent), favs, marks, markTypes };
+  return {
+    version: GPN_VERSION, activeId, tabs, recent: gpnCleanRecent(raw.recent), favs, marks, markTypes,
+    look: gpnCleanLook(raw.look),
+  };
 }
 
 /** 這則提示詞標了哪種符號（黃色星星＝我的最愛），沒有就是空字串 */

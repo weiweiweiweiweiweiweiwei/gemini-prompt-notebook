@@ -120,11 +120,12 @@
   });
   panel.open();
 
-  const connected = (r) => (r.error ? `已連結，但同步失敗：${r.error}`
+  const connected = (r) => (r.error ? `已登入，但同步失敗：${r.error}`
+    : r.replaced ? `已登入，換成雲端上的提示詞（這台原本的 ${r.replaced} 則另外留了一份，在 設定 → 備份 下載得到）`
     : r.merged ? `已連結。這台原本的 ${r.merged} 則已經合併到雲端硬碟`
-    : r.pulled ? `已連結，從雲端硬碟載入了 ${r.pulled} 則提示詞`
-    : r.uploaded ? `已連結，這台的 ${r.uploaded} 則已經存到雲端硬碟`
-    : '已連結 Google 雲端硬碟，之後會自動同步');
+    : r.pulled ? `已登入，從雲端硬碟載入了 ${r.pulled} 則提示詞`
+    : r.uploaded ? `已登入，這台的 ${r.uploaded} 則已經存到雲端硬碟`
+    : '已登入，之後會自動同步');
 
   // 從 Google 回來
   if (params.has('code') || params.has('error')) {
@@ -132,9 +133,9 @@
     const err = params.get('error_description') || params.get('error');
     const fail = (msg) => { panel.openAccount(); panel.toast(msg, true); };
     if (params.get('error') === 'access_denied') {
-      fail('連結沒有完成（按了取消，或沒有按「允許」）。想連結時再按一次就好');
+      fail('登入沒有完成（按了取消，或沒有按「允許」）。想登入時再按一次就好');
     } else if (err) {
-      fail('連結沒有完成：' + err);
+      fail('登入沒有完成：' + err);
     } else {
       sync.finishAuth(params.get('code'), params.get('state') || '')
         .then((r) => (r.ok ? panel.toast(connected(r), !!r.error) : fail(r.error)));
