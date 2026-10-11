@@ -1551,6 +1551,29 @@ button { cursor: pointer; }
   --glass-card: rgba(255, 255, 255, .66);
 }
 /* 縮圖格子：三欄，選中的那張外面一圈藍框 */
+/* 動態背景：遮罩最底下一張一直重畫的 canvas（畫小圖、放大鋪滿，照比例裁切） */
+.gpn-bg-live {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+/* 背景縮圖上的「動態」小標籤 */
+.gpn-bg-thumb { position: relative; }
+.gpn-bg-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 1px 7px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, .55);
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 600;
+}
 .gpn-bg-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 12px; }
 .gpn-bg-tile {
   display: flex;

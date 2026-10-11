@@ -8,6 +8,7 @@
  * 畫的時候一律用「相對位置」（寬高的比例），同一個函式畫 240px 的縮圖和 1920px 的大圖，長相一樣。
  *
  * 只有網頁版、外掛的工具列小視窗會用到（面板就是整個畫面的地方），見 panel.js 的「背景」。
+ * 標了 live 的是動態背景：gpnAnimateBackground 一直重畫（見最下面）。
  */
 
 /** 可重現的亂數：同一張背景每次畫出來都一樣（山的稜線、星星的位置） */
@@ -480,6 +481,170 @@ const GPN_BACKGROUNDS = [
       gpnBlob(ctx, 0.25 * w, 0.80 * h, 0.06 * w, 0.03 * w, '#fff1d6', 0.45);
       ctx.filter = 'none';
     },
+  },  /* ---- 動態背景（4.18.0）----
+     live: true 的會一直動：draw(ctx, w, h, t) 的 t 是秒數，gpnAnimateBackground 每秒畫 24 張。
+     縮圖、判斷明暗用 t = 0 那一張。都刻意「慢」：在背景裡輕輕流動，不搶筆記本的注意力。 */
+  {
+    id: 'live-aurora', label: '流動極光', tone: 'dark', live: true,
+    // 深夜的天空，幾條極光慢慢飄、星星一閃一閃
+    draw(ctx, w, h, t = 0) {
+      const k = w / 1920;
+      ctx.fillStyle = gpnLinear(ctx, 0, 0, 0, h, [[0, '#040714'], [1, '#0c1838']]);
+      ctx.fillRect(0, 0, w, h);
+      const rnd = gpnSeededRandom(7);
+      ctx.fillStyle = '#ffffff';
+      for (let i = 0; i < 120; i++) {
+        const x = rnd() * w, y = rnd() * h * 0.8, ph = rnd() * 6.28, sp = 0.6 + rnd() * 1.6;
+        ctx.globalAlpha = 0.2 + 0.5 * (0.5 + 0.5 * Math.sin(t * sp + ph));
+        ctx.beginPath();
+        ctx.arc(x, y, (0.6 + rnd() * 1.3) * Math.max(k, 0.5), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      ctx.filter = `blur(${Math.round(130 * k)}px)`;
+      const s = (f, p) => Math.sin(t * f + p);
+      gpnBlob(ctx, (0.25 + 0.08 * s(0.21, 0)) * w, (0.38 + 0.05 * s(0.17, 1)) * h, 0.34 * w, 0.12 * h, '#22d3ee', 0.55, -0.25 + 0.15 * s(0.13, 2));
+      gpnBlob(ctx, (0.58 + 0.07 * s(0.18, 3)) * w, (0.28 + 0.06 * s(0.23, 4)) * h, 0.36 * w, 0.11 * h, '#34d399', 0.5, 0.15 + 0.12 * s(0.11, 5));
+      gpnBlob(ctx, (0.82 + 0.05 * s(0.15, 6)) * w, (0.52 + 0.06 * s(0.19, 7)) * h, 0.24 * w, 0.19 * h, '#8b5cf6', 0.55);
+      gpnBlob(ctx, (0.40 + 0.09 * s(0.12, 8)) * w, (0.80 + 0.04 * s(0.2, 9)) * h, 0.30 * w, 0.11 * h, '#6366f1', 0.4);
+      ctx.filter = 'none';
+    },
+  },
+  {
+    id: 'live-waves', label: '起伏海浪', tone: 'dark', live: true,
+    // 一層一層的浪慢慢起伏
+    draw(ctx, w, h, t = 0) {
+      const k = w / 1920;
+      ctx.fillStyle = gpnLinear(ctx, 0, 0, 0, h, [[0, '#0b2545'], [0.5, '#13315c'], [1, '#134e5e']]);
+      ctx.fillRect(0, 0, w, h);
+      ctx.filter = `blur(${Math.round(120 * k)}px)`;
+      gpnBlob(ctx, 0.78 * w, 0.18 * h, 0.22 * w, 0.14 * h, '#8ecae6', 0.35);
+      ctx.filter = 'none';
+      const rnd = gpnSeededRandom(5);
+      const bands = [
+        ['#1d4e89', 0.44, 0.05, 1.3, 0.35], ['#1f6f8b', 0.55, 0.05, 1.7, -0.45], ['#2a9d8f', 0.66, 0.045, 1.1, 0.55],
+        ['#57c4ad', 0.77, 0.04, 1.9, -0.6], ['#a7e2d0', 0.89, 0.035, 1.5, 0.7],
+      ];
+      for (const [color, base, amp, f, speed] of bands) {
+        const ph = rnd() * Math.PI * 2 + t * speed;
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(0, h);
+        for (let x = 0; x <= w; x += Math.max(2, 8 * k)) {
+          const a = (x / w) * Math.PI * 2;
+          ctx.lineTo(x, (base + amp * Math.sin(a * f + ph) + amp * 0.4 * Math.sin(a * f * 2.3 + ph * 1.7)) * h);
+        }
+        ctx.lineTo(w, h);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    },
+  },
+  {
+    id: 'live-lava', label: '熔岩燈', tone: 'mid', live: true,
+    // 像熔岩燈：幾團暖色的光球慢慢上下漂
+    draw(ctx, w, h, t = 0) {
+      const k = w / 1920;
+      ctx.fillStyle = gpnLinear(ctx, 0, 0, w, h, [[0, '#2b1055'], [1, '#d53369']]);
+      ctx.fillRect(0, 0, w, h);
+      ctx.filter = `blur(${Math.round(90 * k)}px)`;
+      const balls = [[0.15, 0.20, '#ff9a3c', 0.09], [0.38, 0.11, '#ffd23f', 0.07], [0.60, 0.17, '#ff5e78', 0.08],
+        [0.82, 0.13, '#ffb26b', 0.10], [0.28, 0.09, '#f72585', 0.06], [0.72, 0.10, '#ffc857', 0.05]];
+      balls.forEach(([x, r, c, sp], i) => {
+        const y = 0.5 + 0.38 * Math.sin(t * sp * 3 + i * 1.7);
+        gpnBlob(ctx, (x + 0.03 * Math.sin(t * 0.2 + i)) * w, y * h, r * w, r * w * 1.15, c, 0.8);
+      });
+      ctx.filter = 'none';
+    },
+  },
+  {
+    id: 'live-meteor', label: '流星雨', tone: 'dark', live: true,
+    // 滿天星，每隔幾秒劃過一道流星
+    draw(ctx, w, h, t = 0) {
+      const k = w / 1920;
+      ctx.fillStyle = gpnLinear(ctx, 0, 0, 0, h, [[0, '#02030a'], [1, '#151a3a']]);
+      ctx.fillRect(0, 0, w, h);
+      ctx.filter = `blur(${Math.round(140 * k)}px)`;
+      gpnBlob(ctx, 0.7 * w, 0.75 * h, 0.35 * w, 0.18 * h, '#3b2f7a', 0.6);
+      ctx.filter = 'none';
+      const rnd = gpnSeededRandom(77);
+      ctx.fillStyle = '#ffffff';
+      for (let i = 0; i < 200; i++) {
+        const x = rnd() * w, y = rnd() * h, ph = rnd() * 6.28;
+        ctx.globalAlpha = 0.25 + 0.45 * (0.5 + 0.5 * Math.sin(t * 1.3 + ph));
+        ctx.beginPath();
+        ctx.arc(x, y, (0.5 + rnd() * 1.4) * Math.max(k, 0.5), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // 三道流星輪流出現：每道 7 秒一輪，劃過的時間約 1.2 秒
+      for (let m = 0; m < 3; m++) {
+        const cycle = 7, local = (t + m * 2.6) % cycle;
+        if (local > 1.2) continue;
+        const r2 = gpnSeededRandom(100 + m + Math.floor((t + m * 2.6) / cycle) * 7);
+        const sx = (0.3 + r2() * 0.6) * w, sy = r2() * 0.35 * h;
+        const p = local / 1.2, len = 0.18 * w;
+        const hx = sx - p * 0.45 * w, hy = sy + p * 0.3 * h;
+        const g = ctx.createLinearGradient(hx, hy, hx + len, hy - len * 0.66);
+        g.addColorStop(0, 'rgba(255,255,255,0.95)');
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.globalAlpha = Math.sin(p * Math.PI);
+        ctx.strokeStyle = g;
+        ctx.lineWidth = Math.max(1, 3 * k);
+        ctx.beginPath();
+        ctx.moveTo(hx, hy);
+        ctx.lineTo(hx + len, hy - len * 0.66);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    },
+  },
+  {
+    id: 'live-sakura', label: '飄落櫻花', tone: 'light', live: true,
+    // 淡粉色的底，花瓣慢慢飄下來、一邊轉
+    draw(ctx, w, h, t = 0) {
+      const k = w / 1920;
+      ctx.fillStyle = gpnLinear(ctx, 0, 0, 0, h, [[0, '#fff7f9'], [1, '#ffe1ea']]);
+      ctx.fillRect(0, 0, w, h);
+      ctx.filter = `blur(${Math.round(60 * k)}px)`;
+      gpnBlob(ctx, 0.15 * w, 0.2 * h, 0.2 * w, 0.14 * w, '#ffc4d4', 0.7);
+      gpnBlob(ctx, 0.85 * w, 0.75 * h, 0.22 * w, 0.15 * w, '#ffb3c8', 0.6);
+      ctx.filter = 'none';
+      const rnd = gpnSeededRandom(12);
+      for (let i = 0; i < 40; i++) {
+        const x0 = rnd(), sp = 0.025 + rnd() * 0.035, size = (10 + rnd() * 16) * k, ph = rnd() * 6.28;
+        const y = ((rnd() + t * sp) % 1.1) - 0.05;
+        const x = x0 + 0.03 * Math.sin(t * 0.8 + ph);
+        ctx.save();
+        ctx.translate(x * w, y * h);
+        ctx.rotate(t * (0.4 + rnd()) + ph);
+        ctx.scale(1, 0.55 + 0.45 * Math.abs(Math.sin(t + ph)));
+        ctx.fillStyle = ['#ff9fb8', '#ffb7c9', '#f7a8c4'][i % 3];
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, size, size * 0.6, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+    },
+  },
+  {
+    id: 'live-rainbow', label: '彩虹漸層', tone: 'mid', live: true,
+    // 幾團柔和的顏色慢慢繞圈、互相融在一起
+    draw(ctx, w, h, t = 0) {
+      const k = w / 1920;
+      ctx.fillStyle = '#f2e9ff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.filter = `blur(${Math.round(150 * k)}px)`;
+      const cols = ['#ff8fab', '#ffc06e', '#7ee8c7', '#7aa8ff', '#c28bff'];
+      cols.forEach((c, i) => {
+        const a = t * 0.12 + (i / cols.length) * Math.PI * 2;
+        gpnBlob(ctx, (0.5 + 0.32 * Math.cos(a)) * w, (0.5 + 0.30 * Math.sin(a * 1.2)) * h, 0.26 * w, 0.26 * w, c, 0.85);
+      });
+      ctx.filter = 'none';
+    },
   },
 ];
 
@@ -516,4 +681,33 @@ function gpnPaintBackground(canvas, id) {
     ctx.restore();
   }
   return true;
+}
+
+/**
+ * 動態背景：在 canvas 上一直重畫，回傳「停下來」的函式。
+ * 畫小一點的圖（寬 960）再讓 CSS 放大：本來就是柔和的色塊，放大看不出來，電腦也輕鬆很多。
+ * 每秒 24 張就夠順；分頁看不到時瀏覽器會自己暫停。
+ * 使用者在系統設定要求「減少動態」的話，只畫一張不動的。
+ */
+function gpnAnimateBackground(canvas, id) {
+  const bg = GPN_BACKGROUNDS.find((b) => b.id === id);
+  if (!bg) return () => {};
+  const ctx = canvas.getContext('2d');
+  const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const start = performance.now();
+  let raf = 0, last = 0;
+  const frame = (now) => {
+    raf = requestAnimationFrame(frame);
+    if (now - last < 1000 / 24) return;
+    last = now;
+    ctx.save();
+    bg.draw(ctx, canvas.width, canvas.height, (now - start) / 1000);
+    ctx.restore();
+  };
+  if (still) {
+    bg.draw(ctx, canvas.width, canvas.height, 0);
+    return () => {};
+  }
+  raf = requestAnimationFrame(frame);
+  return () => cancelAnimationFrame(raf);
 }

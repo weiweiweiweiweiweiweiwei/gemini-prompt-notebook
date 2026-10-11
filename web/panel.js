@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.17.0';
+const GPN_APP_VERSION = '4.18.0';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -97,6 +97,10 @@ function gpnCreatePanel(opts) {
   /** 圖片：設定裡的「背景」 */
   const ICON_IMAGE =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>';
+
+  /** 喇叭：設定裡的「音效」 */
+  const ICON_SOUND =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>';
 
   /** 條列：「全部提示詞」頁 */
   const ICON_LIST =
@@ -298,6 +302,64 @@ function gpnCreatePanel(opts) {
       },
     };
   })();
+
+  /* ---- 音效 ----
+     點書籤、換資料夾、用提示詞、加星號、儲存、刪除、拖曳…都有一個很短的聲音。
+     全部用 Web Audio 當場合成（幾個正弦波、三角波），不用音檔，外掛和網頁版都一樣。
+     可以在 設定 → 音效 關掉（記在這台電腦，prefs 的 gpn_sound）。
+     瀏覽器規定要使用者先點過東西才能出聲，所以第一次播的時候才建 AudioContext。 */
+  let soundOn = true;
+  let audio = null;
+  prefs.get('gpn_sound').then((v) => { if (v === false) soundOn = false; });
+
+  function audioCtx() {
+    if (!audio) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      audio = new AC();
+    }
+    if (audio.state === 'suspended') audio.resume();
+    return audio;
+  }
+
+  /** 一個音：頻率 f（可以滑到 f2）、長度 dur 秒、波形、音量、延遲幾秒才響 */
+  function tone(a, { f, f2 = 0, dur = 0.08, type = 'sine', gain = 0.1, delay = 0 }) {
+    const t = a.currentTime + delay;
+    const o = a.createOscillator();
+    const g = a.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f, t);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(a.destination);
+    o.start(t);
+    o.stop(t + dur + 0.03);
+  }
+
+  const SOUNDS = {
+    tab:    [{ f: 480, f2: 720, dur: 0.11, type: 'triangle', gain: 0.09 }],                     // 翻到另一個書籤
+    folder: [{ f: 620, f2: 820, dur: 0.07, type: 'triangle', gain: 0.07 }],
+    copy:   [{ f: 880, dur: 0.09, gain: 0.08 }, { f: 1320, dur: 0.16, gain: 0.06, delay: 0.07 }],  // 叮咚
+    star:   [{ f: 1046, dur: 0.07, gain: 0.06 }, { f: 1318, dur: 0.07, gain: 0.05, delay: 0.05 },
+             { f: 1568, dur: 0.14, gain: 0.05, delay: 0.1 }],                                      // 閃一下
+    unstar: [{ f: 700, f2: 420, dur: 0.13, type: 'triangle', gain: 0.07 }],
+    click:  [{ f: 520, dur: 0.04, type: 'triangle', gain: 0.06 }],
+    open:   [{ f: 360, f2: 640, dur: 0.13, gain: 0.07 }],
+    save:   [{ f: 660, dur: 0.08, gain: 0.07 }, { f: 990, dur: 0.18, gain: 0.06, delay: 0.07 }],
+    del:    [{ f: 240, f2: 110, dur: 0.2, type: 'triangle', gain: 0.12 }],
+    pick:   [{ f: 300, f2: 520, dur: 0.07, type: 'triangle', gain: 0.06 }],
+    drop:   [{ f: 520, f2: 300, dur: 0.09, type: 'triangle', gain: 0.07 }],
+  };
+
+  function sfx(name) {
+    if (!soundOn || !SOUNDS[name]) return;
+    try {
+      const a = audioCtx();
+      if (a) for (const n of SOUNDS[name]) tone(a, n);
+    } catch { /* 沒聲音就算了，不影響操作 */ }
+  }
 
   /* ==========================================================================
      一、骨架
@@ -521,6 +583,7 @@ function gpnCreatePanel(opts) {
   /** 點書籤：有資料夾的話，一律顯示該書籤的「第一個資料夾」 */
   function switchTab(id) {
     if (id === data.activeId) return;
+    sfx('tab');
     data.activeId = id;
     folderId = null;
     persist();
@@ -532,6 +595,7 @@ function gpnCreatePanel(opts) {
 
   function switchFolder(id) {
     if (id === folderId) return;
+    sfx('folder');
     folderId = id;
     renderFolders();
     renderList();
@@ -817,6 +881,7 @@ function gpnCreatePanel(opts) {
     const cur = markOf(item.id);
     // 標的是已經不用的符號（設定裡移到「沒使用」了）：點一下就拿掉
     const next = cur && !order.includes(cur) ? '' : order[order.indexOf(cur) + 1] || '';
+    sfx(next ? 'star' : 'unstar');
     setMark(item.id, next);
     persist();
     // 在「我的最愛」、符號書籤裡換掉：那張卡片直接拿掉；在一般書籤：只換星號，不重畫（捲動位置不會跳）
@@ -994,6 +1059,7 @@ function gpnCreatePanel(opts) {
    */
   async function usePrompt(item, card, tabId, fid, fromRecent = false) {
     const r = (await onUse(item)) || {};
+    if (!r.bad) sfx('copy');
     if (!fromRecent) recordUse(item, tabId, fid);
     if (r.badge) flashCopied(card, r.badge);
     if (r.toast) toast(r.toast, !!r.bad);
@@ -1075,6 +1141,7 @@ function gpnCreatePanel(opts) {
   function toggleCardMenu(btn, item, tabId, fid) {
     if (menuFor === btn) { closeCardMenu(); return; }
     closeCardMenu();
+    sfx('click');
     const card = btn.closest('.gpn-card');
     const entry = (icon, text, sub, onclick, cls = '') => el('button', {
       class: 'gpn-menu-item' + cls, type: 'button', role: 'menuitem', onclick,
@@ -1139,6 +1206,7 @@ function gpnCreatePanel(opts) {
    */
   async function openInAI(site, item, card, tabId, fid) {
     const copied = await gpnShareCopy(item.content);
+    if (copied) sfx('copy');
     recordUse(item, tabId, fid);
 
     const s = AI_SITES[site];
@@ -1184,6 +1252,7 @@ function gpnCreatePanel(opts) {
 
   /** 刪掉一則提示詞（我的最愛、符號裡的也一起拿掉；最近使用記錄留著，會顯示「原本的提示詞已刪除」） */
   function deleteItem(tabId, fid, id) {
+    sfx('del');
     const list = listOf(tabId, fid);
     const idx = list ? list.items.findIndex((it) => it.id === id) : -1;
     if (idx >= 0) list.items.splice(idx, 1);
@@ -1222,6 +1291,7 @@ function gpnCreatePanel(opts) {
 
       const list = ui.list;
       let moved = false;
+      sfx('pick');
       card.classList.add('is-dragging');
       list.classList.add('is-dragging');
 
@@ -1242,7 +1312,7 @@ function gpnCreatePanel(opts) {
       const onUp = () => {
         card.classList.remove('is-dragging');
         list.classList.remove('is-dragging');
-        if (moved) saveOrder(tabId, fid);
+        if (moved) { sfx('drop'); saveOrder(tabId, fid); }
       };
       followPointer(e.pointerId, onMove, onUp);
     });
@@ -1310,6 +1380,7 @@ function gpnCreatePanel(opts) {
       function startDrag() {
         dragging = true;
         closeCardMenu();
+        sfx('pick');
         node.classList.add('is-drag');
         box.classList.add('is-reordering');
       }
@@ -1355,6 +1426,7 @@ function gpnCreatePanel(opts) {
         if (!dragging) return;
         node.classList.remove('is-drag');
         box.classList.remove('is-reordering');
+        sfx('drop');
         o.onDrop([...box.querySelectorAll(selector)].map((n) => n.getAttribute('data-id')));
         // 擋掉這次放開後的 click，避免拖完又觸發切換（放開的地方不一定還在原本那顆上，所以擋在整個視窗）
         window.addEventListener('click', swallow, { capture: true, once: true });
@@ -1377,6 +1449,7 @@ function gpnCreatePanel(opts) {
 
   function showLayer(layer) {
     closeCardMenu();
+    if (!layerOpen(layer)) sfx('open');
     layer.classList.add('is-open');
     ui.overlay.classList.add('is-editing');
   }
@@ -1581,6 +1654,7 @@ function gpnCreatePanel(opts) {
       toast(moved ? `已新增到「${whereLabel(to.tabId, to.folderId)}」` : '已新增提示詞');
     }
 
+    sfx('save');
     await persist();
     closeEditor();
     render();
@@ -1676,6 +1750,7 @@ function gpnCreatePanel(opts) {
     data.tabs.push(tab);
     data.activeId = tab.id;          // 新增後直接切過去
     folderId = null;
+    sfx('save');
     await persist();
     closeNewTab();
     render();
@@ -1772,6 +1847,7 @@ function gpnCreatePanel(opts) {
       toast('已新增資料夾');
     }
 
+    sfx('save');
     await persist();
     closeFolderEditor();
     render();
@@ -1794,6 +1870,7 @@ function gpnCreatePanel(opts) {
       return;
     }
 
+    sfx('del');
     tab.folders.splice(tab.folders.indexOf(folder), 1);
     if (folderId === folder.id) folderId = null;
 
@@ -1825,6 +1902,7 @@ function gpnCreatePanel(opts) {
     ui.sNavItems = [
       navItem('tab', ICON_TAB, '名稱與資料夾'),
       navItem('marks', ICON_STAR, '星號'),
+      navItem('sound', ICON_SOUND, '音效'),
       // 沒有雲端功能的地方（例如測試）就不出現這一項
       cloud ? navItem('account', ICON_CLOUD_DONE, '雲端同步') : null,
       navItem('backup', ICON_SYNC, '備份'),
@@ -1884,6 +1962,9 @@ function gpnCreatePanel(opts) {
     /* ---- 星號 ---- */
     const secMarks = buildMarksSection();
 
+    /* ---- 音效 ---- */
+    const secSound = buildSoundSection();
+
     /* ---- 雲端同步 ---- */
     const secAccount = cloud ? buildAccountSection() : null;
 
@@ -1893,7 +1974,7 @@ function gpnCreatePanel(opts) {
     /* ---- 背景 ---- */
     const secLook = standalone ? buildLookSection() : null;
 
-    ui.sSections = [secTab, secMarks, secAccount, secBackup, secLook].filter(Boolean);
+    ui.sSections = [secTab, secMarks, secSound, secAccount, secBackup, secLook].filter(Boolean);
     ui.sBody = el('div', { class: 'gpn-settings-body' }, ...ui.sSections);
 
     ui.settings = el('div', { class: 'gpn-dialog gpn-settings', onmousedown: stop },
@@ -1960,6 +2041,7 @@ function gpnCreatePanel(opts) {
     if (!tab) return;
 
     const folders = gpnCountFolders(data);
+    refreshSound();
     ui.bStats.textContent = `${data.tabs.length} 個書籤、` +
       (folders ? `${folders} 個資料夾、` : '') + `${gpnCountItems(data)} 則提示詞`;
     refreshMarks();
@@ -2013,6 +2095,7 @@ function gpnCreatePanel(opts) {
   }
 
   function onFolderSwitch() {
+    sfx('click');
     const tab = tabById(settingsTabId);
     if (!tab || tab.fixed) return;
 
@@ -2067,6 +2150,7 @@ function gpnCreatePanel(opts) {
       return;
     }
 
+    sfx('del');
     data.tabs.splice(data.tabs.indexOf(tab), 1);
     if (!tabById(data.activeId)) { data.activeId = data.tabs[0].id; folderId = null; }
 
@@ -2081,6 +2165,37 @@ function gpnCreatePanel(opts) {
     tabDelArmed = false;
     if (ui.sDel) disarmButton(ui.sDel, '刪除這個書籤');
   }
+
+  /* ---- 音效（設定 → 音效）---- */
+  function buildSoundSection() {
+    ui.soundSwitch = el('button', {
+      class: 'gpn-switch-row', type: 'button', role: 'switch', 'aria-checked': 'true',
+      onclick: () => {
+        soundOn = !soundOn;
+        prefs.set('gpn_sound', soundOn);
+        refreshSound();
+        if (soundOn) sfx('save');
+      },
+    },
+      el('span', { class: 'gpn-switch', 'aria-hidden': 'true' }),
+      el('span', { class: 'gpn-switch-text' }, el('b', { text: '音效' }), ui.soundState = el('span')));
+    const demo = (name, text) => el('button', { class: 'gpn-btn2', type: 'button', onclick: () => sfx(name) }, text);
+    return el('section', { class: 'gpn-section', 'data-section': 'sound' },
+      el('h3', { text: '音效' }),
+      el('p', { class: 'gpn-lede', text:
+        '點書籤、換資料夾、用提示詞、加星號、儲存、刪除、拖曳時，都會有一個很短的聲音。不喜歡可以關掉。' }),
+      field('開關', '（只記在這台電腦）', ui.soundSwitch),
+      field('試聽', null, el('div', { class: 'gpn-brow' },
+        demo('tab', '換書籤'), demo('copy', '用提示詞'), demo('star', '加星號'),
+        demo('save', '儲存'), demo('del', '刪除'), demo('pick', '拖曳'))));
+  }
+
+  function refreshSound() {
+    if (!ui.soundSwitch) return;
+    ui.soundSwitch.setAttribute('aria-checked', String(soundOn));
+    ui.soundState.textContent = soundOn ? '開啟中' : '關閉中';
+  }
+
 
   /* ---- 星號 ----
      和 Gmail 的「星號」設定一樣：上面「使用中」、下面「沒使用」。連續點提示詞的星號時，照「使用中」的順序換。
@@ -2152,6 +2267,7 @@ function gpnCreatePanel(opts) {
   }
 
   function toggleMarkType(m) {
+    sfx('click');
     const types = data.markTypes || [];
     if (types.includes(m)) {
       const n = markedIds(m).length;
@@ -2281,6 +2397,7 @@ function gpnCreatePanel(opts) {
   }
 
   async function onGateLogin() {
+    sfx('click');
     ui.gateBtn.disabled = true;
     ui.gateMsg.textContent = '';
     ui.gateMsg.classList.remove('is-bad', 'is-ok');
@@ -2852,7 +2969,8 @@ function gpnCreatePanel(opts) {
     for (const b of bgPresets) {
       const c = el('canvas', { width: '240', height: '150' });   // 縮圖用同一個函式畫，長相和大圖一樣
       gpnPaintBackground(c, b.id);
-      tiles.push(tile(b.id, b.label, el('span', { class: 'gpn-bg-thumb' }, c)));
+      tiles.push(tile(b.id, b.label, el('span', { class: 'gpn-bg-thumb' }, c,
+        b.live ? el('span', { class: 'gpn-bg-badge', text: '動態' }) : null)));
     }
     if (hasCustomBg) {
       const thumb = el('span', { class: 'gpn-bg-thumb' });
@@ -2893,7 +3011,31 @@ function gpnCreatePanel(opts) {
    * 把背景鋪到整個畫面（遮罩層）。內建的背景當場畫一張 1920 × 1200 的圖。
    * 同時標上圖的明暗（data-tone）：淺色主題配上偏暗的圖，styles.css 會把玻璃調得實一點。
    */
+  let liveStop = null;       // 動態背景正在跑的話，停下它的函式
+
+  function stopLive() {
+    liveStop?.();
+    liveStop = null;
+    ui.liveBg?.remove();
+  }
+
   async function applyBackground(id) {
+    stopLive();
+    // 動態背景：遮罩最底下放一張一直重畫的 canvas（backgrounds.js 的 gpnAnimateBackground）
+    const live = bgPresets.find((b) => b.id === id && b.live);
+    if (live) {
+      if (bgUrl) URL.revokeObjectURL(bgUrl);
+      bgUrl = '';
+      ui.liveBg = ui.liveBg || el('canvas', { class: 'gpn-bg-live', width: '960', height: '600', 'aria-hidden': 'true' });
+      ui.overlay.prepend(ui.liveBg);
+      liveStop = gpnAnimateBackground(ui.liveBg, id);
+      bgChoice = id;
+      ui.overlay.style.backgroundImage = '';
+      ui.overlay.classList.add('has-wallpaper');
+      ui.overlay.setAttribute('data-tone', live.tone || 'mid');
+      markBgTiles();
+      return;
+    }
     let url = '', tone = '';
     try {
       if (id === 'custom') {
@@ -2926,6 +3068,7 @@ function gpnCreatePanel(opts) {
   }
 
   async function chooseBackground(id) {
+    sfx('click');
     const wallpaper = id === 'custom' ? (await prefs.get(GPN_WALLPAPER_ID_KEY)) || '' : '';
     data.look = gpnCleanLook({ bg: id, wallpaper });
     persist();
