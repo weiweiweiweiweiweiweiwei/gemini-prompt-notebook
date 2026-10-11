@@ -183,7 +183,7 @@
 | 星號 | 連續點星號時要換哪幾種符號（見上面「星號」）。在我的最愛、符號書籤按齒輪，會直接打開這一頁 |
 | 雲端同步 | 連結 Google 雲端硬碟、同步狀態、中斷連結（見第三節） |
 | 備份 | 所有書籤一起下載成一個備份檔、或匯入備份檔（見第三節） |
-| 音效 | 點書籤、換資料夾、用提示詞、加星號、儲存、刪除、拖曳時的短音效，可以關掉、可以試聽（只記在這台電腦） |
+| 音效 | 點書籤（「卡嚓」一聲）、換資料夾、用提示詞、加星號、儲存、刪除、拖曳時的短音效，可以關掉、可以試聽（只記在這台電腦） |
 | 背景 | 只有網頁版、工具列小視窗有：點縮圖就換，筆記本的霧面玻璃會把背景模糊地透出來 |
 
 背景可以選：**預設光暈**、內建的 20 張（**夕陽、極光、粉彩、山嵐、海浪、包浩斯、薰衣草、森林、櫻花、沙丘、夜景、薄荷、
@@ -488,6 +488,7 @@ src/
   content.js           外掛專屬：注入按鈕、找到輸入框、把提示詞填進去
   styles.css           面板的全部樣式（毛玻璃）
   backgrounds.js       設定 → 背景 的內建背景（用 canvas 畫的；網頁版、工具列小視窗用）
+  sounds.js            錄好的音效（換書籤的「卡嚓」，Pixabay 免費音效，用 data: 網址內嵌）
   popup.html / .js     工具列小視窗
   sync.js              雲端同步：連結 Google、換 token、讀寫雲端硬碟上的筆記本、合併
   cloud-config.js      雲端的連線設定（Google OAuth 用戶端 ID、token 中繼的網址）
@@ -503,7 +504,7 @@ web/
   ext-login.html       外掛連結雲端硬碟時的回程頁（沒裝外掛的人打開只會看到說明）
   privacy.html         隱私權政策（Google 同意畫面要填這個網址）
   store.js             同樣的資料格式 + localStorage 存取
-  share.js / panel.js / styles.css / sync.js / cloud-config.js / backgrounds.js   和 src/ 同一份
+  share.js / panel.js / styles.css / sync.js / cloud-config.js / backgrounds.js / sounds.js   和 src/ 同一份
 presets/
   chatgpt-99-prompts.json            可以直接匯入的 99 個提示詞
 supabase/

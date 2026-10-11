@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.18.0';
+const GPN_APP_VERSION = '4.18.1';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -353,11 +353,37 @@ function gpnCreatePanel(opts) {
     drop:   [{ f: 520, f2: 300, dur: 0.09, type: 'triangle', gain: 0.07 }],
   };
 
+  /**
+   * 錄好的音效（sounds.js，data: 網址）：有的話用它，沒有才用上面合成的。
+   * 換書籤用真的「卡嚓」聲（使用者挑的）。第一次播的時候才解碼，之後重複用同一份。
+   */
+  const SAMPLES = { tab: typeof GPN_SOUND_TAB !== 'undefined' ? GPN_SOUND_TAB : '' };
+  const decoded = {};
+
+  function sample(a, name) {
+    if (!decoded[name]) {
+      // 不用 fetch：外掛在 AI 網站裡時，網站的安全設定可能擋掉 data: 網址
+      const b64 = SAMPLES[name].split(',')[1];
+      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      decoded[name] = a.decodeAudioData(bytes.buffer);
+    }
+    return decoded[name].then((buf) => {
+      const src = a.createBufferSource();
+      const g = a.createGain();
+      g.gain.value = 0.9;
+      src.buffer = buf;
+      src.connect(g).connect(a.destination);
+      src.start();
+    });
+  }
+
   function sfx(name) {
-    if (!soundOn || !SOUNDS[name]) return;
+    if (!soundOn || !(SAMPLES[name] || SOUNDS[name])) return;
     try {
       const a = audioCtx();
-      if (a) for (const n of SOUNDS[name]) tone(a, n);
+      if (!a) return;
+      if (SAMPLES[name]) sample(a, name).catch(() => { for (const n of SOUNDS[name] || []) tone(a, n); });
+      else for (const n of SOUNDS[name]) tone(a, n);
     } catch { /* 沒聲音就算了，不影響操作 */ }
   }
 

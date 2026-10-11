@@ -17,6 +17,7 @@
          sync.js    雲端同步（外掛在背景程式跑，網頁版在網頁裡跑）
          cloud-config.js  雲端的連線設定（兩邊要連到同一個資料庫）
          backgrounds.js   設定 → 背景 的內建背景（網頁版、工具列小視窗）
+         sounds.js        錄好的音效（換書籤的「卡嚓」）
     2. src/store.js  == web/store.js        （只有「共用資料契約」那一段）
     3. manifest.json 的 version == panel.js 的 GPN_APP_VERSION
        （設定視窗左下角顯示的版本號，用來確認外掛和網頁版是不是同一版）
@@ -27,7 +28,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-WHOLE_FILES = ['share.js', 'panel.js', 'styles.css', 'sync.js', 'cloud-config.js', 'backgrounds.js']
+WHOLE_FILES = ['share.js', 'panel.js', 'styles.css', 'sync.js', 'cloud-config.js', 'backgrounds.js', 'sounds.js']
 BEGIN = '/* ==== 共用資料契約 開始'
 END = '/* ==== 共用資料契約 結束'
 
