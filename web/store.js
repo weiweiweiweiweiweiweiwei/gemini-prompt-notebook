@@ -274,7 +274,7 @@ const GpnStore = {
       const raw = localStorage.getItem(GPN_KEY);
       this.cache = gpnNormalize(raw ? JSON.parse(raw) : null);
     } catch (err) {
-      console.warn('[特務P] 讀取資料失敗，暫時使用記憶體資料：', err);
+      console.warn('[罐頭P] 讀取資料失敗，暫時使用記憶體資料：', err);
     }
     return this.cache;
   },
@@ -285,7 +285,7 @@ const GpnStore = {
       this._mine = JSON.stringify(this.cache);
       localStorage.setItem(GPN_KEY, this._mine);
     } catch (err) {
-      console.warn('[特務P] 儲存失敗：', err);
+      console.warn('[罐頭P] 儲存失敗：', err);
       return false;
     }
     for (const cb of this._onSave) cb(this.cache);
@@ -304,7 +304,7 @@ const GpnStore = {
       this._mine = JSON.stringify(this.cache);
       localStorage.setItem(GPN_KEY, this._mine);
     } catch (err) {
-      console.warn('[特務P] 儲存失敗：', err);
+      console.warn('[罐頭P] 儲存失敗：', err);
     }
     for (const cb of this._onExternal) cb(this.cache);
   },

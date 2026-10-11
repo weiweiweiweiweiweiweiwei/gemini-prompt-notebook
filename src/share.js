@@ -64,14 +64,14 @@ function gpnBuildExport(data, look = null) {
 
 /**
  * 備份檔名。有連結 Google 雲端硬碟時，用帳號 @ 前面那段，一看就知道是哪個帳號的：
- *   apple@gmail.com → 特務P_apple_20261004.json；沒連結 → 特務P-備份-20261004.json
+ *   apple@gmail.com → 罐頭P_apple_20261004.json；沒連結 → 罐頭P-備份-20261004.json
  */
 function gpnExportFileName(email = '') {
   const d = new Date();
   const p = (n) => String(n).padStart(2, '0');
   const day = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`;
   const who = String(email).split('@')[0].replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 40);
-  return who ? `特務P_${who}_${day}.json` : `特務P-備份-${day}.json`;
+  return who ? `罐頭P_${who}_${day}.json` : `罐頭P-備份-${day}.json`;
 }
 
 /** 觸發瀏覽器下載一個 .json 備份檔。email：連結的 Google 帳號（取檔名用）；look：背景 */
@@ -104,12 +104,12 @@ function gpnParseImport(raw) {
   try {
     obj = text.startsWith('{') ? JSON.parse(text) : gpnDecodeShare(text);
   } catch {
-    return { ok: false, error: '看不懂這個檔案，請選「特務P」下載的備份檔' };
+    return { ok: false, error: '看不懂這個檔案，請選「罐頭P」下載的備份檔' };
   }
 
   if (!obj || typeof obj !== 'object') return { ok: false, error: '內容格式不對' };
   if (obj.app && obj.app !== GPN_SHARE_APP) {
-    return { ok: false, error: '這不是「特務P」匯出的備份' };
+    return { ok: false, error: '這不是「罐頭P」匯出的備份' };
   }
   if (!Array.isArray(obj.tabs)) return { ok: false, error: '這份備份裡找不到書籤資料' };
 

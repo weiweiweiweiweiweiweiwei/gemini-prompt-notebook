@@ -1,7 +1,7 @@
 {
   "name": "tewu-p-promo",
   "private": true,
-  "description": "特務P 使用情境影片：stage.html 是畫面，render.js 把它錄成 mp4",
+  "description": "罐頭P 使用情境影片：stage.html 是畫面，render.js 把它錄成 mp4",
   "scripts": {
     "render": "node render.js",
     "render:60": "node render.js --fps 60"

@@ -339,7 +339,7 @@
     typed = ''; paintComposer();
     await sleep(500);
 
-    // ── 打開特務P ──
+    // ── 打開罐頭P ──
     caption('按一下輸入框旁的「書籤」', '#4f8ef7');
     cursorEl.classList.add('is-on');
     trigger.classList.add('is-hint');

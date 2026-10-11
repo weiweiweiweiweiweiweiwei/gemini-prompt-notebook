@@ -27,7 +27,7 @@ const GPN_CLOUD = {
 };
 
 /** 雲端硬碟上的檔名（使用者可以改名，改了也找得到，見 sync.js 的 findFile） */
-const GPN_DRIVE_FILE_NAME = '特務P 提示詞筆記本.json';
+const GPN_DRIVE_FILE_NAME = '罐頭P 提示詞筆記本.json';
 
 /** 雲端功能現在能不能用：設定要填好，而且已經對所有人打開（或管理員在這個瀏覽器開了試用） */
 function gpnCloudConfigured(cfg) {

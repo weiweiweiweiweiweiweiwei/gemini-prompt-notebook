@@ -1,5 +1,5 @@
 /**
- * 特務P：Google 登入的 token 中繼（Supabase Edge Function）
+ * 罐頭P：Google 登入的 token 中繼（Supabase Edge Function）
  *
  * 為什麼需要它：提示詞存在使用者自己的 Google 雲端硬碟，瀏覽器直接和 Google 溝通，
  * 但「用登入回來的 code 換 token」「token 過期換新的」這兩步，Google 規定要附用戶端密鑰，

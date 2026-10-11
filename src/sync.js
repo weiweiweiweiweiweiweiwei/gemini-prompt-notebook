@@ -8,7 +8,7 @@
  *
  * 資料存在哪裡：使用者「自己的」Google 雲端硬碟裡的一個檔案（GPN_DRIVE_FILE_NAME，見 cloud-config.js），
  *   整本筆記本存成一份 JSON。我們的伺服器不經手也不保存提示詞。
- *   權限只要 drive.file：只能碰「特務P 自己建立的檔案」，看不到雲端硬碟裡的其他東西。
+ *   權限只要 drive.file：只能碰「罐頭P 自己建立的檔案」，看不到雲端硬碟裡的其他東西。
  *   檔案靠 appProperties（gpnNotebook=1）認出來，使用者改檔名、搬資料夾都找得到。
  *
  * 登入（OAuth，授權碼＋PKCE）：
@@ -90,6 +90,7 @@ function gpnCreateSync(o) {
   let dirtyGen = 0;       // 這台改了幾次（同步途中又改了，同步完要再送一次）
   let again = false;      // 這一輪寫進這台時，合併了使用者途中新做的（還沒送上雲端）
   let synced = null;      // 這一輪同步好的內容（雲端和這台一樣的那份）
+  let tidied = false;     // 這次開啟已經整理過雲端上的檔名、頭像了
 
   function setState(patch) {
     state = { ...state, ...patch };
@@ -230,7 +231,7 @@ function gpnCreateSync(o) {
     return text ? JSON.parse(text) : {};
   }
 
-  const FIELDS = 'id,version,modifiedTime,trashed';
+  const FIELDS = 'id,version,modifiedTime,trashed,name';
 
   /** 找雲端硬碟上的筆記本：先試記住的那個；不見了（被刪、被丟垃圾桶）就用 appProperties 找 */
   async function findFile() {
@@ -289,7 +290,7 @@ function gpnCreateSync(o) {
     const info = {
       name: GPN_DRIVE_FILE_NAME,
       mimeType: 'application/json',
-      description: '特務P 的提示詞，由特務P 自動同步。請不要手動修改內容；刪掉這個檔案等於刪掉雲端上的提示詞。',
+      description: '罐頭P 的提示詞，由罐頭P 自動同步。請不要手動修改內容；刪掉這個檔案等於刪掉雲端上的提示詞。',
       appProperties: { gpnNotebook: '1' },
     };
     const body =
@@ -471,12 +472,51 @@ function gpnCreateSync(o) {
       }
     }
 
+    if (!tidied) {
+      tidied = true;
+      await tidyUp(file || { id: meta.fileId });
+    }
+
     meta.lastSyncAt = Date.now();
     await saveMeta();
     // 記下這次同步好的內容，下次兩邊都改過時拿來當共同的起點
     if (synced) await kv.set(GPN_BASE_KEY, synced);
     else if (!base && hashDoc(local) === meta.hash) await kv.set(GPN_BASE_KEY, local);
     return note;
+  }
+
+  /**
+   * 每次開啟只做一次的小整理，失敗了也不影響同步：
+   *   1. 改名「罐頭P」之前建的檔案，名字換成新的（使用者自己改過名字的不動）
+   *   2. 沒有頭像（登入時 Google 沒給，例如 4.16.0 以前登入的）：向雲端硬碟要這個帳號的大頭貼，
+   *      雲端硬碟的權限就拿得到，不用重新登入
+   */
+  async function tidyUp(file) {
+    const rename = async (f, from, to) => {
+      if (f?.id && f.name === from) {
+        await drive(`/drive/v3/files/${encodeURIComponent(f.id)}?fields=id`, {
+          method: 'PATCH', type: 'application/json', body: JSON.stringify({ name: to }),
+        });
+      }
+    };
+    try { await rename(file, '特務P 提示詞筆記本.json', GPN_DRIVE_FILE_NAME); } catch { /* 下次再說 */ }
+    try {
+      const r = await drive('/drive/v3/files?' + new URLSearchParams({
+        q: "appProperties has { key='gpnWallpaper' and value='1' } and trashed = false",
+        spaces: 'drive', fields: 'files(id,name)', pageSize: '1',
+      }));
+      await rename((r.files || [])[0], '特務P 背景圖', '罐頭P 背景圖');
+    } catch { /* 下次再說 */ }
+    if (!session?.picture) {
+      try {
+        const a = await drive('/drive/v3/about?fields=user(photoLink)');
+        const pic = a.user?.photoLink || '';
+        if (pic && session) {
+          await saveSession({ ...session, picture: pic });
+          setState({ picture: pic });
+        }
+      } catch { /* 拿不到就繼續用 Email 第一個字 */ }
+    }
   }
 
   /** 立刻同步一次（拉＋推）。同時只會有一次在跑。 */
@@ -606,6 +646,7 @@ function gpnCreateSync(o) {
 
     await switchUser(async () => {
       await saveSession(s);
+      tidied = false;                      // 換了帳號：檔名、頭像再整理一次
       meta = { ...EMPTY_META, ...((await kv.get(GPN_SYNC_KEY)) || {}) };
       if (meta.userId !== s.sub) {
         // 換了一個帳號（或第一次登入）：從頭同步，以雲端為準。
@@ -644,7 +685,7 @@ function gpnCreateSync(o) {
 
   /* ========== 背景圖 ==========
      自己上傳的背景圖很大（幾百 KB），不放進筆記本（那樣每改一則提示詞都要傳一次圖）。
-     另外存一個檔案「特務P 背景圖」，appProperties 的 wid 記著是哪一張；筆記本裡只記代號（look.wallpaper）。
+     另外存一個檔案「罐頭P 背景圖」，appProperties 的 wid 記著是哪一張；筆記本裡只記代號（look.wallpaper）。
      別台看到代號和自己手上的不一樣，才來下載。 */
 
   const WALLPAPER_Q = "appProperties has { key='gpnWallpaper' and value='1' } and trashed = false";
@@ -666,8 +707,8 @@ function gpnCreateSync(o) {
       const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
       const f = await wallpaperFile();
       const info = f ? { appProperties: { wid: id } } : {
-        name: '特務P 背景圖', mimeType: mime,
-        description: '特務P 的背景圖，由特務P 自動同步。',
+        name: '罐頭P 背景圖', mimeType: mime,
+        description: '罐頭P 的背景圖，由罐頭P 自動同步。',
         appProperties: { gpnWallpaper: '1', wid: id },
       };
       const boundary = 'gpn_' + Math.random().toString(36).slice(2);

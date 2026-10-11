@@ -2,7 +2,7 @@
  * 網頁版和外掛之間的小橋（只在網頁版的網址上執行）。
  *
  * 網頁版「⋮ → 開啟 Gemini／ChatGPT」本來做不到自動填入：網頁碰不到別的網站（同源政策），
- * 也碰不到外掛的 chrome.storage。但這台電腦如果也裝了特務P 外掛，就可以借外掛的手：
+ * 也碰不到外掛的 chrome.storage。但這台電腦如果也裝了罐頭P 外掛，就可以借外掛的手：
  *   1. 網頁版用 window.postMessage 把提示詞交給這裡（panel.js 的 handOffToExtension）
  *   2. 這裡放進 chrome.storage（和外掛面板用的是同一個 key：panel.js 的 GPN_PENDING_FILL）
  *   3. 新分頁的 content.js 拿走、填進輸入框（不會送出）

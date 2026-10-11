@@ -313,7 +313,7 @@ const GpnStore = {
       this.cache = gpnNormalize(got[GPN_KEY]);
       this._last = JSON.stringify(got[GPN_KEY] ?? null);
     } catch (err) {
-      console.warn('[特務P] 讀取資料失敗，暫時使用記憶體資料：', err);
+      console.warn('[罐頭P] 讀取資料失敗，暫時使用記憶體資料：', err);
     }
     return this.cache;
   },
@@ -330,7 +330,7 @@ const GpnStore = {
       await chrome.storage.local.set({ [GPN_KEY]: this.cache });
       return true;
     } catch (err) {
-      console.warn('[特務P] 儲存失敗：', err);
+      console.warn('[罐頭P] 儲存失敗：', err);
       this._last = '';
       return false;
     }

@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.16.0';
+const GPN_APP_VERSION = '4.17.0';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -164,7 +164,7 @@ function gpnCreatePanel(opts) {
   /** 給人看的名稱：黃色星星叫「我的最愛」 */
   const markLabel = (m) => (m === GPN_MARK_FAV ? '我的最愛' : GPN_MARK_LABELS[m] || '');
 
-  /** 特務P 的 logo（戴紳士帽的 P，和網頁版的 web/logo.svg 同一筆畫）：登入畫面用 */
+  /** 罐頭P 的 logo（戴紳士帽的 P，和網頁版的 web/logo.svg 同一筆畫）：登入畫面用 */
   const ICON_LOGO =
     '<svg viewBox="200 140 1660 1460" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="80" stroke-linecap="round" stroke-linejoin="round"><path d="M570 635 L735 285 C760 232 782 212 822 222 C880 236 955 276 1012 280 C1068 283 1150 228 1196 210 C1232 197 1252 212 1268 240 L1340 385"/><path d="M1455 640 C1570 600 1720 562 1762 520 C1795 486 1745 466 1650 467 C1500 470 1350 500 1200 526 C950 570 700 612 520 662 C380 702 245 762 268 815 C290 862 420 842 560 815 C800 770 1050 724 1215 724 C1405 726 1508 805 1500 925 C1490 1085 1250 1152 950 1180 C912 1184 902 1205 902 1240 L902 1390 C902 1470 800 1522 720 1525 C640 1528 595 1478 595 1420 L595 895"/></g></svg>';
 
@@ -375,7 +375,7 @@ function gpnCreatePanel(opts) {
 
     ui.overlay = el('div', {
       class: 'gpn-overlay', role: 'dialog', 'aria-modal': standalone ? null : 'true',
-      'aria-label': '特務P',
+      'aria-label': '罐頭P',
       onmousedown: (e) => { if (!standalone && e.target === ui.overlay) close(); },
     }, ui.book);
     // 雲端的狀態還沒拿到之前先別露出筆記本（不然沒登入的人會先閃一下內容），最多等 3 秒
@@ -584,17 +584,23 @@ function gpnCreatePanel(opts) {
     if (ui.addTabBtn) ui.tabs.append(ui.addTabBtn);
 
     // 最右邊固定：自己開的符號（設定 → 星號）、「我的最愛」「最近使用」。
-    // 不能刪、不能拖，其他書籤也拖不到它們後面
+    // 不能刪；自己的書籤拖不到它們後面。符號書籤之間可以長按左右拖，換的就是連續點星號時的順序
     const fixed = (data.markTypes || []).map((m) => {
       const node = fixedTabNode(GPN_MARK_TAB + m, 'mark', GPN_MARK_LABELS[m], markIcon(m),
-        `${GPN_MARK_LABELS[m]}（連續點提示詞右邊的星號，換到這個符號就會收進這裡）`, 'is-mark');
+        `${GPN_MARK_LABELS[m]}（連續點提示詞右邊的星號，換到這個符號就會收進這裡；長按可以左右拖曳排順序）`, 'is-mark');
       node.style.setProperty('--mark-accent', markAccent(m));
+      attachHoldDrag({
+        handle: node.querySelector('.gpn-tab-main'), node, box: ui.tabs, selector: '.gpn-tab.is-mark',
+        anchor: () => ui.tabEls.get(GPN_FAV_ID),           // 拖到最後面：排在「我的最愛」前面
+        vertical: () => false,
+        canStart: () => (data.markTypes || []).length > 1,
+        onDrop: (order) => setMarkOrder(order.map(gpnMarkOfTab)),
+      });
       return node;
     });
     fixed.push(
       fixedTabNode(GPN_FAV_ID, 'fav', '我的最愛', ICON_STAR, '我的最愛（在提示詞右邊按星號，就會收進這裡）'),
       fixedTabNode(GPN_RECENT_ID, 'recent', '最近使用', ICON_HISTORY, `最近使用（最近用過的 ${GPN_RECENT_MAX} 則）`));
-    fixed[0].classList.add('gpn-tab--push');
     ui.tabs.append(...fixed);
 
     paintBookColor(tab);
@@ -1286,6 +1292,7 @@ function gpnCreatePanel(opts) {
    * @param {string}   o.selector  容器裡「可以排序的兄弟」
    * @param {Function} o.anchor    () => 永遠要排在最後的元素（「＋」按鈕），沒有就回 null
    * @param {Function} o.vertical  () => 是否上下排列
+   * @param {boolean}  [o.grid]    會換行的一排（設定裡的符號）：先比上下、同一列再比左右
    * @param {Function} o.canStart  () => 現在能不能排序
    * @param {Function} o.onDrop    (新的 id 順序) => void
    */
@@ -1333,7 +1340,10 @@ function gpnCreatePanel(opts) {
         let after = null;
         for (const n of box.querySelectorAll(selector + ':not(.is-drag)')) {
           const b = n.getBoundingClientRect();
-          if (pos < (v ? b.top + b.height / 2 : b.left + b.width / 2)) { after = n; break; }
+          const before = o.grid
+            ? ev.clientY < b.top || (ev.clientY < b.bottom && ev.clientX < b.left + b.width / 2)
+            : pos < (v ? b.top + b.height / 2 : b.left + b.width / 2);
+          if (before) { after = n; break; }
         }
         // 拖到最後面時，要排在「＋」按鈕前面
         const target = after || o.anchor();
@@ -2088,11 +2098,11 @@ function gpnCreatePanel(opts) {
       el('p', { class: 'gpn-lede', text:
         '和 Gmail 的星號一樣：連續點提示詞右邊的星號，會照「使用中」的順序換成不同的符號，換完一輪就取消。' +
         '每一種符號在書籤列都有自己的書籤（在「我的最愛」左邊），標了那個符號的提示詞會收在裡面。' }),
-      field('使用中', '（點一下就移到「沒使用」）', ui.mUse),
+      field('使用中', '（點一下就移到「沒使用」；長按可以左右拖曳排順序）', ui.mUse),
       field('沒使用', '（點一下就加到「使用中」的最後面）', ui.mOff),
       el('div', { class: 'gpn-note', text:
         `黃色星星就是「我的最愛」，固定排第一個。黃色星星以外最多再用 ${GPN_MAX_MARKS} 種，書籤列才放得下。` +
-        '想換順序的話，先點掉，再照想要的順序一個一個點回來。' }),
+        '順序就是連續點星號時換的順序，書籤列上的符號書籤也照這個順序；在這裡或書籤列上長按拖曳都能換。' }),
       el('div', { class: 'gpn-sep' }),
       field('預先設定', '（和 Gmail 一樣）',
         el('div', { class: 'gpn-brow' },
@@ -2107,7 +2117,7 @@ function gpnCreatePanel(opts) {
       const locked = m === GPN_MARK_FAV;
       const n = markedIds(m).length;
       return el('button', {
-        class: 'gpn-mark-chip' + (locked ? ' is-locked' : ''), type: 'button', role: 'listitem',
+        class: 'gpn-mark-chip' + (locked ? ' is-locked' : ''), type: 'button', role: 'listitem', 'data-id': m,
         title: locked ? '黃色星星就是「我的最愛」，固定排第一個'
           : (on ? '點一下：移到「沒使用」' : '點一下：加到「使用中」') + (n ? `（現在有 ${n} 則標了這個）` : ''),
         'aria-disabled': locked ? 'true' : null,
@@ -2118,7 +2128,27 @@ function gpnCreatePanel(opts) {
         n ? el('span', { class: 'gpn-mark-n', text: String(n) }) : null);
     };
     ui.mUse.replaceChildren(...using.map((m) => chip(m, true)));
+    // 使用中的（黃色星星以外）長按可以拖曳排順序，和書籤一樣
+    for (const node of ui.mUse.querySelectorAll('.gpn-mark-chip:not(.is-locked)')) {
+      attachHoldDrag({
+        handle: node, node, box: ui.mUse, selector: '.gpn-mark-chip:not(.is-locked)', grid: true,
+        anchor: () => null,
+        vertical: () => false,
+        canStart: () => (data.markTypes || []).length > 1,
+        onDrop: (order) => setMarkOrder(order),
+      });
+    }
     ui.mOff.replaceChildren(...GPN_MARKS.filter((m) => !using.includes(m)).map((m) => chip(m, false)));
+  }
+
+  /** 拖曳換了符號的順序（書籤列上、設定裡都是這個） */
+  function setMarkOrder(order) {
+    const types = order.filter((m) => (data.markTypes || []).includes(m));
+    if (types.join() === (data.markTypes || []).join()) return;
+    data.markTypes = types;
+    persist();
+    renderTabs();
+    refreshMarks();
   }
 
   function toggleMarkType(m) {
@@ -2175,8 +2205,8 @@ function gpnCreatePanel(opts) {
       ui.aMsg,
       el('div', { class: 'gpn-note gpn-note--roomy', text:
         '按下去會到 Google 的畫面：先選要用哪個帳號（公司、個人帳號請選對），再按「允許」。' +
-        '特務P 只碰得到它自己建立的那一個檔案，看不到雲端硬碟裡的其他東西。' }),
-      el('div', { class: 'gpn-note', text: '要登入才能使用特務P。' }));
+        '罐頭P 只碰得到它自己建立的那一個檔案，看不到雲端硬碟裡的其他東西。' }),
+      el('div', { class: 'gpn-note', text: '要登入才能使用罐頭P。' }));
 
     /* ---- 已連結 ---- */
     ui.aWho = el('div', { class: 'gpn-account-email' });
@@ -2233,16 +2263,16 @@ function gpnCreatePanel(opts) {
     ui.gateMsg = el('div', { class: 'gpn-note gpn-note--status', role: 'status' });
     ui.gateNoConnect = el('div', { class: 'gpn-note gpn-note--status is-bad', hidden: '', text:
       '直接雙擊檔案打開的網頁版沒辦法登入。請改用網址打開網頁版，或用 Chrome 外掛。' });
-    ui.gate = el('div', { class: 'gpn-gate', hidden: '', role: 'region', 'aria-label': '登入特務P' },
+    ui.gate = el('div', { class: 'gpn-gate', hidden: '', role: 'region', 'aria-label': '登入罐頭P' },
       el('div', { class: 'gpn-gate-logo', html: ICON_LOGO }),
-      el('h1', { class: 'gpn-gate-title', text: '特務P' }),
+      el('h1', { class: 'gpn-gate-title', text: '罐頭P' }),
       el('p', { class: 'gpn-gate-lede', text:
         '請先用 Google 帳號登入。提示詞存在你自己的 Google 雲端硬碟，' +
         '換一台電腦登入同一個帳號，看到的就是同一份。' }),
       ui.gateBtn, ui.gateNoConnect, ui.gateMsg,
       el('div', { class: 'gpn-note gpn-gate-note', text:
         '按下去會到 Google 的畫面：選要用哪個帳號，再按「允許」。' +
-        '特務P 只碰得到它自己建立的檔案，看不到雲端硬碟裡的其他東西。' }),
+        '罐頭P 只碰得到它自己建立的檔案，看不到雲端硬碟裡的其他東西。' }),
       el('a', {
         class: 'gpn-link gpn-gate-privacy', href: new URL('privacy.html', GPN_CLOUD.site).href,
         target: '_blank', rel: 'noopener',
@@ -2533,11 +2563,11 @@ function gpnCreatePanel(opts) {
         el('button', {
           class: 'gpn-btn2', type: 'button',
           onclick: onDownloadBackup,
-        }, '⬇　下載備份檔')),
+        }, '⬇　下載（做備份）')),
       ui.bStats,
       ui.bPrelogin = el('div', { class: 'gpn-prelogin', hidden: '' }),
       el('div', { class: 'gpn-sep' }),
-      field('匯入備份檔', null,
+      field('匯入', null,
         el('div', { class: 'gpn-brow' }, ui.bPick),
         ui.bFile,
         el('div', { class: 'gpn-seg-row' }, ui.bMerge, ui.bReplace),
@@ -2548,7 +2578,7 @@ function gpnCreatePanel(opts) {
 
   /**
    * 下載備份檔：提示詞，加上我的最愛、星號、使用記錄、這台的背景（換電腦時全部跟著過去）。
-   * 有連結 Google 雲端硬碟的話，檔名帶帳號（apple@gmail.com → 特務P_apple_日期.json），看得出是誰的。
+   * 有連結 Google 雲端硬碟的話，檔名帶帳號（apple@gmail.com → 罐頭P_apple_日期.json），看得出是誰的。
    */
   async function onDownloadBackup() {
     const look = gpnCleanLook(data.look);

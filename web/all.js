@@ -1,5 +1,5 @@
 /**
- * 特務P · 全部提示詞（all.html）
+ * 罐頭P · 全部提示詞（all.html）
  *
  * 所有書籤、資料夾的提示詞，完整內容用純文字列在同一頁。
  * 用途：使用者把這個分頁和公文分頁一起分享給瀏覽器的「問問 Gemini」，請它判斷該用哪一則。
@@ -12,7 +12,7 @@
  * 資料就是網頁版那一份（localStorage）。有連結 Google 雲端硬碟的話，打開時先同步一次，
  * 別台剛改的這裡也看得到；網頁版在另一個分頁改了，這裡也會跟著更新。
  *
- * 上面的「另存新檔」把全部提示詞存成一個記事本檔（特務P_全部提示詞_20260929.txt），內容和這一頁一樣。
+ * 上面的「另存新檔」把全部提示詞存成一個記事本檔（罐頭P_全部提示詞_20260929.txt），內容和這一頁一樣。
  */
 (() => {
   'use strict';
@@ -56,8 +56,8 @@
       link('#', `全部（${total}）`, !only),
       ...data.tabs.map((t) => link('#' + encodeURIComponent(t.id), `${t.label}（${gpnTabItemCount(t)}）`, only === t)));
 
-    $('title').textContent = only ? `特務P：「${only.label}」的提示詞` : '特務P：全部提示詞';
-    document.title = only ? `特務P：${only.label}` : '特務P：全部提示詞';
+    $('title').textContent = only ? `罐頭P：「${only.label}」的提示詞` : '罐頭P：全部提示詞';
+    document.title = only ? `罐頭P：${only.label}` : '罐頭P：全部提示詞';
     $('summary').textContent = only
       ? `書籤「${only.label}」共 ${gpnTabItemCount(only)} 則（全部書籤共 ${total} 則）。每一則前面有編號。`
       : `共 ${total} 則提示詞，分在 ${data.tabs.length} 個書籤。依書籤、資料夾分類，每一則前面有編號；★ 是我的最愛` +
@@ -104,7 +104,7 @@
     const p = (n) => String(n).padStart(2, '0');
     const total = gpnCountItems(data);
     const out = [
-      '特務P：全部提示詞',
+      '罐頭P：全部提示詞',
       `存檔時間：${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`,
       `共 ${total} 則提示詞，分在 ${data.tabs.length} 個書籤。★ 是我的最愛` +
         (Object.keys(data.marks || {}).length ? '，〔 〕裡是標的其他符號。' : '。'),
@@ -128,7 +128,7 @@
   function saveText() {
     const d = new Date();
     const p = (n) => String(n).padStart(2, '0');
-    const name = `特務P_全部提示詞_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}.txt`;
+    const name = `罐頭P_全部提示詞_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}.txt`;
     const blob = new Blob(['\ufeff' + buildText()], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = el('a');
@@ -174,7 +174,7 @@
       if (st.signedIn) return;
       $('nav').replaceChildren();
       $('save').hidden = true;
-      $('title').textContent = '特務P：全部提示詞';
+      $('title').textContent = '罐頭P：全部提示詞';
       $('summary').textContent = '要先登入才看得到提示詞。';
       const back = el('a', 'back', '← 回到筆記本登入');
       back.href = './';

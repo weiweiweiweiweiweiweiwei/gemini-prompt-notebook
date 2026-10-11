@@ -1,7 +1,7 @@
 /**
  * 把 stage.html 一格一格錄成 mp4。
  *
- *   node render.js                         → out/特務P-使用情境.mp4（1920×1080、30fps）
+ *   node render.js                         → out/罐頭P-使用情境.mp4（1920×1080、30fps）
  *   node render.js --fps 60                → 60fps
  *   node render.js --stills 5,12.5,20      → 只截那幾秒的畫面成 PNG（檢查用，很快）
  *
@@ -23,7 +23,7 @@ const opt = (name, def) => {
 const FPS = Number(opt('fps', 30));
 const stills = opt('stills', '') ? opt('stills').split(',').map(Number) : null;
 const OUT_DIR = path.join(__dirname, 'out');
-const OUT = path.resolve(opt('out', path.join(OUT_DIR, '特務P-使用情境.mp4')));
+const OUT = path.resolve(opt('out', path.join(OUT_DIR, '罐頭P-使用情境.mp4')));
 const MAX_SECONDS = 120;
 
 const CHROME = [

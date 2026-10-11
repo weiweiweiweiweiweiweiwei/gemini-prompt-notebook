@@ -1,5 +1,5 @@
 /* ============================================================================
-   特務P（常用提示詞筆記本）— 樣式表
+   罐頭P（常用提示詞筆記本）— 樣式表
    用在四個地方：
      1. Light DOM（manifest 的 content_scripts.css）→ 注入工具列的觸發按鈕
      2. Shadow DOM（content.js 用 fetch + adoptedStyleSheets）→ 外掛的面板
@@ -387,7 +387,11 @@ button { cursor: pointer; }
 .gpn-tab-icon svg { width: 17px; height: 17px; fill: currentColor; }
 .gpn-tab-main:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
 /* 「我的最愛」「最近使用」固定靠最右邊，和自己的書籤之間空出來 */
-.gpn-tab--push { margin-left: auto; }
+.gpn-tab-add + .gpn-tab.is-fixed, .gpn-tab:not(.is-fixed) + .gpn-tab.is-fixed { margin-left: auto; }
+/* 設定 → 星號：長按拖曳排序時，抓起來的那顆浮起來、其他淡一點（和書籤同一套） */
+.gpn-mark-chip.is-drag { position: relative; z-index: 2; transform: scale(1.06); box-shadow: var(--shadow-md); cursor: grabbing; }
+.gpn-marks.is-reordering .gpn-mark-chip:not(.is-drag) { opacity: .55; }
+.gpn-mark-chip { user-select: none; -webkit-user-select: none; }
 .gpn-tab[data-color="fav"] .gpn-tab-icon { color: var(--c-fav-accent); }
 /* 「我的最愛」「最近使用」只有圖示，固定窄寬（要和 panel.js 的 GPN_TAB_FIXED_W 一致） */
 .gpn-tab.is-fixed { width: 58px; min-width: 0; }
