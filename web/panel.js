@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.18.2';
+const GPN_APP_VERSION = '4.19.0';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -124,6 +124,8 @@ function gpnCreatePanel(opts) {
     '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5.5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="18.5" r="2"/></svg>';
   const ICON_OPEN =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>';
+  const ICON_DUPLICATE =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>';
   const ICON_DELETE =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
 
@@ -1179,6 +1181,7 @@ function gpnCreatePanel(opts) {
     ui.menu.replaceChildren(
       entry(ICON_OPEN, '開啟 Gemini', autoFills() ? '在新分頁打開，自動填好' : '在新分頁打開', open('gemini')),
       entry(ICON_OPEN, '開啟 ChatGPT', autoFills() ? '在新分頁打開，自動填好' : '在新分頁打開', open('chatgpt')),
+      entry(ICON_DUPLICATE, '拷貝', '在下面多一則一樣的', () => { closeCardMenu(); duplicateItem(tabId, fid, item.id); }),
       el('div', { class: 'gpn-menu-sep', role: 'separator' }),
       ui.menuDel);
 
@@ -1274,6 +1277,23 @@ function gpnCreatePanel(opts) {
     closeCardMenu();
     deleteItem(tabId, fid, item.id);
     toast(`已刪除「${item.title}」`);
+  }
+
+  /**
+   * 拷貝：在這一則正下方多一則一模一樣的，標題後面加「 (複製)」，內容不變。
+   * 新的那則不帶星號（我的最愛、符號只在原本那則上）。在我的最愛、符號書籤裡拷貝，新的放在原本那則所在的書籤。
+   */
+  function duplicateItem(tabId, fid, id) {
+    const list = listOf(tabId, fid);
+    const idx = list ? list.items.findIndex((it) => it.id === id) : -1;
+    if (idx < 0) return;
+    const src = list.items[idx];
+    const copy = { id: gpnNewId(), title: `${src.title} (複製)`.slice(0, 60), content: src.content };
+    list.items.splice(idx + 1, 0, copy);
+    sfx('save');
+    persist();
+    render();
+    toast(activeTab().mark ? `已拷貝到「${whereLabel(tabId, fid)}」` : '已拷貝，在原本那則的下面');
   }
 
   /** 刪掉一則提示詞（我的最愛、符號裡的也一起拿掉；最近使用記錄留著，會顯示「原本的提示詞已刪除」） */
