@@ -39,6 +39,32 @@ function gpnBlob(ctx, x, y, rx, ry, color, alpha = 1, rot = 0) {
   ctx.globalAlpha = 1;
 }
 
+/** 紅色警示三角形（圓角三角形＋白色驚嘆號）。x、y 是中心，r 是大小，rot 旋轉（弧度） */
+function gpnWarn(ctx, x, y, r, color, alpha = 1, rot = 0) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(x, y);
+  ctx.rotate(rot);
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = r * 0.28;
+  ctx.beginPath();
+  ctx.moveTo(0, -r);
+  ctx.lineTo(r * 1.0, r * 0.75);
+  ctx.lineTo(-r * 1.0, r * 0.75);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.globalAlpha = alpha * 0.95;
+  ctx.fillRect(-r * 0.09, -r * 0.42, r * 0.18, r * 0.62);
+  ctx.beginPath();
+  ctx.arc(0, r * 0.42, r * 0.11, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 /**
  * 內建背景清單。draw(ctx, w, h)：畫滿整個 w × h。
  * tone：整張圖偏暗（dark）、中間（mid）、偏亮（light）。淺色主題配上偏暗的圖時，玻璃要調得實一點字才看得清楚。
@@ -644,6 +670,117 @@ const GPN_BACKGROUNDS = [
         gpnBlob(ctx, (0.5 + 0.32 * Math.cos(a)) * w, (0.5 + 0.30 * Math.sin(a * 1.2)) * h, 0.26 * w, 0.26 * w, c, 0.85);
       });
       ctx.filter = 'none';
+    },
+  },
+  /* ---- 資源回收桶的背景（4.21.0）----
+     trash: true：只在資源回收桶裡用，不出現在一般的背景選單。進回收桶時不管原本選了什麼，一律換成這裡的其中一張，
+     提醒「這裡是危險區域」。紅色三角形警示標誌，有規律排的、也有隨機灑的。 */
+  {
+    id: 'warn-dark', label: '深色警示', tone: 'dark', trash: true,
+    // 炭黑底，整齊排列的紅色警示三角形，越往中間越淡（筆記本在中間）
+    draw(ctx, w, h) {
+      ctx.fillStyle = gpnLinear(ctx, 0, 0, 0, h, [[0, '#17181c'], [1, '#0d0d10']]);
+      ctx.fillRect(0, 0, w, h);
+      const k = w / 1920, step = 150 * k;
+      for (let y = step / 2, row = 0; y < h + step; y += step * 0.87, row++) {
+        for (let x = (row % 2 ? step / 2 : 0); x < w + step; x += step) {
+          const dx = (x - w / 2) / (w / 2), dy = (y - h / 2) / (h / 2);
+          const fade = Math.min(1, Math.hypot(dx, dy));
+          gpnWarn(ctx, x, y, 34 * k, '#e53935', 0.15 + 0.55 * fade);
+        }
+      }
+    },
+  },
+  {
+    id: 'warn-tape', label: '封鎖膠帶', tone: 'dark', trash: true,
+    // 深灰底，上下兩條黃黑斜紋的封鎖膠帶，中間隨機灑幾個大小不一的紅色警示
+    draw(ctx, w, h) {
+      const k = w / 1920;
+      ctx.fillStyle = '#1b1c20';
+      ctx.fillRect(0, 0, w, h);
+      const rnd = gpnSeededRandom(31);
+      for (let i = 0; i < 26; i++) {
+        gpnWarn(ctx, rnd() * w, (0.18 + rnd() * 0.64) * h, (24 + rnd() * 60) * k, '#ef5350', 0.25 + rnd() * 0.5, (rnd() - 0.5) * 0.6);
+      }
+      for (const [y, rot] of [[0.09, -0.05], [0.91, 0.04]]) {
+        ctx.save();
+        ctx.translate(w / 2, y * h);
+        ctx.rotate(rot);
+        const bw = w * 1.3, bh = 90 * k;
+        ctx.beginPath();
+        ctx.rect(-bw / 2, -bh / 2, bw, bh);
+        ctx.clip();
+        ctx.fillStyle = '#f9c80e';
+        ctx.fillRect(-bw / 2, -bh / 2, bw, bh);
+        ctx.fillStyle = '#111111';
+        for (let x = -bw / 2 - bh; x < bw / 2 + bh; x += bh * 1.2) {
+          ctx.beginPath();
+          ctx.moveTo(x, -bh / 2);
+          ctx.lineTo(x + bh * 0.6, -bh / 2);
+          ctx.lineTo(x + bh * 0.6 + bh, bh / 2);
+          ctx.lineTo(x + bh, bh / 2);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+    },
+  },
+  {
+    id: 'warn-red', label: '紅色警戒', tone: 'dark', trash: true,
+    // 暗紅到黑的光暈，正中間一個很大的淡淡警示標誌，四周散著小的
+    draw(ctx, w, h) {
+      const k = w / 1920;
+      const g = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.hypot(w, h) / 2);
+      g.addColorStop(0, '#5a0f14');
+      g.addColorStop(1, '#0c0506');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+      gpnWarn(ctx, w / 2, h / 2, 520 * k, '#ff1744', 0.12);
+      const rnd = gpnSeededRandom(9);
+      for (let i = 0; i < 40; i++) gpnWarn(ctx, rnd() * w, rnd() * h, (14 + rnd() * 26) * k, '#ff5252', 0.35 + rnd() * 0.45, (rnd() - 0.5) * 0.8);
+    },
+  },
+  {
+    id: 'warn-light', label: '淺色警示', tone: 'light', trash: true,
+    // 淺灰的紙，整齊排列的紅色警示三角形（淺色版）
+    draw(ctx, w, h) {
+      ctx.fillStyle = '#eceef1';
+      ctx.fillRect(0, 0, w, h);
+      const k = w / 1920, step = 170 * k;
+      for (let y = step / 2, row = 0; y < h + step; y += step * 0.87, row++) {
+        for (let x = (row % 2 ? step / 2 : 0); x < w + step; x += step) gpnWarn(ctx, x, y, 30 * k, '#d32f2f', 0.55);
+      }
+    },
+  },
+  {
+    id: 'warn-stripes', label: '紅白斜紋', tone: 'light', trash: true,
+    // 米白底，左右兩邊紅白斜紋（像施工圍欄），中間隨機幾個警示標誌
+    draw(ctx, w, h) {
+      const k = w / 1920;
+      ctx.fillStyle = '#f7f3ee';
+      ctx.fillRect(0, 0, w, h);
+      for (const x0 of [0, w - 140 * k]) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x0, 0, 140 * k, h);
+        ctx.clip();
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(x0, 0, 140 * k, h);
+        ctx.fillStyle = '#e53935';
+        for (let y = -200 * k; y < h + 200 * k; y += 120 * k) {
+          ctx.beginPath();
+          ctx.moveTo(x0, y);
+          ctx.lineTo(x0 + 140 * k, y - 80 * k);
+          ctx.lineTo(x0 + 140 * k, y - 20 * k);
+          ctx.lineTo(x0, y + 60 * k);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+      const rnd = gpnSeededRandom(4);
+      for (let i = 0; i < 18; i++) gpnWarn(ctx, (0.12 + rnd() * 0.76) * w, rnd() * h, (22 + rnd() * 40) * k, '#e53935', 0.3 + rnd() * 0.5, (rnd() - 0.5) * 0.5);
     },
   },
 ];

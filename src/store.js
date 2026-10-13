@@ -131,11 +131,14 @@ function gpnCleanTrash(arr, itemIds) {
  * 背景（設定 → 背景）：跟著帳號同步，換電腦登入背景也一樣。
  *   bg         'default'、內建背景的 id（backgrounds.js）、或 'custom'（自己上傳的圖）
  *   wallpaper  上傳的圖的代號（圖很大，不放在這裡：存在雲端硬碟另一個檔案，見 sync.js 的 putWallpaper）
+ *   trash      資源回收桶裡的背景（backgrounds.js 裡 trash: true 的那幾張），不管 bg 選什麼，進回收桶一律換成它
  */
+const GPN_TRASH_BG = 'warn-dark';
 function gpnCleanLook(l) {
   const bg = typeof l?.bg === 'string' && l.bg ? l.bg.slice(0, 40) : 'default';
   const wallpaper = bg === 'custom' && typeof l?.wallpaper === 'string' ? l.wallpaper.slice(0, 40) : '';
-  return { bg, wallpaper };
+  const trash = typeof l?.trash === 'string' && l.trash ? l.trash.slice(0, 40) : GPN_TRASH_BG;
+  return { bg, wallpaper, trash };
 }
 
 /** 整理最近使用記錄：新的在前、同一則只留最新那次、最多 GPN_RECENT_MAX 筆 */

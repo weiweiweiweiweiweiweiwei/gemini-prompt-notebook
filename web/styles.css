@@ -778,18 +778,75 @@ button { cursor: pointer; }
 /* ---------- 資源回收桶：不能拖、不能加星號、不能編輯，點一下是選取 ---------- */
 .gpn-card--trash { grid-template-columns: 1fr 46px; }
 .gpn-card--trash .gpn-title { padding-left: 20px; border-radius: 16px 0 0 16px; }
-.gpn-card--trash .gpn-title-text { color: var(--text-mute); }
 .gpn-card--trash.is-selected {
   border-color: var(--primary);
   background: color-mix(in srgb, var(--primary) 14%, var(--glass-card));
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 45%, transparent), var(--shadow-md);
 }
-.gpn-card--trash.is-selected .gpn-title-text { color: var(--text); }
 .gpn-from--time { background: none; padding: 0; }
 [data-color="trash"] { --accent: var(--c-recent-accent); }
+/* ---------- 資源回收桶是一個獨立的空間（panel.js 的 .is-trash）----------
+   上面的書籤、資料夾欄、底下的頭像、搜尋、設定都收起來，只剩最上面一條（回到設定、清空）和底下的還原、永久刪除。
+   背景也換成回收桶專用的紅色警示（見 backgrounds.js 的 trash: true），提醒這裡是危險區域。 */
+.gpn-book.is-trash .gpn-tabs,
+.gpn-book.is-trash .gpn-folders,
+.gpn-book.is-trash .gpn-avatar,
+.gpn-book.is-trash .gpn-tools { display: none; }
+.gpn-book.is-trash .gpn-paper { border-radius: 20px; border-color: color-mix(in srgb, #e53935 55%, var(--glass-line)); }
+.gpn-trash-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid color-mix(in srgb, #e53935 40%, var(--glass-line));
+  background: color-mix(in srgb, #e53935 10%, transparent);
+}
+.gpn-trash-back {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 42px;
+  padding: 0 16px 0 12px;
+  border-radius: 21px;
+  border: 1px solid var(--outline-strong);
+  background: var(--glass-card);
+  font-size: 15px;
+  font-weight: 600;
+}
+.gpn-trash-back:hover { border-color: var(--primary); color: var(--primary); }
+.gpn-trash-back:focus-visible, .gpn-trash-empty:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.gpn-trash-back-arrow { font-size: 18px; }
+.gpn-trash-title { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 18px; }
+.gpn-trash-sign { display: flex; color: #e53935; }
+.gpn-trash-sign svg { width: 24px; height: 24px; fill: currentColor; display: block; }
+.gpn-trash-count { font-size: 14px; color: var(--text-mute); }
+.gpn-trash-empty {
+  flex: none;
+  height: 42px;
+  padding: 0 16px;
+  border-radius: 21px;
+  color: var(--error);
+  font-size: 15px;
+  font-weight: 600;
+}
+.gpn-trash-empty:hover { background: color-mix(in srgb, var(--error) 14%, transparent); }
+.gpn-trash-empty.is-confirm { background: var(--error); color: var(--surface); }
+/* 底下的「永久刪除」：紅色；沒選取時兩顆都按不下去 */
+.gpn-foot .gpn-add--danger { border-style: solid; border-color: var(--error); color: var(--error); }
+.gpn-foot .gpn-add--danger:hover { background: color-mix(in srgb, var(--error) 12%, transparent); border-color: var(--error); color: var(--error); }
+.gpn-foot .gpn-add--danger.is-confirm { background: var(--error); color: var(--surface); }
+.gpn-foot .gpn-add[disabled] { opacity: .45; cursor: not-allowed; pointer-events: none; }
+/* 回收桶的背景在外掛的 AI 網站裡也要鋪滿（平常那裡沒有背景） */
+.gpn-overlay.has-wallpaper { background-size: cover; background-position: center; background-repeat: no-repeat; }
+
+/* 設定左邊選單最下面的「全部提示詞」是連結，不要底線 */
+.gpn-nav-item--go { text-decoration: none; }
+
 /* 底下的「還原」：實心的主要按鈕 */
-.gpn-add--restore { border-style: solid; border-color: var(--primary); background: var(--primary); color: var(--on-primary); }
-.gpn-add--restore:hover { filter: brightness(1.08); background: var(--primary); color: var(--on-primary); }
+.gpn-foot .gpn-add--restore { border-style: solid; border-color: var(--primary); background: var(--primary); color: var(--on-primary); }
+.gpn-foot .gpn-add--restore:hover { filter: brightness(1.08); background: var(--primary); color: var(--on-primary); }
 
 /* ---------- 拖曳卡片到左邊的資料夾、上面別的書籤：底下那格亮起來 ---------- */
 .gpn-book.is-carrying .gpn-folder:not(.is-active) { outline: 1px dashed var(--outline-strong); outline-offset: -2px; }
@@ -1589,6 +1646,141 @@ button { cursor: pointer; }
   .gpn-nav-item { min-height: 42px; white-space: nowrap; }
   .gpn-settings-body { padding: 18px 18px 8px; }
 }
+
+/* ============================================================================
+   三之三、帳號頭像、設定 → 背景、筆記本寬度
+   ========================================================================== */
+.gpn-account-avatar--google { background: #ffffff; box-shadow: var(--shadow-md); }
+
+/* ---- 設定 → 背景 ---- */
+/* 選的背景（內建或自己上傳的）：鋪滿整個畫面（網頁版、工具列小視窗），筆記本的霧面玻璃會把它模糊地透出來 */
+:host(.gpn-standalone) .gpn-overlay.has-wallpaper {
+  background-color: #131314;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+/* 淺色主題：有背景圖時玻璃調得實一點；配上偏暗的圖（例如極光、海浪）再更實，
+   不然沒選中的書籤、灰色小字、齒輪會看不清楚（data-tone 由 panel.js 依圖的亮度標上） */
+:host(:not([data-theme="dark"])) .gpn-overlay.has-wallpaper {
+  --glass: rgba(255, 255, 255, .42);
+  --glass-soft: rgba(255, 255, 255, .34);
+}
+:host(:not([data-theme="dark"])) .gpn-overlay.has-wallpaper[data-tone="dark"] {
+  --glass: rgba(255, 255, 255, .62);
+  --glass-soft: rgba(255, 255, 255, .55);
+  --glass-card: rgba(255, 255, 255, .66);
+}
+/* 縮圖格子：三欄，選中的那張外面一圈藍框 */
+/* 動態背景：遮罩最底下一張一直重畫的 canvas（畫小圖、放大鋪滿，照比例裁切） */
+.gpn-bg-live {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+/* 背景縮圖上的「動態」小標籤 */
+.gpn-bg-thumb { position: relative; }
+.gpn-bg-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 1px 7px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, .55);
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.gpn-bg-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 12px; }
+.gpn-bg-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13.5px;
+  color: var(--text-mute);
+  text-align: center;
+}
+.gpn-bg-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid var(--outline);
+  background-size: cover;
+  background-position: center;
+  outline: 3px solid transparent;
+  outline-offset: 2px;
+  transition: outline-color .15s ease, transform .15s cubic-bezier(.2, 0, 0, 1);
+}
+.gpn-bg-thumb canvas { display: block; width: 100%; height: 100%; }
+.gpn-bg-tile:hover .gpn-bg-thumb { transform: translateY(-2px); }
+.gpn-bg-tile[aria-checked="true"] { color: var(--text); font-weight: 600; }
+.gpn-bg-tile[aria-checked="true"] .gpn-bg-thumb { outline-color: var(--primary); }
+.gpn-bg-tile:focus-visible { outline: none; }
+.gpn-bg-tile:focus-visible .gpn-bg-thumb { outline-color: var(--primary); }
+.gpn-bg-thumb--add { border: 0; background: var(--well); color: var(--text-mute); }
+.gpn-bg-tile:hover .gpn-bg-thumb--add { background: var(--well-hover); color: var(--primary); }
+.gpn-bg-thumb--add svg { width: 28px; height: 28px; fill: currentColor; }
+/* 「預設光暈」的縮圖：和網頁版的彩色光暈（web/page.css）同一組顏色 */
+.gpn-bg-thumb--default {
+  background:
+    radial-gradient(60% 90% at 10% 14%, rgba(255, 190, 110, .55), transparent 62%),
+    radial-gradient(60% 90% at 92% 18%, rgba(110, 160, 255, .5), transparent 62%),
+    radial-gradient(70% 100% at 72% 96%, rgba(100, 200, 170, .45), transparent 62%),
+    #eef1f6;
+}
+:host([data-theme="dark"]) .gpn-bg-thumb--default {
+  background:
+    radial-gradient(60% 90% at 10% 14%, rgba(240, 183, 87, .22), transparent 62%),
+    radial-gradient(60% 90% at 92% 18%, rgba(110, 168, 254, .24), transparent 62%),
+    radial-gradient(70% 100% at 72% 96%, rgba(79, 201, 194, .2), transparent 62%),
+    #131314;
+}
+
+/* ============================================================================
+   筆記本左右兩邊的拖曳邊：拖曳調整寬度，按兩下恢復預設（panel.js 的 startResize）
+   平常看不到，滑過才出現一條細線；可以按的範圍（16px）比細線寬一點，比較好抓。
+   從紙張的高度開始，不蓋到書籤。
+   ========================================================================== */
+.gpn-gutter {
+  position: absolute;
+  top: var(--tab-h-active);
+  bottom: 0;
+  z-index: 5;
+  width: 16px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.gpn-gutter--left { left: -8px; }
+.gpn-gutter--right { right: -8px; }
+.gpn-gutter::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 6px;
+  width: 4px;
+  height: 56px;
+  margin-top: -28px;
+  border-radius: 2px;
+  background: var(--text-mute);
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+.gpn-gutter:hover::after, .gpn-book.is-resizing .gpn-gutter::after { opacity: .75; }
+.gpn-book.is-resizing, .gpn-book.is-resizing * { cursor: ew-resize !important; user-select: none; }
+/* 工具列小視窗本來就是固定大小，不需要拖 */
+:host(.gpn-popup-host) .gpn-gutter { display: none; }
+
+/* 量「遮罩」的寬度用（下面幾個 @container gpn-overlay） */
+.gpn-overlay { container: gpn-overlay / inline-size; }
 
 /* ============================================================================
    四、完成提示 Toast
