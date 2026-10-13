@@ -74,6 +74,15 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     syncNow: () => gpnSync.syncNow(),
     putWallpaper: () => gpnSync.putWallpaper(String(msg.id || ''), String(msg.dataUrl || '')),
     getWallpaper: () => gpnSync.getWallpaper(String(msg.id || '')),
+    cloneSignIn: () => gpnSync.cloneSignIn(String(msg.id || '')),
+    enterClone: () => gpnSync.enterClone(String(msg.id || '')),
+    leaveClone: () => gpnSync.leaveClone({ force: !!msg.force }),
+    listClones: () => gpnSync.listClones(),
+    createClone: () => gpnSync.createClone(String(msg.label || ''), msg.doc, String(msg.avatar || '')),
+    setCloneAvatar: () => gpnSync.setCloneAvatar(msg.clone || null, String(msg.avatar || '')),
+    destroyClone: () => gpnSync.destroyClone(msg.clone || {}),
+    readClone: () => gpnSync.readClone(String(msg.fileId || '')),
+    pushClone: () => gpnSync.pushClone(String(msg.fileId || ''), msg.doc),
   };
   const run = ops[msg.op];
   if (!run) return false;

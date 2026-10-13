@@ -9,6 +9,10 @@
  *   Google 規定換 token 要附用戶端密鑰，網頁和外掛藏不住密鑰，所以由它代換。
  *   它只轉交 token，提示詞不會經過它（提示詞直接在瀏覽器和 Google 雲端硬碟之間傳）。
  *
+ * cloneUrl：分身的中繼（supabase/functions/gpn-clone，和 tokenUrl 同一個 Supabase 專案）。
+ *   用分身代號登入的人沒有 Google 帳號，由它代為讀寫建立的人雲端硬碟裡的分身檔案（見 sync.js 的「分身」）。
+ *   留空就沒有分身功能（設定裡不出現「分身」、登入畫面不出現「用分身代號登入」）。
+ *
  * open：雲端同步要不要對所有人打開。
  *   2026-09-27 起打開（true）：Google Cloud 的轉址網址、中繼的密鑰都確認過可以用了。
  *   關著（false）時使用者看不到任何同步畫面；管理員想先自己試，在網頁版網址後面加 ?try-cloud=1
@@ -22,6 +26,7 @@
 const GPN_CLOUD = {
   clientId: '179560802326-nrdhcrs4r84dltajila7er82ae9nqn67.apps.googleusercontent.com',
   tokenUrl: 'https://algdqnztwyrcxuxqnzyp.supabase.co/functions/v1/gpn-google-token',
+  cloneUrl: 'https://algdqnztwyrcxuxqnzyp.supabase.co/functions/v1/gpn-clone',
   open: true,
   site: 'https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/',
 };

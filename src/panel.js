@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.23.0';
+const GPN_APP_VERSION = '4.24.0';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -93,6 +93,14 @@ function gpnCreatePanel(opts) {
   const ICON_CLOUD_SYNCING =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4s1.79-4 4-4h.71C7.37 7.69 9.48 6 12 6c3.04 0 5.5 2.46 5.5 5.5v.5H19c1.66 0 3 1.34 3 3s-1.34 3-3 3z"/>' +
     '<path class="gpn-cloud-arrow" d="M12 8.5L8.5 12H11v4h2v-4h2.5z"/></svg>';
+
+  /** 圓圈裡一個人（外框）：設定裡的「帳號」。單一 path，理由同上面的齒輪 */
+  const ICON_ACCOUNT =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM7.07 18.28c.43-.9 3.05-1.78 4.93-1.78s4.51.88 4.93 1.78C15.57 19.36 13.86 20 12 20s-3.57-.64-4.93-1.72zm11.29-1.45c-1.43-1.74-4.9-2.33-6.36-2.33s-4.93.59-6.36 2.33A7.95 7.95 0 0 1 4 12c0-4.41 3.59-8 8-8s8 3.59 8 8c0 1.82-.62 3.49-1.64 4.83zM12 6c-1.94 0-3.5 1.56-3.5 3.5S10.06 13 12 13s3.5-1.56 3.5-3.5S13.94 6 12 6zm0 5c-.83 0-1.5-.67-1.5-1.5S11.17 8 12 8s1.5.67 1.5 1.5S12.83 11 12 11z"/></svg>';
+
+  /** 兩個人：設定裡的「分身」 */
+  const ICON_CLONE =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>';
 
   /** 圖片：設定裡的「背景」 */
   const ICON_IMAGE =
@@ -238,6 +246,11 @@ function gpnCreatePanel(opts) {
   let impArmed = false, impTimer = 0;
   let cloudState = { configured: false };   // 雲端同步的狀態（見 sync.js）
   let wipeArmed = false, wipeTimer = 0;
+  // 分身（設定 → 分身）：clones 是建立過的分身；cPick 是正在勾選的 { mode: 'create' | 'push', clone, tabs, folders, items, open }
+  const hasClones = () => !!cloud && typeof cloud.listClones === 'function' && !!GPN_CLOUD.cloneUrl;
+  let clones = null, clonesBusy = false, cPick = null, cDelArmed = '', cDelTimer = 0, leaveArmed = false;
+  let cAvatarOpen = '';          // 哪個分身的「換頭像」打開著（分身代號）
+  const hasAvatars = () => typeof GPN_AVATARS !== 'undefined';
   /** 對話框開著時雲端送來新資料，先不重畫（免得打到一半的字不見），關掉對話框再畫 */
   let staleWhileLayer = false;
   const ui = {};
@@ -2390,7 +2403,8 @@ function gpnCreatePanel(opts) {
       navItem('tab', ICON_TAB, '名稱與資料夾'),
       navItem('marks', ICON_STAR, '星號'),
       // 沒有雲端功能的地方（例如測試）就不出現這一項
-      cloud ? navItem('account', ICON_CLOUD_DONE, '帳號') : null,
+      cloud ? navItem('account', ICON_ACCOUNT, '帳號') : null,
+      hasClones() ? navItem('clones', ICON_CLONE, '分身') : null,
       navItem('backup', ICON_SYNC, '備份'),
       // 背景圖只鋪在「面板就是整個畫面」的地方（網頁版、工具列小視窗）；AI 網站裡的面板背後是網站本身
       standalone ? navItem('look', ICON_IMAGE, '背景') : null,
@@ -2463,13 +2477,16 @@ function gpnCreatePanel(opts) {
     /* ---- 雲端同步 ---- */
     const secAccount = cloud ? buildAccountSection() : null;
 
+    /* ---- 分身 ---- */
+    const secClones = hasClones() ? buildClonesSection() : null;
+
     /* ---- 備份 ---- */
     const secBackup = buildBackupSection();
 
     /* ---- 背景 ---- */
     const secLook = standalone ? buildLookSection() : null;
 
-    ui.sSections = [secTab, secMarks, secAccount, secBackup, secLook].filter(Boolean);
+    ui.sSections = [secTab, secMarks, secAccount, secClones, secBackup, secLook].filter(Boolean);
     ui.sBody = el('div', { class: 'gpn-settings-body' }, ...ui.sSections);
 
     ui.settings = el('div', { class: 'gpn-dialog gpn-settings', onmousedown: stop },
@@ -2493,7 +2510,7 @@ function gpnCreatePanel(opts) {
     const hasAccount = !!cloud && !!cloudState.configured;
     if (tab.mark && section === 'tab') section = 'marks';
     if (tab.fixed && section === 'tab') section = hasAccount ? 'account' : 'backup';
-    if (section === 'account' && !hasAccount) section = tab.fixed ? 'backup' : 'tab';
+    if ((section === 'account' || section === 'clones') && !hasAccount) section = tab.fixed ? 'backup' : 'tab';
     settingsTabId = tabId;
     ui.sName.value = tab.label;
     ui.sName.classList.remove('is-bad');
@@ -2528,6 +2545,7 @@ function gpnCreatePanel(opts) {
     hideFolderConfirm();
     disarmTabDelete();
     disarmWipe();
+    if (key === 'clones') openClones();
   }
 
   /** 設定視窗裡所有「跟著資料變」的文字，一次更新 */
@@ -2804,17 +2822,18 @@ function gpnCreatePanel(opts) {
     ui.aPhotoNote = el('div', { class: 'gpn-note', hidden: '', text:
       '想在這裡和筆記本右下角看到 Google 頭像的話，登出再登入一次就有了。' });
 
+    ui.aKind = el('div', { class: 'gpn-note' });
+    ui.aWhere = el('div', { class: 'gpn-note' });
+    ui.aBack = el('button', { class: 'gpn-btn2 gpn-btn--block', type: 'button', hidden: '', onclick: onLeaveClone });
     ui.aIn = el('div', {},
       el('div', { class: 'gpn-account-card' },
         ui.aFace,
-        el('div', { class: 'gpn-account-info' },
-          el('div', { class: 'gpn-note', text: '已登入（提示詞存在 Google 雲端硬碟）' }), ui.aWho)),
+        el('div', { class: 'gpn-account-info' }, ui.aKind, ui.aWho)),
       ui.aPhotoNote,
       el('div', { class: 'gpn-account-status' }, ui.aStatusIcon, ui.aStatus),
       el('div', { class: 'gpn-brow' }, ui.aSyncBtn, ui.aSignOut),
-      el('div', { class: 'gpn-note', text:
-        `提示詞存在你的 Google 雲端硬碟，檔名是「${GPN_DRIVE_FILE_NAME}」。` +
-        '一改就會自動同步，平常不用按「立即同步」。' }),
+      ui.aBack,
+      ui.aWhere,
       ui.aFileLink,
       el('div', { class: 'gpn-note', text:
         '登出後，這台電腦上的提示詞會清掉、要再登入才看得到；雲端硬碟上的都還在，' +
@@ -2832,6 +2851,7 @@ function gpnCreatePanel(opts) {
     if (!ui.aOut) return;
     setAccountMsg('');
     disarmWipe();
+    leaveArmed = false;
     refreshAccount();
   }
 
@@ -2847,6 +2867,29 @@ function gpnCreatePanel(opts) {
     ui.gateMsg = el('div', { class: 'gpn-note gpn-note--status', role: 'status' });
     ui.gateNoConnect = el('div', { class: 'gpn-note gpn-note--status is-bad', hidden: '', text:
       '直接雙擊檔案打開的網頁版沒辦法登入。請改用網址打開網頁版，或用 Chrome 外掛。' });
+    // 分身代號：別人建立的分身，不用 Google 帳號也能登入（見 sync.js 的「分身」）
+    ui.gateCloneInput = el('input', {
+      class: 'gpn-input gpn-clone-input', type: 'text', maxlength: '24', placeholder: 'XXXX-XXXX-XXXX-XXXX',
+      autocomplete: 'off', autocapitalize: 'characters', spellcheck: 'false', 'aria-label': '分身代號',
+      onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); onGateClone(); } },
+    });
+    ui.gateCloneBtn = el('button', { class: 'gpn-btn gpn-btn--save', type: 'button', onclick: onGateClone }, '登入');
+    // 平常只顯示一行小字，點了才展開（大部分人用 Google 登入，分身代號是少數人用的）
+    ui.gateMore = el('button', {
+      class: 'gpn-gate-more', type: 'button', hidden: hasClones() ? null : '', 'aria-expanded': 'false',
+      onclick: () => {
+        ui.gateMore.hidden = true;
+        ui.gateMore.setAttribute('aria-expanded', 'true');
+        ui.gateClone.hidden = false;
+        ui.gateCloneInput.focus();
+      },
+    }, '選擇其他登入方式');
+    ui.gateClone = el('div', { class: 'gpn-gate-clone', hidden: '' },
+      el('div', { class: 'gpn-gate-or', text: '或是' }),
+      el('div', { class: 'gpn-label', text: '用分身代號登入' }),
+      el('div', { class: 'gpn-gate-clone-row' }, ui.gateCloneInput, ui.gateCloneBtn),
+      el('div', { class: 'gpn-note gpn-gate-note', text:
+        '有人把他建立的分身代號給你的話，輸入那 16 碼就能使用，不用 Google 帳號。' }));
     ui.gate = el('div', { class: 'gpn-gate', hidden: '', role: 'region', 'aria-label': '登入罐頭P' },
       el('div', { class: 'gpn-gate-logo', html: ICON_LOGO }),
       el('h1', { class: 'gpn-gate-title', text: '罐頭P' }),
@@ -2857,6 +2900,7 @@ function gpnCreatePanel(opts) {
       el('div', { class: 'gpn-note gpn-gate-note', text:
         '按下去會到 Google 的畫面：選要用哪個帳號，再按「允許」。' +
         '罐頭P 只碰得到它自己建立的檔案，看不到雲端硬碟裡的其他東西。' }),
+      ui.gateMore, ui.gateClone,
       el('a', {
         class: 'gpn-link gpn-gate-privacy', href: new URL('privacy.html', GPN_CLOUD.site).href,
         target: '_blank', rel: 'noopener',
@@ -2880,6 +2924,31 @@ function gpnCreatePanel(opts) {
     }
   }
 
+  async function onGateClone() {
+    const raw = ui.gateCloneInput.value;
+    ui.gateMsg.classList.remove('is-bad', 'is-ok');
+    if (!gpnIsCloneId(gpnCleanCloneId(raw))) {
+      ui.gateMsg.textContent = '分身代號是 16 個英文字母和數字（中間的「-」可打可不打），請再檢查一次';
+      ui.gateMsg.classList.add('is-bad');
+      ui.gateCloneInput.focus();
+      return;
+    }
+    sfx('click');
+    ui.gateCloneBtn.disabled = true;
+    ui.gateMsg.textContent = '登入中…';
+    const r = await cloud.cloneSignIn(raw);
+    ui.gateCloneBtn.disabled = false;
+    if (!r || !r.ok) {
+      ui.gateMsg.textContent = r?.error || '沒辦法登入，請稍後再試';
+      ui.gateMsg.classList.add('is-bad');
+      return;
+    }
+    ui.gateCloneInput.value = '';
+    ui.gateMsg.textContent = '';
+    refreshCloud(await cloud.getState());
+    toast(r.error ? `已登入分身，但同步失敗：${r.error}` : `已登入分身「${r.label}」`, !!r.error);
+  }
+
   /** 沒登入就只顯示登入畫面；登出的那一刻，正在開的對話框、選單一起關掉 */
   function paintGate() {
     if (!ui.gate) return;
@@ -2888,6 +2957,12 @@ function gpnCreatePanel(opts) {
     ui.gate.hidden = !gated;
     ui.book.hidden = gated;
     ui.overlay.classList.toggle('is-gated', gated);
+    if (gated && !was) {
+      // 每次回到登入畫面，「其他登入方式」都先收起來
+      ui.gateClone.hidden = true;
+      ui.gateMore.hidden = !hasClones();
+      ui.gateMore.setAttribute('aria-expanded', 'false');
+    }
     if (gated) {
       closeCardMenu();
       closeEditor();
@@ -2914,8 +2989,12 @@ function gpnCreatePanel(opts) {
     const letter = () => {
       node.replaceChildren(el('span', { class: 'gpn-face-letter', text: (st.email || '?').charAt(0).toUpperCase() }));
     };
-    if (node._face === `${st.picture}|${st.email}`) return;
-    node._face = `${st.picture}|${st.email}`;
+    // 分身沒有 Google 大頭貼：用它選的頭像（avatars.js）
+    const art = st.clone?.avatar && hasAvatars() ? gpnAvatarSvg(st.clone.avatar) : '';
+    const key = `${st.picture}|${st.email}|${art ? st.clone.avatar : ''}`;
+    if (node._face === key) return;
+    node._face = key;
+    if (art) { node.replaceChildren(el('span', { class: 'gpn-face-art', html: art })); return; }
     if (!st.picture) { letter(); return; }
     const img = el('img', { class: 'gpn-face-img', alt: '', referrerpolicy: 'no-referrer', src: st.picture });
     img.addEventListener('error', letter, { once: true });
@@ -3031,6 +3110,7 @@ function gpnCreatePanel(opts) {
     paintGear(cloudState);
     paintAvatar(cloudState);
     refreshAccount();
+    refreshClones();
     if (cloudState.signedIn && cloudState.phase === 'idle') retryWallpaper();
   }
 
@@ -3088,14 +3168,468 @@ function gpnCreatePanel(opts) {
       return;
     }
     const d = describeCloud(st);
+    const c = st.clone;
     ui.aWho.textContent = st.email || 'Google 帳號';
+    ui.aKind.textContent = c ? '已登入分身' : '已登入（提示詞存在 Google 雲端硬碟）';
+    ui.aWhere.textContent = c
+      ? `這個分身由 ${c.ownerEmail || '建立的人'} 建立和管理，提示詞存在他的 Google 雲端硬碟。` +
+        `一改就會自動同步。到期日 ${ymd(c.expiresAt)}，到期後會自動銷毀，想留著的話先到「備份」下載一份。`
+      : `提示詞存在你的 Google 雲端硬碟，檔名是「${GPN_DRIVE_FILE_NAME}」。一改就會自動同步，平常不用按「立即同步」。`;
+    ui.aBack.hidden = !st.owner;
+    if (!leaveArmed) ui.aBack.textContent = `回到我的帳號（${st.owner}）`;
     paintFace(ui.aFace, st);
-    ui.aPhotoNote.hidden = !!st.picture;
+    ui.aPhotoNote.hidden = !!st.picture || !!c;
     ui.aStatusIcon.innerHTML = d.icon;
     ui.aStatus.textContent = d.long;
     ui.aStatus.parentElement.setAttribute('data-kind', d.kind);
-    ui.aFileLink.hidden = !st.fileId;
+    ui.aFileLink.hidden = !st.fileId || !!c;
     if (st.fileId) ui.aFileLink.href = `https://drive.google.com/file/d/${encodeURIComponent(st.fileId)}/view`;
+  }
+
+  /* ---- 分身 ----
+     建立的人（用自己的 Google 帳號登入時）：建立、列出、複製代號、進入、再推一次、銷毀。
+     用分身登入時：看這個分身是誰建的、什麼時候到期；建立的人自己進來的話，可以回到自己的帳號。
+     資料怎麼存、代號怎麼產生，見 sync.js 的「分身」。 */
+
+  /** 2027/10/13 */
+  function ymd(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+  }
+
+  function buildClonesSection() {
+    ui.cMsg = el('div', { class: 'gpn-note gpn-note--status', role: 'status' });
+    ui.cNew = el('button', { class: 'gpn-btn gpn-btn--save gpn-btn--block', type: 'button', onclick: () => openPick('create') },
+      '＋　建立分身');
+    ui.cList = el('div', { class: 'gpn-clone-list' });
+    ui.cDone = el('div', { class: 'gpn-clone-done', hidden: '' });
+
+    /* 勾選要放進分身的提示詞 */
+    ui.cPickTitle = el('div', { class: 'gpn-label' });
+    ui.cName = el('input', {
+      class: 'gpn-input', type: 'text', maxlength: '30', placeholder: '例如：業務組',
+      onkeydown: (e) => { if (e.key === 'Enter') e.preventDefault(); },
+    });
+    ui.cNameField = field('分身名稱', '（同事登入後會看到）', ui.cName);
+    ui.cAvatarBox = el('div');
+    ui.cAvatarField = field('頭像', '（之後也可以換）', ui.cAvatarBox);
+    ui.cAvatarField.hidden = !hasAvatars();
+    ui.cTree = el('div', { class: 'gpn-clone-tree', role: 'tree' });
+    ui.cCount = el('div', { class: 'gpn-note' });
+    ui.cGo = el('button', { class: 'gpn-btn gpn-btn--save', type: 'button', onclick: onPickGo });
+    ui.cPick = el('div', { class: 'gpn-clone-pick', hidden: '' },
+      ui.cNameField, ui.cAvatarField,
+      ui.cPickTitle,
+      el('div', { class: 'gpn-brow gpn-clone-all' },
+        el('button', { class: 'gpn-btn2', type: 'button', onclick: () => pickAll(true) }, '全部勾選'),
+        el('button', { class: 'gpn-btn2', type: 'button', onclick: () => pickAll(false) }, '全部不勾')),
+      ui.cTree, ui.cCount,
+      el('div', { class: 'gpn-brow gpn-clone-go' },
+        el('button', { class: 'gpn-btn2', type: 'button', onclick: closePick }, '取消'), ui.cGo));
+
+    ui.cOwner = el('div', {},
+      el('p', { class: 'gpn-lede', text:
+        '分身是一個不用 Google 帳號的小帳號：勾選要給的書籤、資料夾、提示詞，複製一份成分身，' +
+        '會拿到一組 16 碼的分身代號。同事在登入畫面輸入代號，就能使用、新增、修改、刪除，就跟一般帳號一樣。' }),
+      el('div', { class: 'gpn-note', text:
+        '分身的提示詞存在你的 Google 雲端硬碟（一個分身一個檔案），你隨時可以「進入分身」幫忙編輯，或把它銷毀。' +
+        '分身和你的筆記本各自獨立，你之後改了自己的，可以按「再推一次」送過去。建立滿一年會自動銷毀。' }),
+      ui.cNew, ui.cMsg, ui.cDone, ui.cPick, ui.cList);
+
+    /* 用分身登入時 */
+    ui.cMineName = el('div', { class: 'gpn-account-email' });
+    ui.cMineNote = el('div', { class: 'gpn-note' });
+    ui.cMineBack = el('button', { class: 'gpn-btn2 gpn-btn--block', type: 'button', hidden: '', onclick: onLeaveClone });
+    ui.cMineFace = el('span', { class: 'gpn-account-avatar' });
+    ui.cMineAvatars = el('div');
+    ui.cMine = el('div', { hidden: '' },
+      el('div', { class: 'gpn-account-card' },
+        ui.cMineFace,
+        el('div', { class: 'gpn-account-info' }, el('div', { class: 'gpn-note', text: '你現在用的是分身' }), ui.cMineName)),
+      ui.cMineNote, ui.cMineBack,
+      hasAvatars() ? el('div', { class: 'gpn-field gpn-clone-myavatar' },
+        el('div', { class: 'gpn-label' }, '頭像', el('span', { text: '　點一下就換（每台電腦都會跟著換）' })), ui.cMineAvatars) : null);
+
+    return el('section', { class: 'gpn-section', 'data-section': 'clones' },
+      el('h3', { text: '分身' }), ui.cOwner, ui.cMine);
+  }
+
+  /** 打開分身頁：建立的人就去雲端硬碟拿最新的清單 */
+  function openClones() {
+    disarmCloneDelete();
+    cAvatarOpen = '';
+    if (!cPick) ui.cDone.hidden = true;
+    refreshClones();
+    if (cloudState.signedIn && !cloudState.clone) loadClones();
+  }
+
+  async function loadClones() {
+    if (clonesBusy) return;
+    clonesBusy = true;
+    if (!clones) setCloneMsg('讀取中…', 'ok');
+    const r = await cloud.listClones();
+    clonesBusy = false;
+    if (!r || !r.ok) { setCloneMsg(r?.error || '讀不到分身的清單，請稍後再試'); return; }
+    clones = r.clones || [];
+    setCloneMsg('');
+    refreshClones();
+  }
+
+  function setCloneMsg(msg, kind = 'bad') {
+    if (!ui.cMsg) return;
+    ui.cMsg.textContent = msg;
+    ui.cMsg.classList.toggle('is-bad', !!msg && kind === 'bad');
+    ui.cMsg.classList.toggle('is-ok', !!msg && kind === 'ok');
+  }
+
+  function refreshClones() {
+    if (!ui.cOwner) return;
+    const st = cloudState, c = st.clone;
+    ui.cOwner.hidden = !st.signedIn || !!c;
+    ui.cMine.hidden = !c;
+    if (c) {
+      ui.cMineName.textContent = c.label || '分身';
+      ui.cMineNote.textContent = `由 ${c.ownerEmail || '建立的人'} 建立和管理，提示詞存在他的 Google 雲端硬碟。` +
+        `到期日 ${ymd(c.expiresAt)}，到期後會自動銷毀，想留著的話先到「備份」下載一份。`;
+      ui.cMineBack.hidden = !st.owner;
+      if (!leaveArmed) ui.cMineBack.textContent = `回到我的帳號（${st.owner}）`;
+      paintFace(ui.cMineFace, st);
+      if (hasAvatars()) ui.cMineAvatars.replaceChildren(avatarGrid(c.avatar, onMyAvatar));
+      return;
+    }
+    if (!st.signedIn) { clones = null; return; }
+    ui.cNew.hidden = !!cPick;
+    ui.cList.hidden = !!cPick;
+    if (!clones) { ui.cList.replaceChildren(); return; }
+    ui.cList.replaceChildren(
+      el('div', { class: 'gpn-label gpn-clone-head', text: clones.length ? `建立過的分身（${clones.length}）` : '還沒有建立分身' }),
+      ...clones.map(cloneCard));
+  }
+
+  /** 分身的頭像；沒選過（或認不得）的用兩個人的圖示 */
+  function avatarFace(id) {
+    const svg = hasAvatars() ? gpnAvatarSvg(id) : '';
+    return svg ? el('span', { class: 'gpn-face-art', html: svg }) : el('span', { class: 'gpn-clone-noface', html: ICON_CLONE });
+  }
+
+  /** 選頭像的格子（動物、人物各一組）：current 是現在選的；onPick(id) */
+  function avatarGrid(current, onPick) {
+    const groups = [...new Set(GPN_AVATARS.map((a) => a.group))];
+    return el('div', { class: 'gpn-avatar-pick', role: 'radiogroup', 'aria-label': '頭像' },
+      ...groups.flatMap((g) => [
+        el('div', { class: 'gpn-avatar-group', text: g }),
+        el('div', { class: 'gpn-avatar-grid' }, ...GPN_AVATARS.filter((a) => a.group === g).map((a) => el('button', {
+          class: 'gpn-avatar-opt' + (a.id === current ? ' is-on' : ''), type: 'button', role: 'radio',
+          'aria-checked': String(a.id === current), 'aria-label': a.label, title: a.label,
+          onclick: () => onPick(a.id),
+        }, el('span', { class: 'gpn-face-art', html: gpnAvatarSvg(a.id) })))),
+      ]));
+  }
+
+  /** 建立的人幫某個分身換頭像：畫面先換，存不進去再換回來 */
+  async function onCloneAvatar(c, id) {
+    const old = c.avatar;
+    c.avatar = id;
+    cAvatarOpen = '';
+    refreshClones();
+    const r = await cloud.setCloneAvatar(c, id);
+    if (!r || !r.ok) {
+      c.avatar = old;
+      refreshClones();
+      toast(r?.error || '頭像沒有換成功，請稍後再試', true);
+    }
+  }
+
+  /** 用分身登入的人換自己的頭像 */
+  async function onMyAvatar(id) {
+    if (cloudState.clone?.avatar === id) return;
+    const r = await cloud.setCloneAvatar(null, id);
+    if (!r || !r.ok) { toast(r?.error || '頭像沒有換成功，請稍後再試', true); return; }
+    refreshCloud(await cloud.getState());
+  }
+
+  function cloneCard(c) {
+    const armed = cDelArmed === c.id;
+    const petOpen = cAvatarOpen === c.id && hasAvatars();
+    return el('div', { class: 'gpn-clone-card' },
+      el('div', { class: 'gpn-clone-top' },
+        el('button', {
+          class: 'gpn-clone-face', type: 'button', title: '換頭像', 'aria-label': `換「${c.label}」的頭像`,
+          'aria-expanded': String(petOpen), disabled: hasAvatars() ? null : '',
+          onclick: () => { cAvatarOpen = petOpen ? '' : c.id; refreshClones(); },
+        }, avatarFace(c.avatar)),
+        el('div', { class: 'gpn-clone-name', text: c.label || '分身' })),
+      petOpen ? avatarGrid(c.avatar, (id) => onCloneAvatar(c, id)) : null,
+      el('div', { class: 'gpn-clone-id' },
+        el('code', { text: gpnFormatCloneId(c.id) }),
+        el('button', { class: 'gpn-link gpn-clone-copy', type: 'button', onclick: () => copyInvite(c) }, '複製代號和網址')),
+      el('div', { class: 'gpn-note', text: `建立 ${ymd(c.createdAt)}　・　到期 ${ymd(c.expiresAt)}` +
+        (c.modifiedAt ? `　・　最後修改 ${ago(c.modifiedAt)}` : '') }),
+      el('div', { class: 'gpn-brow' },
+        el('button', { class: 'gpn-btn2', type: 'button', onclick: () => onEnterClone(c) }, '進入分身'),
+        el('button', { class: 'gpn-btn2', type: 'button', onclick: () => openPick('push', c) }, '再推一次'),
+        el('button', {
+          class: 'gpn-btn2 gpn-clone-del' + (armed ? ' gpn-btn2--danger' : ''), type: 'button', onclick: () => onDestroyClone(c),
+        }, armed ? '確定銷毀？再按一次' : '銷毀')));
+  }
+
+  /** 給同事的一段話：網址＋代號，貼到 LINE、Email 就能用 */
+  async function copyInvite(c) {
+    const text = `罐頭P 分身「${c.label}」\n網址：${GPN_CLOUD.site}\n分身代號：${gpnFormatCloneId(c.id)}\n` +
+      '打開網址，在登入畫面選「用分身代號登入」，輸入上面的代號就能使用。';
+    toast((await gpnShareCopy(text)) ? '已複製代號和網址，貼給同事就好' : '複製失敗，請手動選取代號', false);
+  }
+
+  async function onEnterClone(c) {
+    setCloneMsg('切換中…', 'ok');
+    const r = await cloud.enterClone(c.id);
+    if (!r || !r.ok) { setCloneMsg(r?.error || '沒辦法進入分身，請稍後再試'); return; }
+    setCloneMsg('');
+    clones = null;
+    closePick();
+    folderId = null;
+    refreshCloud(await cloud.getState());
+    closeSettings();
+    render();
+    toast(r.error ? `已進入分身，但同步失敗：${r.error}` : `已進入分身「${c.label}」。要回來時到 設定 → 分身，按「回到我的帳號」`, !!r.error);
+  }
+
+  /** 回到自己的帳號。分身裡還有修改送不出去的話，先講清楚、要再按一次 */
+  async function onLeaveClone() {
+    const btns = [ui.aBack, ui.cMineBack].filter(Boolean);
+    for (const b of btns) b.disabled = true;
+    const r = await cloud.leaveClone({ force: leaveArmed });
+    for (const b of btns) b.disabled = false;
+    if (r?.unsynced) {
+      leaveArmed = true;
+      for (const b of btns) armButton(b, '分身還有修改沒送出去，現在離開會不見。確定？再按一次');
+      return;
+    }
+    leaveArmed = false;
+    if (!r || !r.ok) { toast(r?.error || '沒辦法回到原本的帳號', true); return; }
+    closePick();
+    folderId = null;
+    refreshCloud(await cloud.getState());
+    render();
+    syncLook();
+    showSection('clones');
+    toast(r.error ? `已回到你的帳號，但同步失敗：${r.error}` : '已回到你的帳號');
+  }
+
+  function disarmCloneDelete() {
+    clearTimeout(cDelTimer);
+    cDelArmed = '';
+  }
+
+  async function onDestroyClone(c) {
+    if (cDelArmed !== c.id) {
+      cDelArmed = c.id;
+      clearTimeout(cDelTimer);
+      cDelTimer = setTimeout(() => { disarmCloneDelete(); refreshClones(); }, 6000);
+      refreshClones();
+      return;
+    }
+    disarmCloneDelete();
+    setCloneMsg('銷毀中…', 'ok');
+    const r = await cloud.destroyClone(c);
+    if (!r || !r.ok) { setCloneMsg(r?.error || '沒辦法銷毀，請稍後再試'); refreshClones(); return; }
+    clones = (clones || []).filter((x) => x.id !== c.id);
+    setCloneMsg('');
+    refreshClones();
+    toast(`已銷毀分身「${c.label}」，這組代號不能再登入了`);
+  }
+
+  /* ---- 勾選要放進分身的書籤、資料夾、提示詞 ----
+     勾書籤＝裡面全部；勾資料夾＝裡面全部；也可以只勾幾則。一部分有勾的顯示成「—」。
+     資料夾預設收起來（提示詞很多時才看得完），點名稱左邊的三角形展開。 */
+
+  async function openPick(mode, clone = null) {
+    disarmCloneDelete();
+    ui.cDone.hidden = true;
+    // diff：分身裡也有、但標題或內容和我的不一樣的（推過去會換成我的，畫面上要標出來）
+    const pick = { mode, clone, tabs: new Set(), folders: new Set(), items: new Set(), open: new Set(), diff: new Set() };
+    if (mode === 'push') {
+      // 分身裡已經有的先勾好（id 一樣就是當初給的那一則）
+      setCloneMsg('讀取分身的內容…', 'ok');
+      const r = await cloud.readClone(clone.fileId);
+      if (!r || !r.ok) { setCloneMsg(r?.error || '讀不到這個分身，請稍後再試'); return; }
+      setCloneMsg('');
+      const have = gpnNormalize(r.data);
+      const theirs = new Map();
+      for (const t of have.tabs) {
+        pick.tabs.add(t.id);
+        for (const l of gpnListsOf(t)) {
+          if (l !== t) pick.folders.add(l.id);
+          for (const it of l.items) { pick.items.add(it.id); theirs.set(it.id, it); }
+        }
+      }
+      for (const t of data.tabs) {
+        for (const l of gpnListsOf(t)) {
+          for (const it of l.items) {
+            const o = theirs.get(it.id);
+            if (o && (o.title !== it.title || o.content !== it.content)) pick.diff.add(it.id);
+          }
+        }
+      }
+      // 有不一樣的，就把那幾個資料夾先展開，看得到是哪幾則
+      for (const t of data.tabs) for (const f of t.folders || []) if (f.items.some((it) => pick.diff.has(it.id))) pick.open.add(f.id);
+      // 只留我這邊也有的
+      const mine = new Set();
+      for (const t of data.tabs) { mine.add(t.id); for (const l of gpnListsOf(t)) { mine.add(l.id); for (const it of l.items) mine.add(it.id); } }
+      for (const set of [pick.tabs, pick.folders, pick.items]) for (const id of [...set]) if (!mine.has(id)) set.delete(id);
+    }
+    if (hasAvatars()) pick.avatar = gpnRandomAvatar();
+    cPick = pick;
+    ui.cName.value = '';
+    ui.cNameField.hidden = mode !== 'create';
+    ui.cAvatarField.hidden = mode !== 'create' || !hasAvatars();
+    if (mode === 'create' && hasAvatars()) paintAvatarPick();
+    ui.cPickTitle.textContent = mode === 'create' ? '要放進分身的提示詞' : `要推進分身「${clone.label}」的提示詞`;
+    ui.cGo.textContent = mode === 'create' ? '建立分身' : '推過去';
+    ui.cPick.hidden = false;
+    paintPick();
+    refreshClones();
+    if (mode === 'create') setTimeout(() => ui.cName.focus(), 30);
+  }
+
+  function paintAvatarPick() {
+    ui.cAvatarBox.replaceChildren(avatarGrid(cPick.avatar, (id) => { cPick.avatar = id; paintAvatarPick(); }));
+  }
+
+  function closePick() {
+    cPick = null;
+    ui.cPick.hidden = true;
+    refreshClones();
+  }
+
+  /** 這個書籤、資料夾裡的提示詞勾了幾則：'all' | 'some' | 'none'（空的看自己有沒有勾） */
+  function pickState(ids, selfId, selfSet) {
+    if (!ids.length) return selfSet.has(selfId) ? 'all' : 'none';
+    const n = ids.filter((id) => cPick.items.has(id)).length;
+    return n === ids.length ? 'all' : n ? 'some' : 'none';
+  }
+
+  function pickAll(on) {
+    for (const t of data.tabs) {
+      for (const l of gpnListsOf(t)) {
+        if (l !== t) cPick.folders[on ? 'add' : 'delete'](l.id);
+        for (const it of l.items) cPick.items[on ? 'add' : 'delete'](it.id);
+      }
+      cPick.tabs[on ? 'add' : 'delete'](t.id);
+    }
+    paintPick();
+  }
+
+  function paintPick() {
+    if (!cPick) return;
+    const box = (state, onchange, label) => {
+      const input = el('input', { type: 'checkbox', 'aria-label': label, onchange });
+      input.checked = state === 'all';
+      input.indeterminate = state === 'some';
+      return input;
+    };
+    const toggle = (set, id) => { set[set.has(id) ? 'delete' : 'add'](id); };
+    const setMany = (on, tabId, lists) => {
+      if (tabId) cPick.tabs[on ? 'add' : 'delete'](tabId);
+      for (const l of lists) {
+        if (l.id && l !== tabById(tabId)) cPick.folders[on ? 'add' : 'delete'](l.id);
+        for (const it of l.items) cPick.items[on ? 'add' : 'delete'](it.id);
+      }
+      paintPick();
+    };
+    const itemRow = (it, deep) => el('label', { class: 'gpn-clone-row gpn-clone-row--item' + (deep ? ' gpn-clone-row--deep' : '') },
+      box(cPick.items.has(it.id) ? 'all' : 'none', () => { toggle(cPick.items, it.id); paintPick(); }, it.title),
+      el('span', { class: 'gpn-clone-text', text: it.title || it.content.slice(0, 40) || '（沒有標題）' }),
+      cPick.diff.has(it.id) ? el('span', {
+        class: 'gpn-clone-diff', text: '分身裡的不一樣',
+        title: '分身裡這一則被改過（或你改過）。勾著推過去，分身裡的會換成你現在的版本',
+      }) : null);
+
+    const rows = [];
+    for (const t of data.tabs) {
+      const lists = gpnListsOf(t);
+      const ids = lists.flatMap((l) => l.items.map((i) => i.id));
+      const ts = pickState(ids, t.id, cPick.tabs);
+      rows.push(el('label', { class: 'gpn-clone-row gpn-clone-row--tab' },
+        box(ts, () => setMany(ts !== 'all', t.id, lists), t.label),
+        el('span', { class: 'gpn-clone-dot', 'data-color': t.color }),
+        el('span', { class: 'gpn-clone-text', text: t.label }),
+        el('span', { class: 'gpn-clone-n', text: `${ids.filter((id) => cPick.items.has(id)).length}/${ids.length}` })));
+      if (!t.folders) {
+        for (const it of t.items) rows.push(itemRow(it, false));
+        continue;
+      }
+      for (const f of t.folders) {
+        const fids = f.items.map((i) => i.id);
+        const fs = pickState(fids, f.id, cPick.folders);
+        const open = cPick.open.has(f.id);
+        rows.push(el('div', { class: 'gpn-clone-row gpn-clone-row--folder' },
+          el('button', {
+            class: 'gpn-clone-caret' + (open ? ' is-open' : ''), type: 'button', 'aria-expanded': String(open),
+            'aria-label': open ? `收起「${f.label}」` : `展開「${f.label}」`, disabled: f.items.length ? null : '',
+            onclick: () => { toggle(cPick.open, f.id); paintPick(); },
+          }, '▸'),
+          el('label', { class: 'gpn-clone-folder' },
+            box(fs, () => setMany(fs !== 'all', null, [f]), f.label),
+            el('span', { class: 'gpn-clone-text', text: f.label }),
+            el('span', { class: 'gpn-clone-n', text: `${fids.filter((id) => cPick.items.has(id)).length}/${fids.length}` }))));
+        if (open) for (const it of f.items) rows.push(itemRow(it, true));
+      }
+    }
+    ui.cTree.replaceChildren(...rows);
+    const n = cPick.items.size;
+    const over = [...cPick.diff].filter((id) => cPick.items.has(id)).length;
+    ui.cCount.textContent = !n ? '還沒有勾選任何提示詞'
+      : cPick.mode === 'push'
+        ? `勾了 ${n} 則。分身裡已經有的會換成你現在的版本` + (over ? `（其中 ${over} 則分身裡的不一樣，不想蓋掉就取消勾選）` : '') +
+          '；分身自己新增的不會動。'
+        : `勾了 ${n} 則提示詞`;
+  }
+
+  async function onPickGo() {
+    if (!cPick) return;
+    const sub = gpnCloneSubset(data, cPick);
+    if (!cPick.items.size && !cPick.tabs.size && !cPick.folders.size) { toast('請先勾選要放進分身的提示詞', true); return; }
+    ui.cGo.disabled = true;
+    if (cPick.mode === 'create') {
+      const label = ui.cName.value.trim();
+      if (!label) { ui.cGo.disabled = false; ui.cName.classList.add('is-bad'); ui.cName.focus(); return; }
+      ui.cName.classList.remove('is-bad');
+      setCloneMsg('建立中…', 'ok');
+      const r = await cloud.createClone(label, sub, cPick.avatar || '');
+      ui.cGo.disabled = false;
+      if (!r || !r.ok) { setCloneMsg(r?.error || '沒辦法建立分身，請稍後再試'); return; }
+      setCloneMsg('');
+      closePick();
+      clones = [r.clone, ...(clones || [])];
+      refreshClones();
+      showCloneDone(r.clone, gpnCountItems(sub));
+    } else {
+      const c = cPick.clone;
+      setCloneMsg('推送中…', 'ok');
+      const r = await cloud.pushClone(c.fileId, sub);
+      ui.cGo.disabled = false;
+      if (!r || !r.ok) { setCloneMsg(r?.error || '沒辦法推過去，請稍後再試'); return; }
+      setCloneMsg('');
+      closePick();
+      toast(r.added || r.updated
+        ? `已推進分身「${c.label}」：新增 ${r.added} 則、更新 ${r.updated} 則`
+        : `分身「${c.label}」已經是最新的了`);
+    }
+  }
+
+  /** 剛建立好：大大的代號＋複製按鈕 */
+  function showCloneDone(c, n) {
+    ui.cDone.replaceChildren(
+      el('div', { class: 'gpn-label', text: `分身「${c.label}」建立好了（${n} 則提示詞）` }),
+      el('code', { class: 'gpn-clone-big', text: gpnFormatCloneId(c.id) }),
+      el('div', { class: 'gpn-brow' },
+        el('button', { class: 'gpn-btn2', type: 'button', onclick: () => copyInvite(c) }, '複製代號和網址')),
+      el('div', { class: 'gpn-note', text:
+        `把代號和網址給同事：打開 ${GPN_CLOUD.site}，在登入畫面選「用分身代號登入」，輸入代號就能使用。` +
+        '代號就像密碼，拿到的人都能使用、修改這個分身；不想給了就按「銷毀」。下面的清單隨時看得到代號。' }));
+    ui.cDone.hidden = false;
   }
 
   /* ---- 備份 ----

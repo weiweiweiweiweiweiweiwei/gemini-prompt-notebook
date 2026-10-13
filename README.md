@@ -191,6 +191,29 @@
 
 （外掛的面板和小視窗沒有這顆按鈕：外掛的頁面「問問 Gemini」讀不到，請用網頁版。）
 
+### 分身：不用 Google 帳號，也能把提示詞分給同事（4.24.0）
+
+想把某個書籤裡的幾個資料夾、幾則提示詞給同事用，但同事不想（或不能）用 Google 帳號登入時，就建立一個 **分身**。
+
+1. **齒輪 → 分身 → ＋ 建立分身**：取個名字（例如「業務組」）、挑一個頭像，
+   再勾選要給的書籤、資料夾、提示詞（勾書籤＝裡面全部、勾資料夾＝裡面全部，也可以只勾幾則）。
+2. 按 **建立分身**，會拿到一組 16 碼的 **分身代號**（例如 `K7QM-3XPA-9RVD-H2WN`）。按 **複製代號和網址** 貼給同事。
+3. 同事打開網頁版（或外掛），在登入畫面按最下面的小字 **選擇其他登入方式**，輸入代號就能用：
+   新增、修改、刪除都可以，就跟一般帳號一樣；換一台電腦用同一組代號登入，看到的也一樣。
+
+- **資料存在哪裡**：建立的人自己的 Google 雲端硬碟，一個分身一個檔案「罐頭P 分身 - 名稱.json」，
+  同事新增、修改的也都存在那裡。同事沒有 Google 帳號、碰不到雲端硬碟，所以由中繼（`supabase/functions/gpn-clone`）代為讀寫那個檔案。
+- **各自獨立**：分身是建立當下複製的一份，之後兩邊各改各的。想把自己後來改的送過去，按分身的 **再推一次**：
+  分身裡已經有的會換成你現在的版本（分身裡被改過的會標「分身裡的不一樣」，不想蓋掉就取消勾選），沒有的就加進去；
+  分身自己新增的不會動。
+- **進入分身**：建立的人可以直接用那個分身的身分使用、編輯，改完到 齒輪 → 分身 按 **回到我的帳號**，不用重新登入 Google。
+- **頭像**：分身沒有 Google 大頭貼，建立時挑一個（幾何風格的動物，或扁平插畫的人物）。
+  建立的人點分身清單裡的頭像、用分身的人在 齒輪 → 分身，都可以再換。
+- **代號就像密碼**：拿到代號的人都能使用、修改那個分身。不想給了就按 **銷毀**（按兩次），代號馬上不能用，檔案丟進雲端硬碟的垃圾桶。
+- **一年後自動銷毀**：建立滿一年，代號不能再用，檔案丟進垃圾桶。到期前想留著，用分身登入後到 **備份** 下載一份。
+- 建立分身的人撤銷了罐頭P 的授權（或很久很久沒用、Google 讓登入失效），分身會同步不了，同事會看到提示；
+  建立的人打開罐頭P 重新登入一次就好，同事那邊沒送出的修改不會不見。
+
 ### 設定裡有什麼（齒輪）
 
 左邊選單、右邊內容。改名、換色、開關資料夾都是 **改了就自動存**，最後按「完成」離開。
@@ -200,6 +223,7 @@
 | 名稱與資料夾 | 由上到下：書籤名稱、書籤顏色（點按鈕才會展開色票）、使用資料夾的開關；最下面可以刪除這個書籤（按兩次） |
 | 星號 | 連續點星號時要換哪幾種符號（見上面「星號」）。在我的最愛、符號書籤按齒輪，會直接打開這一頁 |
 | 帳號 | 登入的 Google 帳號、同步狀態、登出（見第三節） |
+| 分身 | 建立不用 Google 帳號的分身給同事用；複製代號、換頭像、進入分身、再推一次、銷毀（見上面「分身」） |
 | 備份 | 所有書籤一起下載成一個備份檔、或匯入備份檔（見第三節） |
 | 背景 | 最上面是 **深淺主題**（跟著系統／淺色／深色，跟著帳號同步）；下面點縮圖換背景（只有網頁版、工具列小視窗），筆記本的霧面玻璃會把背景模糊地透出來 |
 
@@ -431,6 +455,19 @@ https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/?try-cloud=1
 3. 跑 `python tools/checksync.py --fix`，推上 GitHub（網頁版會自動重新發布）。
 4. 外掛到 `chrome://extensions` 按 ⟳ 重新載入。
 
+#### ⑤ 分身的中繼（gpn-clone，4.24.0）
+
+分身（見第一節「分身」）要多一個 Edge Function 和兩張資料表，都放在同一個 flowstudy 專案、名稱加了 gpn 開頭：
+
+1. **資料表**：跑 `supabase/migrations/20261013_gpn_clones.sql`（`gpn_clone_owners`、`gpn_clones`）。
+   兩張都開了 RLS 而且沒有任何 policy，只有函式（service role）碰得到，網頁拿公開金鑰碰不到。
+2. **函式**：部署 `supabase/functions/gpn-clone/index.ts`，**JWT 驗證關閉**（verify_jwt = false）。
+   密鑰沿用 ② 的 `GPN_GOOGLE_CLIENT_ID`／`GPN_GOOGLE_CLIENT_SECRET`。可以另外設 `GPN_CLONE_KEY` 當加密 refresh token 的金鑰；
+   沒設就由用戶端密鑰推出來（之後換了用戶端密鑰，建立分身的人打開罐頭P 一次，中繼就會拿到用新金鑰加密的 token）。
+3. `cloud-config.js` 的 `cloneUrl` 指到這個函式。留空就沒有分身功能（設定裡不出現「分身」、登入畫面不出現「選擇其他登入方式」）。
+
+本機測試：`.claude/launch.json` 的 `gpn-edge-clone` 用 Node 跑真正的 `index.ts`，接到假的 Google 和假的資料庫（`mock_gdrive.py`）。
+
 #### 機關的 Google Workspace 帳號連不上？
 
 有些機關的 Google 管理員會擋「還沒被核准的第三方應用程式」存取雲端硬碟。
@@ -441,6 +478,9 @@ https://weiweiweiweiweiweiweiwei.github.io/gemini-prompt-notebook/?try-cloud=1
 
 提示詞在每個人自己的雲端硬碟裡，**管理員看不到**。token 中繼不保存任何東西；
 Supabase 的 Edge Function 記錄只有「幾點被呼叫、成功或失敗」。
+
+分身例外：`gpn_clones`、`gpn_clone_owners` 記著分身代號的雜湊（不是代號本身）、對應的檔案、名稱、到期日、
+建立的人的 Email 和加密過的 refresh token。提示詞仍然在建立的人的雲端硬碟裡，中繼讀寫時只是轉手、不保存。
 
 > 以前（4.5 版）用的 Supabase 帳號系統已經停用：程式不再連資料庫。
 > 舊的 `notebooks` 資料表、`Authentication → Users` 裡的帳號還留在 Supabase 上，確認大家都改用雲端硬碟之後可以刪掉。
@@ -506,6 +546,7 @@ src/
   styles.css           面板的全部樣式（毛玻璃）
   backgrounds.js       設定 → 背景 的內建背景（用 canvas 畫的；網頁版、工具列小視窗用）
   sounds.js            錄好的音效（換書籤的「卡嚓」，Pixabay 免費音效，用 data: 網址內嵌）
+  avatars.js           分身的頭像（幾何風格的動物、扁平插畫的人物，SVG）
   popup.html / .js     工具列小視窗
   sync.js              雲端同步：連結 Google、換 token、讀寫雲端硬碟上的筆記本、合併
   cloud-config.js      雲端的連線設定（Google OAuth 用戶端 ID、token 中繼的網址）
@@ -521,11 +562,13 @@ web/
   ext-login.html       外掛連結雲端硬碟時的回程頁（沒裝外掛的人打開只會看到說明）
   privacy.html         隱私權政策（Google 同意畫面要填這個網址）
   store.js             同樣的資料格式 + localStorage 存取
-  share.js / panel.js / styles.css / sync.js / cloud-config.js / backgrounds.js / sounds.js   和 src/ 同一份
+  share.js / panel.js / styles.css / sync.js / cloud-config.js / backgrounds.js / sounds.js / avatars.js   和 src/ 同一份
 presets/
   chatgpt-99-prompts.json            可以直接匯入的 99 個提示詞
 supabase/
   functions/gpn-google-token/index.ts   token 中繼（Supabase Edge Function，放在 flowstudy 專案），見「雲端同步的設定」
+  functions/gpn-clone/index.ts          分身的中繼：代為讀寫建立的人雲端硬碟裡的分身檔案，見「⑤ 分身的中繼」
+  migrations/20261013_gpn_clones.sql    分身的兩張資料表
 tools/
   checksync.py         檢查 src/ 和 web/ 的共用程式碼有沒有分岔
 .github/workflows/

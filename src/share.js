@@ -277,3 +277,106 @@ async function gpnShareCopy(text) {
     return ok;
   }
 }
+
+/* ========== 分身的小工具 ==========
+   畫面（panel.js）和同步（sync.js）都會用到，所以放在每個地方都有載入的這裡。分身是什麼見 sync.js 的「分身」。 */
+
+const GPN_CLONE_DAYS = 365;                                   // 分身的壽命
+const GPN_CLONE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';  // 拿掉 0 O 1 I，抄的時候不會看錯
+
+/** 16 碼的分身代號：每碼 32 種（一個位元組取 5 個位元，剛好平均） */
+function gpnNewCloneId() {
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => GPN_CLONE_ALPHABET[b & 31]).join('');
+}
+const gpnCleanCloneId = (s) => String(s || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
+const gpnIsCloneId = (id) => typeof id === 'string' && id.length === 16 && [...id].every((c) => GPN_CLONE_ALPHABET.includes(c));
+/** K7QM3XPA9RVDH2WN → K7QM-3XPA-9RVD-H2WN */
+const gpnFormatCloneId = (id) => String(id || '').replace(/(.{4})(?=.)/g, '$1-');
+
+/** 分身的名稱：雲端硬碟的 appProperties 一個最多 124 個位元組（中文一個字 3 個），所以限制長度 */
+function gpnCloneLabel(label) {
+  let s = String(label || '').replace(/\s+/g, ' ').trim() || '分身';
+  while (new TextEncoder().encode(s).length > 90) s = s.slice(0, -1);
+  return s;
+}
+
+/**
+ * 從筆記本挑出勾選的部分，做成分身的筆記本。pick：{ tabs, folders, items }（都是 Set，放 id）。
+ * 勾了提示詞，它所在的書籤、資料夾自動帶上；空的書籤、資料夾要自己勾了才帶。
+ * id 全部照舊：「再推一次」靠 id 認出是同一則。我的最愛、星號、使用記錄、回收桶不帶過去。
+ */
+function gpnCloneSubset(d, pick) {
+  const copy = (it) => ({ id: it.id, title: it.title, content: it.content });
+  const tabs = [];
+  for (const t of d.tabs) {
+    const head = { id: t.id, label: t.label, color: t.color };
+    if (t.folders) {
+      const folders = t.folders
+        .map((f) => ({ id: f.id, label: f.label, items: f.items.filter((i) => pick.items.has(i.id)).map(copy) }))
+        .filter((f) => f.items.length || pick.folders.has(f.id));
+      if (folders.length || pick.tabs.has(t.id)) tabs.push(folders.length ? { ...head, folders } : { ...head, items: [] });
+    } else {
+      const items = t.items.filter((i) => pick.items.has(i.id)).map(copy);
+      if (items.length || pick.tabs.has(t.id)) tabs.push({ ...head, items });
+    }
+  }
+  return gpnNormalize({ version: GPN_VERSION, activeId: tabs[0]?.id, tabs, recent: [], favs: [], marks: {}, markTypes: [], trash: [] });
+}
+
+/**
+ * 再推一次：把 sub（勾選的部分）疊到分身現在的內容上。
+ *   同一則（同 id）→ 標題、內容換成最新的（不管分身把它搬到哪裡，都留在原地）
+ *   分身沒有的     → 加到同一個書籤、資料夾（分身沒有那個書籤、資料夾就新增；書籤滿了放最後一個）
+ *   分身自己新增的、刪掉的（沒有再勾的）→ 不動；分身丟進回收桶、這次又勾了的 → 拿出來
+ * 回傳 { data, added, updated }
+ */
+function gpnCloneOverlay(clone, sub) {
+  const out = gpnNormalize(JSON.parse(JSON.stringify(clone)));
+  const where = new Map();
+  for (const t of out.tabs) for (const l of gpnListsOf(t)) for (const it of l.items) where.set(it.id, it);
+  let added = 0, updated = 0;
+  for (const st of sub.tabs) {
+    let t = out.tabs.find((x) => x.id === st.id);
+    if (!t) {
+      if (out.tabs.length < GPN_MAX_TABS) {
+        t = st.folders ? { id: st.id, label: st.label, color: st.color, folders: [] } : { id: st.id, label: st.label, color: st.color, items: [] };
+        out.tabs.push(t);
+      } else {
+        t = out.tabs[out.tabs.length - 1];
+      }
+    }
+    for (const sl of gpnListsOf(st)) {
+      let list = null;                 // 加新的提示詞要放哪裡（用到才決定）
+      const target = () => {
+        if (list) return list;
+        if (!t.folders) return (list = t);
+        list = sl !== st && t.folders.find((f) => f.id === sl.id);
+        if (!list && sl !== st && t.folders.length < GPN_MAX_FOLDERS) {
+          list = { id: sl.id, label: sl.label, items: [] };
+          t.folders.push(list);
+        }
+        if (!list) {
+          if (!t.folders.length) t.folders.push({ id: 'f_' + t.id, label: GPN_DEFAULT_FOLDER, items: [] });
+          list = t.folders[t.folders.length - 1];
+        }
+        return list;
+      };
+      if (sl !== st && t.folders && !t.folders.some((f) => f.id === sl.id) && !sl.items.length) target();
+      for (const it of sl.items) {
+        const have = where.get(it.id);
+        if (have) {
+          if (have.title !== it.title || have.content !== it.content) updated++;
+          have.title = it.title;
+          have.content = it.content;
+        } else {
+          const copy = { id: it.id, title: it.title, content: it.content };
+          target().items.push(copy);
+          where.set(it.id, copy);
+          added++;
+        }
+      }
+    }
+  }
+  out.trash = (out.trash || []).filter((r) => !where.has(r.id));
+  return { data: gpnNormalize(out), added, updated };
+}
