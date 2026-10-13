@@ -19,8 +19,9 @@ body {
   background-attachment: fixed;
 }
 
+/* 深色：跟著系統；或在 設定 → 背景 → 深淺主題 選了深色（panel.js 在 <html> 標上 data-gpn-theme） */
 @media (prefers-color-scheme: dark) {
-  body {
+  html:not([data-gpn-theme="light"]) body {
     color: #e3e3e3;
     background:
       radial-gradient(38vmax 38vmax at 10% 14%, rgba(240, 183, 87, .16), transparent 62%),
@@ -29,6 +30,15 @@ body {
       #131314;
     background-attachment: fixed;
   }
+}
+html[data-gpn-theme="dark"] body {
+  color: #e3e3e3;
+  background:
+    radial-gradient(38vmax 38vmax at 10% 14%, rgba(240, 183, 87, .16), transparent 62%),
+    radial-gradient(42vmax 42vmax at 92% 18%, rgba(110, 168, 254, .18), transparent 62%),
+    radial-gradient(46vmax 46vmax at 72% 96%, rgba(79, 201, 194, .14), transparent 62%),
+    #131314;
+  background-attachment: fixed;
 }
 
 .nojs { margin: 40px 16px; text-align: center; font-size: 18px; }

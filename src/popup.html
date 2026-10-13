@@ -14,13 +14,20 @@
       #eef1f6;
   }
   @media (prefers-color-scheme: dark) {
-    body {
+    html:not([data-gpn-theme="light"]) body {
       background:
         radial-gradient(420px 420px at 8% 10%, rgba(240, 183, 87, .16), transparent 62%),
         radial-gradient(460px 460px at 94% 16%, rgba(110, 168, 254, .18), transparent 62%),
         radial-gradient(500px 500px at 70% 100%, rgba(79, 201, 194, .14), transparent 62%),
         #131314;
     }
+  }
+  html[data-gpn-theme="dark"] body {
+    background:
+      radial-gradient(420px 420px at 8% 10%, rgba(240, 183, 87, .16), transparent 62%),
+      radial-gradient(460px 460px at 94% 16%, rgba(110, 168, 254, .18), transparent 62%),
+      radial-gradient(500px 500px at 70% 100%, rgba(79, 201, 194, .14), transparent 62%),
+      #131314;
   }
 </style>
 </head>

@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.21.0';
+const GPN_APP_VERSION = '4.22.0';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -98,9 +98,6 @@ function gpnCreatePanel(opts) {
   const ICON_IMAGE =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>';
 
-  /** 喇叭：設定裡的「音效」 */
-  const ICON_SOUND =
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>';
 
   /** 條列：「全部提示詞」頁 */
   const ICON_LIST =
@@ -127,6 +124,10 @@ function gpnCreatePanel(opts) {
   /** 警示三角形：資源回收桶最上面 */
   const ICON_WARN =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>';
+  /** 回收桶背景冒出來的大警示三角形（圓角三角形＋白色驚嘆號） */
+  const ICON_WARN_BIG =
+    '<svg viewBox="0 0 100 90" aria-hidden="true"><path d="M44 6a7 7 0 0 1 12 0l42 72a7 7 0 0 1-6 11H8a7 7 0 0 1-6-11z" fill="#e53935"/>' +
+    '<rect x="45" y="28" width="10" height="34" rx="5" fill="#fff"/><circle cx="50" cy="73" r="6" fill="#fff"/></svg>';
   /** 放大鏡：搜尋 */
   const ICON_SEARCH =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>';
@@ -322,11 +323,10 @@ function gpnCreatePanel(opts) {
   /* ---- 音效 ----
      點書籤、換資料夾、用提示詞、加星號、儲存、刪除、拖曳…都有一個很短的聲音。
      全部用 Web Audio 當場合成（幾個正弦波、三角波），不用音檔，外掛和網頁版都一樣。
-     可以在 設定 → 音效 關掉（記在這台電腦，prefs 的 gpn_sound）。
+     （4.22.0 起拿掉了「設定 → 音效」那一頁：音效一律開著。）
      瀏覽器規定要使用者先點過東西才能出聲，所以第一次播的時候才建 AudioContext。 */
-  let soundOn = true;
+  const soundOn = true;
   let audio = null;
-  prefs.get('gpn_sound').then((v) => { if (v === false) soundOn = false; });
 
   function audioCtx() {
     if (!audio) {
@@ -851,7 +851,7 @@ function gpnCreatePanel(opts) {
     const inTrash = !!tab.trash && !searching;
     ui.book.classList.toggle('is-trash', inTrash);
     ui.trashTop.hidden = !inTrash;
-    refreshTrashLook();
+    paintTrashFx(inTrash);
     ui.addBtn.hidden = !!tab.fixed || searching;
     ui.clearRecentBtn.hidden = !tab.recent || searching;
     ui.trashRestore.hidden = ui.trashPurge.hidden = true;
@@ -2389,7 +2389,6 @@ function gpnCreatePanel(opts) {
     ui.sNavItems = [
       navItem('tab', ICON_TAB, '名稱與資料夾'),
       navItem('marks', ICON_STAR, '星號'),
-      navItem('sound', ICON_SOUND, '音效'),
       // 沒有雲端功能的地方（例如測試）就不出現這一項
       cloud ? navItem('account', ICON_CLOUD_DONE, '帳號') : null,
       navItem('backup', ICON_SYNC, '備份'),
@@ -2460,8 +2459,6 @@ function gpnCreatePanel(opts) {
     /* ---- 星號 ---- */
     const secMarks = buildMarksSection();
 
-    /* ---- 音效 ---- */
-    const secSound = buildSoundSection();
 
     /* ---- 雲端同步 ---- */
     const secAccount = cloud ? buildAccountSection() : null;
@@ -2472,7 +2469,7 @@ function gpnCreatePanel(opts) {
     /* ---- 背景 ---- */
     const secLook = standalone ? buildLookSection() : null;
 
-    ui.sSections = [secTab, secMarks, secSound, secAccount, secBackup, secLook].filter(Boolean);
+    ui.sSections = [secTab, secMarks, secAccount, secBackup, secLook].filter(Boolean);
     ui.sBody = el('div', { class: 'gpn-settings-body' }, ...ui.sSections);
 
     ui.settings = el('div', { class: 'gpn-dialog gpn-settings', onmousedown: stop },
@@ -2539,7 +2536,6 @@ function gpnCreatePanel(opts) {
     if (!tab) return;
 
     const folders = gpnCountFolders(data);
-    refreshSound();
     const nTrash = trashList().length;
     ui.sTrashNav.querySelector('.gpn-nav-text').textContent = nTrash ? `資源回收桶（${nTrash}）` : '資源回收桶';
     ui.bStats.textContent = `${data.tabs.length} 個書籤、` +
@@ -2667,35 +2663,6 @@ function gpnCreatePanel(opts) {
     if (ui.sDel) disarmButton(ui.sDel, '刪除這個書籤');
   }
 
-  /* ---- 音效（設定 → 音效）---- */
-  function buildSoundSection() {
-    ui.soundSwitch = el('button', {
-      class: 'gpn-switch-row', type: 'button', role: 'switch', 'aria-checked': 'true',
-      onclick: () => {
-        soundOn = !soundOn;
-        prefs.set('gpn_sound', soundOn);
-        refreshSound();
-        if (soundOn) sfx('save');
-      },
-    },
-      el('span', { class: 'gpn-switch', 'aria-hidden': 'true' }),
-      el('span', { class: 'gpn-switch-text' }, el('b', { text: '音效' }), ui.soundState = el('span')));
-    const demo = (name, text) => el('button', { class: 'gpn-btn2', type: 'button', onclick: () => sfx(name) }, text);
-    return el('section', { class: 'gpn-section', 'data-section': 'sound' },
-      el('h3', { text: '音效' }),
-      el('p', { class: 'gpn-lede', text:
-        '點書籤、換資料夾、用提示詞、加星號、儲存、刪除、拖曳時，都會有一個很短的聲音。不喜歡可以關掉。' }),
-      field('開關', '（只記在這台電腦）', ui.soundSwitch),
-      field('試聽', null, el('div', { class: 'gpn-brow' },
-        demo('tab', '換書籤'), demo('copy', '用提示詞'), demo('star', '加星號'),
-        demo('save', '儲存'), demo('del', '刪除'), demo('pick', '拖曳'))));
-  }
-
-  function refreshSound() {
-    if (!ui.soundSwitch) return;
-    ui.soundSwitch.setAttribute('aria-checked', String(soundOn));
-    ui.soundState.textContent = soundOn ? '開啟中' : '關閉中';
-  }
 
 
   /* ---- 星號 ----
@@ -3335,6 +3302,7 @@ function gpnCreatePanel(opts) {
     }
     data.look = keepLook;                       // 背景交給 importLook 決定
     if (await importLook(parsed.look, replace)) msg += '，背景也換好了';
+    applyTheme();
     folderId = null;
     await persist();
     syncLook();
@@ -3411,23 +3379,41 @@ function gpnCreatePanel(opts) {
    * 資源回收桶的背景：在回收桶裡不管原本選了什麼，一律換成回收桶的背景（紅色警示，提醒這裡是危險區域）；
    * 離開時換回原本的。外掛在 AI 網站裡的面板也一樣（平常沒有背景，進回收桶才有）。
    */
-  async function refreshTrashLook() {
-    if (activeTab().trash && searchQ === null) {
-      const id = gpnCleanLook(data.look).trash;
-      const key = 'trash|' + id;
-      if (bgApplied === key) return;
-      bgApplied = key;
-      await applyBackground(bgPresets.some((b) => b.id === id && b.trash) ? id : GPN_TRASH_BG);
-    } else if (bgApplied.startsWith('trash|')) {
-      bgApplied = '';
-      if (standalone) syncLook();
-      else applyBackground('default');
+  /**
+   * 資源回收桶的警示（4.22.0）：背景沿用使用者自己選的，只是冒出 4 個大大小小的紅色警示三角形，
+   * 大的在後面、比較模糊、比較淡；小的在前面、比較清楚，一個接一個彈出來，之後輕輕漂著。
+   * 刻意只放幾個、分散在四周（筆記本在中間），不要像壁紙一樣排滿整面。
+   */
+  const TRASH_FX = [
+    // [左 %, 上 %, 大小（畫面短邊的 %）, 模糊 px, 不透明度, 旋轉 deg, 第幾個出現]
+    [-5, 50, 42, 14, 0.32, -8, 0],    // 左下，最大最後面（一半露在畫面外）
+    [82, 4, 28, 7, 0.45, 10, 1],      // 右上
+    [7, 9, 15, 2, 0.8, 6, 2],         // 左上，小的在前面
+    [86, 66, 19, 3.5, 0.62, -12, 3],  // 右下
+  ];
+
+  function buildTrashFx() {
+    ui.trashFx = el('div', { class: 'gpn-trash-fx', 'aria-hidden': 'true' });
+    for (const [x, y, size, blur, alpha, rot, i] of TRASH_FX) {
+      const n = el('div', { class: 'gpn-warn', html: ICON_WARN_BIG });
+      n.style.cssText = `left:${x}%;top:${y}%;--s:${size}vmin;--blur:${blur}px;--a:${alpha};--rot:${rot}deg;--i:${i}`;
+      ui.trashFx.append(n);
     }
   }
 
+  /** 進回收桶時讓三角形重新彈一次（拿掉再放回去，動畫才會重播） */
+  function paintTrashFx(on) {
+    if (!ui.trashFx) {
+      if (!on) return;
+      buildTrashFx();
+    }
+    if (on && !ui.trashFx.isConnected) ui.overlay.prepend(ui.trashFx);
+    else if (!on && ui.trashFx.isConnected) ui.trashFx.remove();
+  }
+
   async function syncLook() {
+    applyTheme();
     if (!standalone) return;
-    if (activeTab().trash) { refreshTrashLook(); return; }
     const want = gpnCleanLook(data.look);
     if (want.bg === 'custom') {
       const [mine, url] = await Promise.all([prefs.get(GPN_WALLPAPER_ID_KEY), prefs.get(GPN_WALLPAPER_KEY)]);
@@ -3467,26 +3453,62 @@ function gpnCreatePanel(opts) {
     persist();
   }
 
-  /** 設定 → 背景 → 資源回收桶的背景 */
-  function chooseTrashBackground(id) {
+  /* ---- 深淺主題（設定 → 背景 最上面）----
+     平常外掛跟著 AI 網站、網頁版和小視窗跟著系統（各自在 content.js、app.js、popup.js 設 data-theme）。
+     選了「淺色」「深色」就蓋過去：記下它們原本要的（natural），它們之後再改也照樣蓋回來；選回「跟著系統」就還給它。 */
+  let naturalTheme = root.host?.getAttribute('data-theme') || '';
+  let themeGuard = false;
+  if (root.host) {
+    new MutationObserver(() => {
+      if (themeGuard) return;
+      naturalTheme = root.host.getAttribute('data-theme') || naturalTheme;
+      applyTheme();
+    }).observe(root.host, { attributes: true, attributeFilter: ['data-theme'] });
+  }
+
+  function applyTheme() {
+    if (!root.host) return;
+    const want = gpnCleanLook(data.look).theme;
+    // 網頁版、工具列小視窗：網頁本身的底色（預設光暈）也要跟著換（page.css、popup.html 看 data-gpn-theme）
+    if (standalone) {
+      if (want === 'auto') document.documentElement.removeAttribute('data-gpn-theme');
+      else document.documentElement.setAttribute('data-gpn-theme', want);
+    }
+    const t = want === 'auto' ? naturalTheme : want;
+    if (!t || root.host.getAttribute('data-theme') === t) return;
+    themeGuard = true;
+    root.host.setAttribute('data-theme', t);
+    Promise.resolve().then(() => { themeGuard = false; });
+  }
+
+  function chooseTheme(theme) {
     sfx('click');
-    data.look = gpnCleanLook({ ...gpnCleanLook(data.look), trash: id });
+    data.look = gpnCleanLook({ ...gpnCleanLook(data.look), theme });
     persist();
-    markBgTiles();
-    if (activeTab().trash) { bgApplied = ''; refreshTrashLook(); }
+    applyTheme();
+    markThemeSeg();
+  }
+
+  function markThemeSeg() {
+    const cur = gpnCleanLook(data.look).theme;
+    for (const b of ui.lTheme?.children || []) b.classList.toggle('is-on', b.getAttribute('data-theme-pick') === cur);
   }
 
   function buildLookSection() {
     ui.lFile = el('input', { type: 'file', accept: 'image/*', class: 'gpn-file', onchange: onPickWallpaper });
     ui.lGrid = el('div', { class: 'gpn-bg-grid', role: 'radiogroup', 'aria-label': '背景' });
+    const pick = (key, text) => el('button', {
+      class: 'gpn-seg', type: 'button', 'data-theme-pick': key, onclick: () => chooseTheme(key),
+    }, text);
+    ui.lTheme = el('div', { class: 'gpn-seg-row gpn-seg-row--theme' },
+      pick('auto', '跟著系統'), pick('light', '☀ 淺色'), pick('dark', '☾ 深色'));
     return el('section', { class: 'gpn-section', 'data-section': 'look' },
       el('h3', { text: '背景' }),
+      field('深淺主題', '（外掛在 AI 網站裡選「跟著系統」時，跟著那個網站）', ui.lTheme),
+      el('div', { class: 'gpn-sep' }),
       ui.lGrid,
       ui.lFile,
-      el('div', { class: 'gpn-note', text: '背景跟著帳號同步：換一台電腦登入，背景也一樣（上傳的圖也會存到你的 Google 雲端硬碟）' }),
-      el('div', { class: 'gpn-sep' }),
-      field('資源回收桶的背景', '（進回收桶時一律換成這張，提醒這裡是危險區域）',
-        ui.lTrashGrid = el('div', { class: 'gpn-bg-grid', role: 'radiogroup', 'aria-label': '資源回收桶的背景' })));
+      el('div', { class: 'gpn-note', text: '背景、深淺主題都跟著帳號同步：換一台電腦登入也一樣（上傳的圖也會存到你的 Google 雲端硬碟）' }));
   }
 
   /** 背景的縮圖格子：預設光暈、內建的幾張、自己上傳的（有的話），最後一格是「上傳圖片」 */
@@ -3498,7 +3520,7 @@ function gpnCreatePanel(opts) {
     }, thumb, el('span', { class: 'gpn-bg-name', text: label }));
 
     const tiles = [tile('default', '預設光暈', el('span', { class: 'gpn-bg-thumb gpn-bg-thumb--default' }))];
-    for (const b of bgPresets.filter((x) => !x.trash)) {
+    for (const b of bgPresets) {
       const c = el('canvas', { width: '240', height: '150' });   // 縮圖用同一個函式畫，長相和大圖一樣
       gpnPaintBackground(c, b.id);
       tiles.push(tile(b.id, b.label, el('span', { class: 'gpn-bg-thumb' }, c,
@@ -3514,30 +3536,14 @@ function gpnCreatePanel(opts) {
     }, el('span', { class: 'gpn-bg-thumb gpn-bg-thumb--add', html: ICON_IMAGE }),
       el('span', { class: 'gpn-bg-name', text: '上傳圖片…' })));
     ui.lGrid.replaceChildren(...tiles);
-    renderTrashBgTiles();
     markBgTiles();
+    markThemeSeg();
   }
 
   function markBgTiles() {
     for (const t of ui.lGrid?.querySelectorAll('[data-bg]') || []) {
       t.setAttribute('aria-checked', String(t.getAttribute('data-bg') === gpnCleanLook(data.look).bg));
     }
-    for (const t of ui.lTrashGrid?.querySelectorAll('[data-bg]') || []) {
-      t.setAttribute('aria-checked', String(t.getAttribute('data-bg') === gpnCleanLook(data.look).trash));
-    }
-  }
-
-  function renderTrashBgTiles() {
-    if (!ui.lTrashGrid) return;
-    ui.lTrashGrid.replaceChildren(...bgPresets.filter((b) => b.trash).map((b) => {
-      const c = el('canvas', { width: '240', height: '150' });
-      gpnPaintBackground(c, b.id);
-      return el('button', {
-        class: 'gpn-bg-tile', type: 'button', role: 'radio', 'data-bg': b.id,
-        onclick: () => chooseTrashBackground(b.id),
-      }, el('span', { class: 'gpn-bg-thumb' }, c), el('span', { class: 'gpn-bg-name', text: b.label }));
-    }));
-    markBgTiles();
   }
 
   /** 整張圖偏暗、中間、偏亮（量一張 16 × 10 的縮圖的平均亮度） */

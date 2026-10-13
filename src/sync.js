@@ -332,7 +332,7 @@ function gpnCreateSync(o) {
     const parts = [d.tabs, d.recent || []];
     if (d.favs?.length) parts.push(d.favs);
     if (Object.keys(d.marks || {}).length || d.markTypes?.length) parts.push(d.marks || {}, d.markTypes || []);
-    if (d.look && ((d.look.bg && d.look.bg !== 'default') || (d.look.trash && d.look.trash !== GPN_TRASH_BG))) parts.push(d.look);
+    if (d.look && ((d.look.bg && d.look.bg !== 'default') || (d.look.theme && d.look.theme !== 'auto'))) parts.push(d.look);
     if (d.trash?.length) parts.push(d.trash);
     const s = JSON.stringify(parts);
     let h = 0x811c9dc5;
