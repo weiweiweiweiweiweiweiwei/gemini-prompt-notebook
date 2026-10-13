@@ -16,6 +16,7 @@
  *   marks: { 'purple-question': [ 提示詞 id, ... ] },   // 其他符號（Gmail 那樣的星號），各自的順序
  *   markTypes: [ 'purple-question', 'blue-info' ],      // 設定裡「使用中」的符號（黃色星星以外）
  *   look: { bg: 'aurora', wallpaper: '' },              // 背景：選了哪一張；自己上傳的圖的代號（圖本身另外存）
+ *   trash: [ { id, title, content, deletedAt, tabId, folderId, mark } ],  // 資源回收桶（刪掉的提示詞先放這裡）
  * }
  * 一個書籤只會有 items 或 folders 其中一個；有 folders 就代表開了資料夾，
  * 而且至少有一個資料夾。
@@ -53,6 +54,8 @@ const GPN_MAX_LABEL = 100;               // 書籤名稱的上限只是防呆（
 const GPN_DEFAULT_FOLDER = '一般';        // 書籤剛開啟資料夾時，原本的提示詞放在這裡
 const GPN_RECENT_ID = 't_recent';        // 「最近使用」書籤的 id（固定、不能刪）
 const GPN_RECENT_MAX = 50;               // 最近使用最多記幾筆
+const GPN_TRASH_ID = 't_trash';          // 「資源回收桶」的 id（設定最下面點進去；不在書籤列上）
+const GPN_TRASH_MAX = 1000;              // 回收桶的上限只是防呆，正常用不到
 const GPN_FAV_ID = 't_star';             // 「我的最愛」書籤的 id（固定、不能刪；注意不是預設書籤「常用」的 t_fav）
 const GPN_COLORS = ['amber', 'green', 'blue', 'rose', 'purple', 'teal'];
 const GPN_COLOR_LABELS = {
@@ -97,7 +100,31 @@ function gpnDefaultData() {
     marks: {},
     markTypes: [],
     look: { bg: 'default', wallpaper: '' },
+    trash: [],
   };
+}
+
+/**
+ * 資源回收桶：刪掉的提示詞先放這裡，可以還原、也可以永久刪除（像電腦的資源回收桶）。
+ * 記著原本在哪個書籤、資料夾、標了什麼符號，還原時放回去。最新刪的在最前面。
+ * 同一則（同 id）只留一筆；已經回到筆記本裡的（別台還原了）就不算在回收桶。
+ */
+function gpnCleanTrash(arr, itemIds) {
+  const seen = new Set();
+  return (Array.isArray(arr) ? arr : [])
+    .filter((r) => r && typeof r === 'object' && typeof r.id === 'string' && r.id)
+    .map((r) => ({
+      id: r.id,
+      title: String(r.title ?? '').slice(0, 60),
+      content: String(r.content ?? ''),
+      deletedAt: Number(r.deletedAt) || 0,
+      tabId: typeof r.tabId === 'string' ? r.tabId : '',
+      folderId: typeof r.folderId === 'string' ? r.folderId : '',
+      mark: GPN_MARKS.includes(r.mark) ? r.mark : '',
+    }))
+    .filter((r) => !itemIds.has(r.id) && !seen.has(r.id) && seen.add(r.id))
+    .sort((a, b) => b.deletedAt - a.deletedAt)
+    .slice(0, GPN_TRASH_MAX);
 }
 
 /**
@@ -219,7 +246,7 @@ function gpnNormalize(raw) {
 
   let activeId = raw.activeId;
   if (!activeId && raw.active) activeId = raw.active === 'other' ? 't_oth' : 't_fav';
-  const fixed = activeId === GPN_RECENT_ID || activeId === GPN_FAV_ID ||
+  const fixed = activeId === GPN_RECENT_ID || activeId === GPN_FAV_ID || activeId === GPN_TRASH_ID ||
                 markTypes.includes(gpnMarkOfTab(activeId));
   if (!fixed && !tabs.some((t) => t.id === activeId)) activeId = tabs[0].id;
 
@@ -241,6 +268,7 @@ function gpnNormalize(raw) {
   return {
     version: GPN_VERSION, activeId, tabs, recent: gpnCleanRecent(raw.recent), favs, marks, markTypes,
     look: gpnCleanLook(raw.look),
+    trash: gpnCleanTrash(raw.trash, itemIds),
   };
 }
 

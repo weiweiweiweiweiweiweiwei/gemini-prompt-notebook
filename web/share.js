@@ -19,6 +19,7 @@
  *   favs、marks、markTypes   我的最愛、其他符號（星號）、設定裡使用中的符號
  *   recent                   最近使用記錄
  *   look: { bg, wallpaper }  背景：選了哪一張；自己上傳的圖（data: 網址）
+ *   trash                    資源回收桶（4.20.0 起）
  * 換電腦時這些都要跟著過去，不然新電腦只剩提示詞，我的最愛、星號、使用記錄全是空的。
  * 舊版（v2、v3、沒有上面這些欄位的）匯出的備份也都吃得下，見 store.js 的升級規則。
  *
@@ -58,6 +59,7 @@ function gpnBuildExport(data, look = null) {
     marks: data.marks || {},
     markTypes: data.markTypes || [],
     recent: data.recent || [],
+    trash: data.trash || [],
     ...(look && look.bg ? { look } : {}),
   };
 }
@@ -117,13 +119,13 @@ function gpnParseImport(raw) {
   // version 要一起傳：v3 的備份要靠它才認得出來。
   const data = gpnNormalize({
     version: obj.version, tabs: obj.tabs, activeId: obj.tabs[0]?.id,
-    favs: obj.favs, marks: obj.marks, markTypes: obj.markTypes, recent: obj.recent,
+    favs: obj.favs, marks: obj.marks, markTypes: obj.markTypes, recent: obj.recent, trash: obj.trash,
   });
   const itemCount = gpnCountItems(data);
   if (!itemCount) return { ok: false, error: '這份備份裡一則提示詞都沒有' };
 
   // 4.15.0 以前的備份沒有我的最愛、星號、使用記錄：完全取代時，這台原本的要留著
-  const personal = ['favs', 'marks', 'markTypes', 'recent'].some((k) => k in obj);
+  const personal = ['favs', 'marks', 'markTypes', 'recent', 'trash'].some((k) => k in obj);
   const markedCount = data.favs.length + Object.values(data.marks).reduce((n, ids) => n + ids.length, 0);
   // 背景：只收認得的值，上傳的圖一定要是圖片的 data: 網址
   const look = obj.look && typeof obj.look.bg === 'string'
@@ -229,6 +231,8 @@ function gpnMergeData(current, incoming) {
     out.marks[m] = [...(out.marks[m] || []), ...ids.map((id) => idMap.get(id))];
   }
   out.markTypes = [...(out.markTypes || []), ...(incoming.markTypes || [])];
+  // 回收桶：兩邊的都留著（同一則只留一筆；備份裡已經在筆記本的那則，normalize 會拿掉）
+  out.trash = [...(out.trash || []), ...(incoming.trash || [])];
 
   // 資料夾 id 若和別的書籤裡的撞到，normalize 會自動換一個新的
   return { data: gpnNormalize(out), added, newTabs, newFolders, skipped };

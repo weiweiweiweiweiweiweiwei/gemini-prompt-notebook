@@ -333,6 +333,7 @@ function gpnCreateSync(o) {
     if (d.favs?.length) parts.push(d.favs);
     if (Object.keys(d.marks || {}).length || d.markTypes?.length) parts.push(d.marks || {}, d.markTypes || []);
     if (d.look && d.look.bg && d.look.bg !== 'default') parts.push(d.look);
+    if (d.trash?.length) parts.push(d.trash);
     const s = JSON.stringify(parts);
     let h = 0x811c9dc5;
     for (let i = 0; i < s.length; i++) {
@@ -344,7 +345,7 @@ function gpnCreateSync(o) {
 
   /** 雲端來的資料不要把這台「正在看哪個書籤」也蓋掉 */
   function keepActive(doc, local) {
-    if (local.activeId === GPN_RECENT_ID || local.activeId === GPN_FAV_ID ||
+    if (local.activeId === GPN_RECENT_ID || local.activeId === GPN_FAV_ID || local.activeId === GPN_TRASH_ID ||
         (doc.markTypes || []).includes(gpnMarkOfTab(local.activeId)) ||
         doc.tabs.some((t) => t.id === local.activeId)) {
       doc.activeId = local.activeId;
@@ -771,7 +772,7 @@ function gpnFlatten(d) {
   }
   return {
     tabOrder: d.tabs.map((t) => t.id), tabs, folders, items, lists,
-    favs: d.favs || [], marks: d.marks || {}, markTypes: d.markTypes || [], recent: d.recent || [], look: d.look,
+    favs: d.favs || [], marks: d.marks || {}, markTypes: d.markTypes || [], recent: d.recent || [], look: d.look, trash: d.trash || [],
   };
 }
 
@@ -928,6 +929,10 @@ function gpnMerge3(base, local, cloud) {
   // 背景：誰換過就用誰的（兩邊都換了以這台為主）
   const same = (a, b) => JSON.stringify(gpnCleanLook(a)) === JSON.stringify(gpnCleanLook(b));
   const look = same(L.look, B.look) ? C.look : L.look;
+  // 回收桶：一邊丟進去的就有；一邊還原了或永久刪除了（上次有、這次沒有）就拿掉
+  const tIds = mergeSet(B.trash.map((r) => r.id), L.trash.map((r) => r.id), C.trash.map((r) => r.id));
+  const tById = new Map([...C.trash, ...L.trash].map((r) => [r.id, r]));
+  const trash = tIds.map((id) => tById.get(id)).filter((r) => r && !items.has(r.id));
 
   // 最近使用：兩邊合在一起、同一則取最近那次；一邊移除（或清空）了、之後也沒再用過的就拿掉
   const recent = new Map();
@@ -955,5 +960,6 @@ function gpnMerge3(base, local, cloud) {
     marks,
     markTypes,
     look,
+    trash,
   });
 }

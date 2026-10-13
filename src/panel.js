@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.19.0';
+const GPN_APP_VERSION = '4.20.0';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -124,6 +124,12 @@ function gpnCreatePanel(opts) {
     '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5.5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="18.5" r="2"/></svg>';
   const ICON_OPEN =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>';
+  /** 放大鏡：搜尋 */
+  const ICON_SEARCH =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>';
+  /** 繞回去的箭頭：還原 */
+  const ICON_RESTORE =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18z"/></svg>';
   const ICON_DUPLICATE =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>';
   const ICON_DELETE =
@@ -247,7 +253,12 @@ function gpnCreatePanel(opts) {
   const markTab = (m) => ({
     id: GPN_MARK_TAB + m, label: GPN_MARK_LABELS[m], color: 'mark', fixed: true, mark: m, items: [],
   });
+  /** 資源回收桶：不在書籤列上，從 設定 最下面點進來 */
+  const trashTab = () => ({
+    id: GPN_TRASH_ID, label: '資源回收桶', color: 'trash', fixed: true, trash: true, items: [],
+  });
   const tabById = (id) => (id === GPN_RECENT_ID ? recentTab()
+    : id === GPN_TRASH_ID ? trashTab()
     : id === GPN_FAV_ID ? favTab()
     : (data.markTypes || []).includes(gpnMarkOfTab(id)) ? markTab(gpnMarkOfTab(id))
     : data.tabs.find((t) => t.id === id));
@@ -427,14 +438,35 @@ function gpnCreatePanel(opts) {
     }, el('span', { text: '＋' }), el('span', { class: 'gpn-folder-add-text', text: ' 新增資料夾' }));
     wheelToRow(ui.folderList);
 
+    /* ---- 搜尋：齒輪左邊的放大鏡；按了紙張最上面出現搜尋列 ---- */
+    ui.searchBtn = el('button', {
+      class: 'gpn-tool gpn-search-btn', type: 'button', title: '搜尋所有提示詞', 'aria-label': '搜尋',
+      html: ICON_SEARCH, onclick: enterSearch,
+    });
+    ui.searchInput = el('input', {
+      class: 'gpn-search-input', type: 'search', placeholder: '搜尋標題或內容…', 'aria-label': '搜尋提示詞',
+      oninput: () => { searchQ = ui.searchInput.value; renderList(); },
+      onkeydown: (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); exitSearch(); } },
+    });
+    ui.searchBar = el('div', { class: 'gpn-search-bar', hidden: '' },
+      el('span', { class: 'gpn-search-icon', html: ICON_SEARCH }),
+      ui.searchInput,
+      el('button', {
+        class: 'gpn-search-close', type: 'button', title: '離開搜尋', 'aria-label': '離開搜尋',
+        html: ICON_CLOSE, onclick: () => exitSearch(),
+      }));
+
     ui.book = el('div', { class: 'gpn-book' },
       ui.tabs,
       el('div', { class: 'gpn-paper' },
         notice ? el('div', { class: 'gpn-notice', role: 'alert', text: notice }) : null,
+        ui.searchBar,
         el('div', { class: 'gpn-body' },
           el('nav', { class: 'gpn-folders' }, ui.folderList),
           ui.list),
         el('div', { class: 'gpn-foot' },
+          // 最左邊：登入中的 Google 帳號頭像
+          ui.avatar,
           ui.addBtn = el('button', {
             class: 'gpn-add', type: 'button',
             onclick: () => openEditor(data.activeId, activeFolder()?.id ?? null, null),
@@ -444,7 +476,15 @@ function gpnCreatePanel(opts) {
             class: 'gpn-add gpn-add--quiet', type: 'button', hidden: '',
             onclick: onClearRecent,
           }, '清除全部使用記錄'),
-          el('div', { class: 'gpn-tools' }, ui.avatar, ui.gear)
+          // 資源回收桶裡換成這兩顆：還原選取的、永久刪除（沒選取時是清空）
+          ui.trashRestore = el('button', {
+            class: 'gpn-add gpn-add--restore', type: 'button', hidden: '',
+            onclick: () => restoreTrash([...trashSel]),
+          }, '還原'),
+          ui.trashPurge = el('button', {
+            class: 'gpn-add gpn-add--quiet', type: 'button', hidden: '', onclick: onTrashPurge,
+          }, '清空資源回收桶'),
+          el('div', { class: 'gpn-tools' }, ui.searchBtn, ui.gear)
         )
       )
     );
@@ -453,15 +493,7 @@ function gpnCreatePanel(opts) {
     ui.book.append(buildGutter('left'), buildGutter('right'));
     buildCardMenu();
 
-    // 筆記本左下角外面、和「新增提示詞」同高的小圖示：「全部提示詞」。
-    // 是一般連結，按了整頁換到純文字的清單頁（網頁版的 all.html）
-    if (allPageUrl) {
-      ui.book.append(el('a', {
-        class: 'gpn-all-link', href: allPageUrl, 'aria-label': '全部提示詞',
-        title: '全部提示詞：所有書籤的提示詞，完整內容用純文字列在同一頁（方便「問問 Gemini」讀）',
-        html: ICON_LIST,
-      }));
-    }
+    // 「全部提示詞」（網頁版的 all.html）以前在筆記本左下角外面，4.20.0 起收進 設定 的左邊選單
 
     ui.overlay = el('div', {
       class: 'gpn-overlay', role: 'dialog', 'aria-modal': standalone ? null : 'true',
@@ -610,8 +642,10 @@ function gpnCreatePanel(opts) {
 
   /** 點書籤：有資料夾的話，一律顯示該書籤的「第一個資料夾」 */
   function switchTab(id) {
-    if (id === data.activeId) return;
+    if (searchQ !== null && id !== data.activeId) exitSearch(false);
+    if (id === data.activeId) { if (searchQ !== null) { exitSearch(); } return; }
     sfx('tab');
+    trashSel = new Set();
     data.activeId = id;
     folderId = null;
     persist();
@@ -644,7 +678,7 @@ function gpnCreatePanel(opts) {
         class: 'gpn-tab-main', type: 'button', role: 'tab',
         'aria-selected': String(isActive),
         title: t.label,
-        onclick: () => { if (t.id !== data.activeId) switchTab(t.id); },
+        onclick: () => switchTab(t.id),          // 搜尋中點目前的書籤＝離開搜尋
       }, t.label);
 
       // 設定鈕不放在書籤上——它會佔掉空間，害書籤上的字無法置中（齒輪在底部，見 build）
@@ -715,7 +749,7 @@ function gpnCreatePanel(opts) {
     }, el('button', {
       class: 'gpn-tab-main', type: 'button', role: 'tab', 'aria-selected': String(on),
       'aria-label': label, title,
-      onclick: () => { if (data.activeId !== id) switchTab(id); },
+      onclick: () => switchTab(id),
     }, el('span', { class: 'gpn-tab-icon', html: icon })));
     ui.tabEls.set(id, node);
     return node;
@@ -798,9 +832,13 @@ function gpnCreatePanel(opts) {
     closeCardMenu();
     // 底部按鈕：一般書籤是「新增提示詞」，「最近使用」換成「清除全部使用記錄」，「我的最愛」和符號都沒有
     // （右邊的雲端、設定圖示一直都在）
-    ui.addBtn.hidden = !!tab.fixed;
-    ui.clearRecentBtn.hidden = !tab.recent;
+    const searching = searchQ !== null;
+    ui.addBtn.hidden = !!tab.fixed || searching;
+    ui.clearRecentBtn.hidden = !tab.recent || searching;
+    ui.trashRestore.hidden = ui.trashPurge.hidden = true;
     disarmClearRecent();
+    if (searching) { renderSearch(); return; }
+    if (tab.trash) { renderTrash(); return; }
     if (tab.recent) { renderRecent(); return; }
     if (tab.mark) { renderMarked(tab.mark); return; }
 
@@ -830,7 +868,7 @@ function gpnCreatePanel(opts) {
    * from：在「我的最愛」或符號書籤裡顯示時傳「從哪個書籤來的」；
    * sortList：那個書籤的 id，拖曳排序改排它自己的順序，不動提示詞在原本書籤裡的位置。
    */
-  function buildCard(item, tabId, fid, from = null, sortList = null) {
+  function buildCard(item, tabId, fid, from = null, sortList = null, noDrag = false) {
     const grip = el('div', {
       class: 'gpn-grip', title: '按住拖曳可調整順序', 'aria-label': '拖曳排序', html: ICON_GRIP,
     });
@@ -866,8 +904,9 @@ function gpnCreatePanel(opts) {
 
     const card = el('div', { class: 'gpn-card', role: 'listitem', 'data-id': item.id },
       grip, titleBtn, starBtn, editBtn, moreBtn);
-    if (sortList) attachDrag(grip, card, sortList, null);
-    else attachDrag(grip, card, tabId, fid);
+    if (noDrag) grip.classList.add('is-off');          // 搜尋結果：順序是搜出來的，不能拖
+    else if (sortList) attachDrag(grip, card, sortList, null);
+    else attachDrag(grip, card, tabId, fid, true);
     return card;
   }
 
@@ -1163,6 +1202,9 @@ function gpnCreatePanel(opts) {
       if (menuFor && !ui.menu.contains(e.target) && !menuFor.contains(e.target)) closeCardMenu();
     }, true);
     ui.list.addEventListener('scroll', () => closeCardMenu(), { passive: true });
+    ui.list.addEventListener('click', (e) => {
+      if (activeTab().trash && e.target === ui.list && trashSel.size) { trashSel = new Set(); paintTrashSelection(); }
+    });
     window.addEventListener('resize', () => closeCardMenu());
   }
 
@@ -1171,20 +1213,32 @@ function gpnCreatePanel(opts) {
     closeCardMenu();
     sfx('click');
     const card = btn.closest('.gpn-card');
-    const entry = (icon, text, sub, onclick, cls = '') => el('button', {
-      class: 'gpn-menu-item' + cls, type: 'button', role: 'menuitem', onclick,
-    }, el('span', { class: 'gpn-menu-icon', html: icon }),
-      el('span', { class: 'gpn-menu-text' }, el('span', { text }), sub ? el('small', { text: sub }) : null));
+    const entry = menuEntry;
     const open = (site) => () => { closeCardMenu(); openInAI(site, item, card, tabId, fid); };
 
-    ui.menuDel = entry(ICON_DELETE, '刪除', null, () => onMenuDelete(item, tabId, fid), ' gpn-menu-item--del');
-    ui.menu.replaceChildren(
+    openMenuWith(btn, [
       entry(ICON_OPEN, '開啟 Gemini', autoFills() ? '在新分頁打開，自動填好' : '在新分頁打開', open('gemini')),
       entry(ICON_OPEN, '開啟 ChatGPT', autoFills() ? '在新分頁打開，自動填好' : '在新分頁打開', open('chatgpt')),
       entry(ICON_DUPLICATE, '拷貝', '在下面多一則一樣的', () => { closeCardMenu(); duplicateItem(tabId, fid, item.id); }),
       el('div', { class: 'gpn-menu-sep', role: 'separator' }),
-      ui.menuDel);
+      entry(ICON_DELETE, '刪除', '先放進資源回收桶', () => {
+        closeCardMenu();
+        deleteItem(tabId, fid, item.id);
+        toast(`已把「${item.title}」移到資源回收桶（設定 → 資源回收桶 可以還原）`, false, 4200);
+      }, ' gpn-menu-item--del'),
+    ]);
+  }
 
+  function menuEntry(icon, text, sub, onclick, cls = '') {
+    return el('button', {
+      class: 'gpn-menu-item' + cls, type: 'button', role: 'menuitem', onclick,
+    }, el('span', { class: 'gpn-menu-icon', html: icon }),
+      el('span', { class: 'gpn-menu-text' }, el('span', { text }), sub ? el('small', { text: sub }) : null));
+  }
+
+  function openMenuWith(btn, nodes) {
+    const card = btn.closest('.gpn-card');
+    ui.menu.replaceChildren(...nodes);
     menuFor = btn;
     btn.setAttribute('aria-expanded', 'true');
     card?.classList.add('has-menu');
@@ -1296,16 +1350,348 @@ function gpnCreatePanel(opts) {
     toast(activeTab().mark ? `已拷貝到「${whereLabel(tabId, fid)}」` : '已拷貝，在原本那則的下面');
   }
 
-  /** 刪掉一則提示詞（我的最愛、符號裡的也一起拿掉；最近使用記錄留著，會顯示「原本的提示詞已刪除」） */
+  /**
+   * 刪掉一則提示詞：先放進資源回收桶（記著原本在哪、標了什麼符號），我的最愛、符號裡的也一起拿掉。
+   * 最近使用記錄留著，會顯示「原本的提示詞已刪除」。
+   */
   function deleteItem(tabId, fid, id) {
     sfx('del');
     const list = listOf(tabId, fid);
     const idx = list ? list.items.findIndex((it) => it.id === id) : -1;
-    if (idx >= 0) list.items.splice(idx, 1);
-    setMark(id, '');
+    if (idx >= 0) toTrash(list.items.splice(idx, 1)[0], tabId, fid);
+    else setMark(id, '');
     persist();
     render();
   }
+
+  /* ==========================================================================
+     資源回收桶（4.20.0）：刪掉的提示詞先放這裡，可以還原、也可以永久刪除，像電腦的資源回收桶。
+     從 設定 最下面的「資源回收桶」進來；點上面任何一個書籤就離開。
+     裡面的提示詞不能用、不能拖、不能加星號、不能編輯：點一下是「選取」，
+     按住 Shift 點選一整段、按住 Ctrl 點選跳著選（Mac 是 ⌘），Ctrl＋A 全選。
+     選好了用底下的「還原」「永久刪除」；每一則右邊的 ⋮ 也可以單獨還原、永久刪除。
+     ========================================================================== */
+
+  let trashSel = new Set();      // 選取中的 id
+  let trashAnchor = '';          // Shift 選一段的起點
+  let purgeArmed = false, purgeTimer = 0;
+
+  const trashList = () => data.trash || [];
+
+  /** 刪掉的提示詞放進回收桶：記著原本在哪、標了什麼符號，還原時放回去 */
+  function toTrash(item, tabId, fid) {
+    data.trash = [{
+      id: item.id, title: item.title, content: item.content, deletedAt: Date.now(),
+      tabId: tabId || '', folderId: fid || '', mark: markOf(item.id),
+    }, ...trashList().filter((r) => r.id !== item.id)];
+    setMark(item.id, '');
+  }
+
+  function openTrash() {
+    closeSettings();
+    exitSearch(false);
+    trashSel = new Set();
+    trashAnchor = '';
+    switchTab(GPN_TRASH_ID);
+  }
+
+  /** 「刪除於 10/12 下午3:20」 */
+  const deletedLabel = (ts) => {
+    const d = new Date(ts);
+    return ts ? `刪除於 ${d.getMonth() + 1}/${d.getDate()} ${clock(ts)}` : '';
+  };
+
+  function renderTrash() {
+    const list = trashList();
+    for (const id of [...trashSel]) if (!list.some((r) => r.id === id)) trashSel.delete(id);
+    ui.list.replaceChildren();
+    if (!list.length) {
+      ui.list.append(el('div', { class: 'gpn-empty' },
+        el('div', { class: 'gpn-empty-emoji gpn-empty-mark', html: ICON_DELETE }),
+        el('div', { class: 'gpn-empty-title', text: '資源回收桶是空的' }),
+        el('div', { class: 'gpn-empty-desc', text: '刪掉的提示詞會先放在這裡，需要時可以還原' })));
+    } else {
+      ui.list.append(el('div', { class: 'gpn-trash-head' },
+        el('b', { text: `資源回收桶・${list.length} 則` }),
+        el('span', { text: '點一下選取；按住 Shift 選一整段、按住 Ctrl 跳著選' })));
+      const where = (r) => {
+        const t = data.tabs.find((x) => x.id === r.tabId);
+        const f = t?.folders?.find((x) => x.id === r.folderId);
+        return t ? t.label + (f ? ` › ${f.label}` : '') : '原本的書籤已刪除';
+      };
+      for (const r of list) {
+        const more = el('button', {
+          class: 'gpn-more', type: 'button', title: '還原或永久刪除這一則',
+          'aria-label': `還原或永久刪除：${r.title}`, 'aria-haspopup': 'menu', 'aria-expanded': 'false',
+          html: ICON_MORE,
+          onclick: (e) => { e.stopPropagation(); toggleTrashMenu(more, r); },
+        });
+        const card = el('div', {
+          class: 'gpn-card gpn-card--trash' + (trashSel.has(r.id) ? ' is-selected' : ''),
+          role: 'listitem', 'data-id': r.id, 'aria-selected': String(trashSel.has(r.id)),
+        },
+          el('button', {
+            class: 'gpn-title', type: 'button', title: '點一下選取（Shift：選一整段；Ctrl：跳著選）',
+            onclick: (e) => selectTrash(r.id, e),
+          },
+            el('div', { class: 'gpn-title-text', text: r.title || '(未命名)' }),
+            el('div', { class: 'gpn-title-sub' },
+              el('span', { class: 'gpn-from', text: where(r) }),
+              el('span', { class: 'gpn-from gpn-from--time', text: deletedLabel(r.deletedAt) }),
+              preview(r.content))),
+          more);
+        ui.list.append(card);
+      }
+    }
+    paintTrashBar();
+  }
+
+  /** 點選：一般點＝只選這一則；Shift＝從上次點的那則選到這一則；Ctrl／⌘＝加選或取消這一則 */
+  function selectTrash(id, e) {
+    const ids = trashList().map((r) => r.id);
+    if (e.shiftKey && trashAnchor && ids.includes(trashAnchor)) {
+      const [a, b] = [ids.indexOf(trashAnchor), ids.indexOf(id)].sort((x, y) => x - y);
+      if (!(e.ctrlKey || e.metaKey)) trashSel = new Set();
+      for (const x of ids.slice(a, b + 1)) trashSel.add(x);
+    } else if (e.ctrlKey || e.metaKey) {
+      if (trashSel.has(id)) trashSel.delete(id); else trashSel.add(id);
+      trashAnchor = id;
+    } else {
+      trashSel = new Set([id]);
+      trashAnchor = id;
+    }
+    sfx('click');
+    paintTrashSelection();
+  }
+
+  function paintTrashSelection() {
+    for (const c of ui.list.querySelectorAll('.gpn-card--trash')) {
+      const on = trashSel.has(c.getAttribute('data-id'));
+      c.classList.toggle('is-selected', on);
+      c.setAttribute('aria-selected', String(on));
+    }
+    paintTrashBar();
+  }
+
+  /** 底下那排：有選取時是「還原」「永久刪除」；沒選取時是「清空資源回收桶」 */
+  function paintTrashBar() {
+    const n = trashSel.size, total = trashList().length;
+    disarmPurge();
+    ui.trashRestore.hidden = !n;
+    ui.trashPurge.hidden = !n && !total;
+    ui.trashRestore.textContent = `還原（${n}）`;
+    ui.trashPurge.textContent = n ? `永久刪除（${n}）` : '清空資源回收桶';
+  }
+
+  /** 還原：放回原本的書籤、資料夾（不在了就放第一個書籤），符號也標回去 */
+  function restoreTrash(ids) {
+    const back = trashList().filter((r) => ids.includes(r.id));
+    if (!back.length) return;
+    for (const r of [...back].reverse()) {
+      const tab = data.tabs.find((t) => t.id === r.tabId) || data.tabs[0];
+      const list = tab.folders ? tab.folders.find((f) => f.id === r.folderId) || tab.folders[0] : tab;
+      list.items.push({ id: r.id, title: r.title, content: r.content });
+      if (r.mark && (r.mark === GPN_MARK_FAV || GPN_MARKS.includes(r.mark))) setMark(r.id, r.mark);
+    }
+    data.trash = trashList().filter((r) => !ids.includes(r.id));
+    for (const id of ids) trashSel.delete(id);
+    sfx('save');
+    persist();
+    render();
+    toast(back.length === 1 ? `已還原「${back[0].title}」` : `已還原 ${back.length} 則`);
+  }
+
+  /** 永久刪除（按兩次）：ids 是空的就是清空整個回收桶 */
+  function purgeTrash(ids, btn, label) {
+    const n = ids.length || trashList().length;
+    if (!n) return;
+    if (!purgeArmed) {
+      purgeArmed = true;
+      armButton(btn, ids.length ? `永久刪除 ${n} 則？再按一次` : `清空 ${n} 則？再按一次`);
+      clearTimeout(purgeTimer);
+      purgeTimer = setTimeout(() => { purgeArmed = false; disarmButton(btn, label); }, 5000);
+      return;
+    }
+    purgeArmed = false;
+    data.trash = ids.length ? trashList().filter((r) => !ids.includes(r.id)) : [];
+    trashSel = new Set();
+    sfx('del');
+    persist();
+    renderList();
+    toast(ids.length ? `已永久刪除 ${n} 則` : '資源回收桶已清空');
+  }
+
+  function disarmPurge() {
+    clearTimeout(purgeTimer);
+    purgeArmed = false;
+    ui.trashPurge?.classList.remove('is-confirm');
+  }
+
+  function onTrashPurge() {
+    const ids = [...trashSel];
+    purgeTrash(ids, ui.trashPurge, ids.length ? `永久刪除（${ids.length}）` : '清空資源回收桶');
+  }
+
+  /** 回收桶裡每一則右邊的 ⋮：還原、永久刪除 */
+  function toggleTrashMenu(btn, r) {
+    if (menuFor === btn) { closeCardMenu(); return; }
+    closeCardMenu();
+    sfx('click');
+    const del = menuEntry(ICON_DELETE, '永久刪除', '刪了就找不回來', () => {
+      const text = del.querySelector('.gpn-menu-text > span');
+      if (!menuDelArmed) {
+        menuDelArmed = true;
+        del.classList.add('is-confirm');
+        text.textContent = '確定永久刪除？再按一次';
+        return;
+      }
+      closeCardMenu();
+      data.trash = trashList().filter((x) => x.id !== r.id);
+      trashSel.delete(r.id);
+      sfx('del');
+      persist();
+      renderList();
+      toast(`已永久刪除「${r.title}」`);
+    }, ' gpn-menu-item--del');
+    openMenuWith(btn, [
+      menuEntry(ICON_RESTORE, '還原', '放回原本的書籤', () => { closeCardMenu(); restoreTrash([r.id]); }),
+      el('div', { class: 'gpn-menu-sep', role: 'separator' }),
+      del,
+    ]);
+  }
+
+  /* ==========================================================================
+     搜尋（4.20.0）：底下放大鏡。打任何字，標題或內容有出現的提示詞都列出來，
+     不分書籤、全部放在同一頁；空白隔開的幾個字要「都有出現」才算。點一下照樣是使用。
+     點上面任何一個書籤、按 Esc 或右邊的 × 就離開搜尋。
+     ========================================================================== */
+
+  let searchQ = null;            // null＝沒在搜尋
+
+  function enterSearch() {
+    if (searchQ !== null) { ui.searchInput.focus(); return; }
+    sfx('open');
+    searchQ = '';
+    ui.searchInput.value = '';
+    ui.book.classList.add('is-searching');
+    ui.searchBar.hidden = false;
+    renderList();
+    setTimeout(() => ui.searchInput.focus(), 30);
+  }
+
+  function exitSearch(rerender = true) {
+    if (searchQ === null) return;
+    searchQ = null;
+    ui.book.classList.remove('is-searching');
+    ui.searchBar.hidden = true;
+    if (rerender) { renderFolders(); renderList(); }
+  }
+
+  /** 把 text 裡出現的關鍵字包成 <mark>（用 DOM 組，不用 innerHTML，提示詞裡的 < > 才不會出事） */
+  function highlight(text, terms) {
+    const frag = document.createDocumentFragment();
+    if (!terms.length) { frag.append(text); return frag; }
+    const lower = text.toLowerCase();
+    let i = 0;
+    while (i < text.length) {
+      let hit = -1, len = 0;
+      for (const t of terms) {
+        const at = lower.indexOf(t, i);
+        if (at >= 0 && (hit < 0 || at < hit)) { hit = at; len = t.length; }
+      }
+      if (hit < 0) { frag.append(text.slice(i)); break; }
+      if (hit > i) frag.append(text.slice(i, hit));
+      frag.append(el('mark', { class: 'gpn-hit', text: text.slice(hit, hit + len) }));
+      i = hit + len;
+    }
+    return frag;
+  }
+
+  /** 內容裡第一個關鍵字附近的一小段（前面留一點上下文） */
+  function snippet(content, terms) {
+    const one = String(content).replace(/\s+/g, ' ').trim();
+    const lower = one.toLowerCase();
+    const at = Math.min(...terms.map((t) => { const i = lower.indexOf(t); return i < 0 ? Infinity : i; }));
+    if (!isFinite(at) || at < 20) return one.length > 60 ? one.slice(0, 60) + '…' : one;
+    const start = at - 16;
+    const piece = one.slice(start, start + 60);
+    return '…' + piece + (start + 60 < one.length ? '…' : '');
+  }
+
+  function renderSearch() {
+    const terms = String(searchQ || '').toLowerCase().split(/\s+/).filter(Boolean);
+    ui.list.replaceChildren();
+    if (!terms.length) {
+      ui.list.append(el('div', { class: 'gpn-empty' },
+        el('div', { class: 'gpn-empty-emoji gpn-empty-mark', html: ICON_SEARCH }),
+        el('div', { class: 'gpn-empty-title', text: '搜尋所有提示詞' }),
+        el('div', { class: 'gpn-empty-desc', text: '在上面打字，標題或內容有出現的都會列出來（不分書籤）' })));
+      return;
+    }
+    const found = [];
+    for (const t of data.tabs) {
+      for (const l of gpnListsOf(t)) {
+        for (const it of l.items) {
+          const hay = (it.title + '\n' + it.content).toLowerCase();
+          if (terms.every((x) => hay.includes(x))) found.push({ it, t, f: l === t ? null : l });
+        }
+      }
+    }
+    ui.list.append(el('div', { class: 'gpn-trash-head' },
+      el('b', { text: found.length ? `找到 ${found.length} 則` : '找不到' }),
+      el('span', { text: found.length ? '點一下就能使用' : '換個字試試看，或少打幾個字' })));
+    for (const { it, t, f } of found) {
+      const card = buildCard(it, t.id, f ? f.id : null, t.label + (f ? ` › ${f.label}` : ''), null, true);
+      card.querySelector('.gpn-title-text').replaceChildren(highlight(it.title || '(未命名)', terms));
+      const sub = card.querySelector('.gpn-title-sub');
+      const from = sub.querySelector('.gpn-from');
+      sub.replaceChildren(from, highlight(snippet(it.content, terms), terms));
+      ui.list.append(card);
+    }
+  }
+
+  /* ==========================================================================
+     把提示詞拖到左邊的資料夾、或上面別的書籤（4.20.0）：像在檔案總管把檔案拖到別的資料夾。
+     拖著卡片的 ⣿ 移到資料夾（或書籤）上，那一格會亮起來，放開就搬過去（放在最後面）。
+     ========================================================================== */
+
+  /** 滑鼠底下是不是一個可以放的資料夾、書籤：回傳 { node, tabId, folderId }，不是就 null */
+  function dropTargetAt(x, y, fromTab, fromFolder) {
+    const hit = root.elementFromPoint?.(x, y);
+    if (!hit) return null;
+    const folder = hit.closest?.('.gpn-folder');
+    if (folder && ui.folderList.contains(folder)) {
+      const fid = folder.getAttribute('data-id');
+      if (fid === fromFolder) return null;
+      return { node: folder, tabId: activeTab().id, folderId: fid };
+    }
+    const tab = hit.closest?.('.gpn-tab:not(.is-fixed)');
+    if (tab && ui.tabs.contains(tab)) {
+      const tid = tab.getAttribute('data-id');
+      const t = data.tabs.find((x) => x.id === tid);
+      if (!t || (tid === fromTab && !t.folders)) return null;
+      if (tid === fromTab) return null;            // 同一個書籤的資料夾，請拖到左邊的資料夾
+      return { node: tab, tabId: tid, folderId: t.folders ? t.folders[0].id : null };
+    }
+    return null;
+  }
+
+  function moveItemTo(fromTab, fromFolder, id, to) {
+    const src = listOf(fromTab, fromFolder);
+    const dest = listOf(to.tabId, to.folderId);
+    if (!src || !dest || src === dest) return false;
+    const idx = src.items.findIndex((it) => it.id === id);
+    if (idx < 0) return false;
+    const [item] = src.items.splice(idx, 1);
+    dest.items.push(item);
+    persist();
+    renderFolders();
+    renderList();
+    updateTabStates();
+    toast(`已搬到「${whereLabel(to.tabId, to.folderId)}」`);
+    return true;
+  }
+
 
   /**
    * 拖曳時跟著滑鼠走：移動、放開都聽「整個視窗」，不聽按下去的那個元素。
@@ -1329,7 +1715,8 @@ function gpnCreatePanel(opts) {
 
   /* ========== 卡片上下拖曳排序（按住左邊把手，馬上就能拖） ========== */
 
-  function attachDrag(handle, card, tabId, fid) {
+  /** canMove：一般書籤裡的卡片，可以拖到左邊的資料夾、上面別的書籤（我的最愛、符號書籤裡的只排順序） */
+  function attachDrag(handle, card, tabId, fid, canMove = false) {
     handle.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       e.preventDefault();
@@ -1337,12 +1724,23 @@ function gpnCreatePanel(opts) {
 
       const list = ui.list;
       let moved = false;
+      let target = null;               // 滑鼠底下可以放的資料夾、書籤
       sfx('pick');
       card.classList.add('is-dragging');
       list.classList.add('is-dragging');
+      if (canMove) ui.book.classList.add('is-carrying');
 
       const onMove = (ev) => {
         moved = true;
+        if (canMove) {
+          const t = dropTargetAt(ev.clientX, ev.clientY, tabId, fid);
+          if (t?.node !== target?.node) {
+            target?.node.classList.remove('is-drop');
+            t?.node.classList.add('is-drop');
+            target = t;
+          }
+          if (target) return;          // 在資料夾、書籤上面：先不排順序
+        }
         const y = ev.clientY;
         const box = list.getBoundingClientRect();
         if (y < box.top + 50) list.scrollTop -= 14;
@@ -1358,7 +1756,12 @@ function gpnCreatePanel(opts) {
       const onUp = () => {
         card.classList.remove('is-dragging');
         list.classList.remove('is-dragging');
-        if (moved) { sfx('drop'); saveOrder(tabId, fid); }
+        ui.book.classList.remove('is-carrying');
+        target?.node.classList.remove('is-drop');
+        if (!moved) return;
+        sfx('drop');
+        if (target && moveItemTo(tabId, fid, card.getAttribute('data-id'), target)) return;
+        saveOrder(tabId, fid);
       };
       followPointer(e.pointerId, onMove, onUp);
     });
@@ -1718,7 +2121,7 @@ function gpnCreatePanel(opts) {
     const { tabId, folderId: fid, id } = editing;
     closeEditor();
     deleteItem(tabId, fid, id);
-    toast('已刪除');
+    toast('已移到資源回收桶（設定 → 資源回收桶 可以還原）', false, 4200);
   }
 
   function disarmDelete() {
@@ -1917,13 +2320,14 @@ function gpnCreatePanel(opts) {
     }
 
     sfx('del');
+    for (const it of folder.items) toTrash(it, tab.id, folder.id);
     tab.folders.splice(tab.folders.indexOf(folder), 1);
     if (folderId === folder.id) folderId = null;
 
     persist();
     closeFolderEditor();
     render();
-    toast(`已刪除資料夾「${folder.label}」`);
+    toast(folder.items.length ? `已刪除資料夾「${folder.label}」，裡面的提示詞在資源回收桶` : `已刪除資料夾「${folder.label}」`);
   }
 
   function disarmFolderDelete() {
@@ -1956,10 +2360,20 @@ function gpnCreatePanel(opts) {
       standalone ? navItem('look', ICON_IMAGE, '背景') : null,
     ].filter(Boolean);
     const [navTab, ...navAll] = ui.sNavItems;
+    // 最下面兩個不是設定頁，是「去別的地方」：全部提示詞（只有網頁版）、資源回收桶
+    const navGo = (icon, text, onclick, extra = {}) => el(extra.href ? 'a' : 'button', {
+      class: 'gpn-nav-item gpn-nav-item--go', type: extra.href ? null : 'button', onclick, ...extra,
+    }, el('span', { class: 'gpn-nav-icon', html: icon }), el('span', { class: 'gpn-nav-text', text }));
+    ui.sTrashNav = navGo(ICON_DELETE, '資源回收桶', openTrash);
     const nav = el('nav', { class: 'gpn-settings-nav', role: 'tablist', 'aria-orientation': 'vertical' },
       el('h2', { text: '設定' }),
       ui.sNavGroup, navTab,
       el('div', { class: 'gpn-nav-group', text: '所有書籤' }), ...navAll,
+      el('div', { class: 'gpn-nav-group', text: '其他' }),
+      allPageUrl ? navGo(ICON_LIST, '全部提示詞', null, {
+        href: allPageUrl, title: '所有書籤的提示詞，完整內容用純文字列在同一頁（方便「問問 Gemini」讀）',
+      }) : null,
+      ui.sTrashNav,
       // 外掛和網頁版長得不一樣時，先看這裡的數字是不是一樣
       el('div', {
         class: 'gpn-nav-version',
@@ -2088,6 +2502,8 @@ function gpnCreatePanel(opts) {
 
     const folders = gpnCountFolders(data);
     refreshSound();
+    const nTrash = trashList().length;
+    ui.sTrashNav.querySelector('.gpn-nav-text').textContent = nTrash ? `資源回收桶（${nTrash}）` : '資源回收桶';
     ui.bStats.textContent = `${data.tabs.length} 個書籤、` +
       (folders ? `${folders} 個資料夾、` : '') + `${gpnCountItems(data)} 則提示詞`;
     refreshMarks();
@@ -2197,13 +2613,14 @@ function gpnCreatePanel(opts) {
     }
 
     sfx('del');
+    for (const l of gpnListsOf(tab)) for (const it of l.items) toTrash(it, tab.id, l === tab ? '' : l.id);
     data.tabs.splice(data.tabs.indexOf(tab), 1);
     if (!tabById(data.activeId)) { data.activeId = data.tabs[0].id; folderId = null; }
 
     persist();
     closeSettings();
     render();
-    toast(`已刪除書籤「${tab.label}」`);
+    toast(gpnTabItemCount(tab) ? `已刪除書籤「${tab.label}」，裡面的提示詞在資源回收桶` : `已刪除書籤「${tab.label}」`);
   }
 
   function disarmTabDelete() {
@@ -3188,12 +3605,36 @@ function gpnCreatePanel(opts) {
   }
 
   function onKeydown(e) {
-    if (e.key !== 'Escape' || !isOpen()) return;
+    if (!isOpen()) return;
+    // 資源回收桶：Ctrl＋A 全選、Delete 永久刪除選取的（按兩次）、Esc 取消選取
+    if (activeTab().trash && searchQ === null && !anyLayerOpen() && !menuFor) {
+      const inField = /^(INPUT|TEXTAREA)$/.test(root.activeElement?.tagName || '');
+      if (!inField && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+        trashSel = new Set(trashList().map((r) => r.id));
+        paintTrashSelection();
+        e.preventDefault(); e.stopPropagation();
+        return;
+      }
+      if (!inField && e.key === 'Delete' && trashSel.size) {
+        onTrashPurge();
+        e.preventDefault(); e.stopPropagation();
+        return;
+      }
+      if (e.key === 'Escape' && trashSel.size) {
+        trashSel = new Set();
+        paintTrashSelection();
+        e.preventDefault(); e.stopPropagation();
+        return;
+      }
+    }
+    if (e.key !== 'Escape') return;
 
     if (menuFor) {
       const btn = menuFor;
       closeCardMenu();
       btn.focus();
+    } else if (searchQ !== null && !anyLayerOpen()) {
+      exitSearch();
     } else if (layerOpen(ui.settingsLayer)) {
       if (!ui.sConfirm.hidden) hideFolderConfirm();
       else closeSettings();
