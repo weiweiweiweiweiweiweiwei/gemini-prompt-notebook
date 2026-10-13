@@ -40,6 +40,39 @@ function gpnBlob(ctx, x, y, rx, ry, color, alpha = 1, rot = 0) {
 }
 
 /**
+ * 森林（靜態的「森林」和動態的「搖曳森林」共用）：一層一層的樹影，越遠越淡，上面透下來一點晨光。
+ * sway 為 true 時，每棵樹的樹梢跟著 t 左右輕輕擺：近的擺得多、遠的擺得少，
+ * 相鄰的樹差一點點時間，看起來像一陣風從林子裡吹過去。
+ */
+function gpnForest(ctx, w, h, t, sway) {
+  const k = w / 1920;
+  ctx.fillStyle = gpnLinear(ctx, 0, 0, 0, h, [[0, '#c8e6c9'], [0.45, '#5f8f6b'], [1, '#13301f']]);
+  ctx.fillRect(0, 0, w, h);
+  ctx.filter = `blur(${Math.round(80 * k)}px)`;
+  gpnBlob(ctx, 0.30 * w, 0.10 * h, 0.30 * w, 0.18 * h, '#fff6d5', sway ? 0.62 + 0.08 * Math.sin(t * 0.5) : 0.7);
+  ctx.filter = 'none';
+  const rnd = gpnSeededRandom(33);
+  [['#4c7a5a', 0.45], ['#335f44', 0.58], ['#21452f', 0.72], ['#12291b', 0.86]].forEach(([c, base], layer) => {
+    const n = 26, step = w / n;
+    const amp = sway ? step * (0.10 + 0.08 * layer) : 0;  // 近的（下面的）擺得比較多
+    ctx.fillStyle = c;
+    ctx.beginPath();
+    ctx.moveTo(0, h);
+    for (let i = 0; i <= n; i++) {
+      const x = (i / n) * w;
+      const tip = (base - (0.06 + rnd() * 0.12)) * h;      // 一棵棵尖尖的樹
+      const dx = amp * Math.sin(t * 0.9 - i * 0.35 + layer * 0.8);
+      ctx.lineTo(x - step / 2, base * h);
+      ctx.lineTo(x + dx, tip);
+    }
+    ctx.lineTo(w, base * h);
+    ctx.lineTo(w, h);
+    ctx.closePath();
+    ctx.fill();
+  });
+}
+
+/**
  * 內建背景清單。draw(ctx, w, h)：畫滿整個 w × h。
  * tone：整張圖偏暗（dark）、中間（mid）、偏亮（light）。淺色主題配上偏暗的圖時，玻璃要調得實一點字才看得清楚。
  * 座標以 1920 × 1200 的畫面來想，再用 k（寬的比例）、v（高的比例）換算。
@@ -215,31 +248,7 @@ const GPN_BACKGROUNDS = [
   {
     id: 'forest', label: '森林', tone: 'dark',
     // 深綠的林子：一層一層的樹影，越遠越淡，上面透下來一點晨光
-    draw(ctx, w, h) {
-      const k = w / 1920;
-      ctx.fillStyle = gpnLinear(ctx, 0, 0, 0, h, [[0, '#c8e6c9'], [0.45, '#5f8f6b'], [1, '#13301f']]);
-      ctx.fillRect(0, 0, w, h);
-      ctx.filter = `blur(${Math.round(80 * k)}px)`;
-      gpnBlob(ctx, 0.30 * w, 0.10 * h, 0.30 * w, 0.18 * h, '#fff6d5', 0.7);
-      ctx.filter = 'none';
-      const rnd = gpnSeededRandom(33);
-      [['#4c7a5a', 0.45], ['#335f44', 0.58], ['#21452f', 0.72], ['#12291b', 0.86]].forEach(([c, base]) => {
-        ctx.fillStyle = c;
-        ctx.beginPath();
-        ctx.moveTo(0, h);
-        const n = 26;
-        for (let i = 0; i <= n; i++) {
-          const x = (i / n) * w;
-          const tip = (base - (0.06 + rnd() * 0.12)) * h;      // 一棵棵尖尖的樹
-          ctx.lineTo(x - w / n / 2, base * h);
-          ctx.lineTo(x, tip);
-        }
-        ctx.lineTo(w, base * h);
-        ctx.lineTo(w, h);
-        ctx.closePath();
-        ctx.fill();
-      });
-    },
+    draw(ctx, w, h) { gpnForest(ctx, w, h, 0, false); },
   },
   {
     id: 'sakura', label: '櫻花', tone: 'light',
@@ -481,6 +490,67 @@ const GPN_BACKGROUNDS = [
       gpnBlob(ctx, 0.25 * w, 0.80 * h, 0.06 * w, 0.03 * w, '#fff1d6', 0.45);
       ctx.filter = 'none';
     },
+  },
+  {
+    id: 'snowfield', label: '雪原', tone: 'light',
+    // 冬天的早上：淡藍的天、白白的雪坡一層層，遠處一點淡紫的山影
+    draw(ctx, w, h) {
+      const k = w / 1920;
+      ctx.fillStyle = gpnLinear(ctx, 0, 0, 0, h, [[0, '#dbe9f7'], [0.5, '#eef4fb'], [1, '#ffffff']]);
+      ctx.fillRect(0, 0, w, h);
+      ctx.filter = `blur(${Math.round(70 * k)}px)`;
+      gpnBlob(ctx, 0.75 * w, 0.15 * h, 0.18 * w, 0.12 * w, '#fff4e0', 0.8);
+      gpnBlob(ctx, 0.25 * w, 0.48 * h, 0.40 * w, 0.10 * h, '#b9b4dc', 0.55);
+      gpnBlob(ctx, 0.80 * w, 0.55 * h, 0.35 * w, 0.09 * h, '#a9c3e6', 0.5);
+      gpnBlob(ctx, 0.35 * w, 0.75 * h, 0.55 * w, 0.12 * h, '#d6e4f3', 0.8);
+      gpnBlob(ctx, 0.70 * w, 0.92 * h, 0.50 * w, 0.10 * h, '#c7d9ee', 0.6);
+      ctx.filter = 'none';
+    },
+  },
+  {
+    id: 'bamboo', label: '竹林', tone: 'mid',
+    // 青綠的竹林：一根根粗細不一的竹子，前面深、後面淺，上面透著光
+    draw(ctx, w, h) {
+      const k = w / 1920;
+      ctx.fillStyle = gpnLinear(ctx, 0, 0, 0, h, [[0, '#e6f2c8'], [0.6, '#8fbf7a'], [1, '#3f6b3a']]);
+      ctx.fillRect(0, 0, w, h);
+      const rnd = gpnSeededRandom(58);
+      [['#a9cf8a', 0.5, 14], ['#6fa45c', 0.7, 10], ['#3e7340', 0.9, 7]].forEach(([c, a, n]) => {
+        ctx.fillStyle = c;
+        ctx.globalAlpha = a;
+        for (let i = 0; i < n; i++) {
+          const x = rnd() * w, bw = (24 + rnd() * 50) * k * (a + 0.3);
+          ctx.fillRect(x, 0, bw, h);
+        }
+      });
+      ctx.globalAlpha = 1;
+      ctx.filter = `blur(${Math.round(90 * k)}px)`;
+      gpnBlob(ctx, 0.6 * w, 0.08 * h, 0.30 * w, 0.14 * h, '#fbffe0', 0.6);
+      ctx.filter = 'none';
+    },
+  },
+  {
+    id: 'wheat', label: '麥田', tone: 'mid',
+    // 黃昏的麥田：金黃色的田一層層延伸到遠方，天空是淡淡的桃色
+    draw(ctx, w, h) {
+      const k = w / 1920;
+      ctx.fillStyle = gpnLinear(ctx, 0, 0, 0, h, [[0, '#ffd8b0'], [0.4, '#ffe6a8'], [1, '#c98a2e']]);
+      ctx.fillRect(0, 0, w, h);
+      ctx.filter = `blur(${Math.round(80 * k)}px)`;
+      gpnBlob(ctx, 0.70 * w, 0.30 * h, 0.12 * w, 0.12 * w, '#fff3c4', 0.9);
+      ctx.filter = 'none';
+      [['#f2c86b', 0.50], ['#e2ac48', 0.62], ['#cf9236', 0.76], ['#a96f24', 0.90]].forEach(([c, base], i) => {
+        ctx.fillStyle = c;
+        ctx.beginPath();
+        ctx.moveTo(0, h);
+        for (let x = 0; x <= w + 1; x += w / 40) {
+          ctx.lineTo(x, (base + 0.02 * Math.sin(x / w * Math.PI * (2 + i) + i)) * h);
+        }
+        ctx.lineTo(w, h);
+        ctx.closePath();
+        ctx.fill();
+      });
+    },
   },  /* ---- 動態背景（4.18.0）----
      live: true 的會一直動：draw(ctx, w, h, t) 的 t 是秒數，gpnAnimateBackground 每秒畫 24 張。
      縮圖、判斷明暗用 t = 0 那一張。都刻意「慢」：在背景裡輕輕流動，不搶筆記本的注意力。 */
@@ -644,6 +714,76 @@ const GPN_BACKGROUNDS = [
         gpnBlob(ctx, (0.5 + 0.32 * Math.cos(a)) * w, (0.5 + 0.30 * Math.sin(a * 1.2)) * h, 0.26 * w, 0.26 * w, c, 0.85);
       });
       ctx.filter = 'none';
+    },
+  },
+  {
+    id: 'live-forest', label: '搖曳森林', tone: 'dark', live: true,
+    // 「森林」那張，樹梢跟著風輕輕左右擺，晨光跟著慢慢明暗
+    draw(ctx, w, h, t = 0) { gpnForest(ctx, w, h, t, true); },
+  },
+  {
+    id: 'live-firefly', label: '螢火蟲', tone: 'dark', live: true,
+    // 夜裡的林子，一群黃綠色的小光點慢慢飄、一明一暗
+    draw(ctx, w, h, t = 0) {
+      const k = w / 1920;
+      ctx.fillStyle = gpnLinear(ctx, 0, 0, 0, h, [[0, '#0b1a24'], [0.6, '#10291f'], [1, '#061209']]);
+      ctx.fillRect(0, 0, w, h);
+      ctx.filter = `blur(${Math.round(120 * k)}px)`;
+      gpnBlob(ctx, 0.5 * w, 0.85 * h, 0.5 * w, 0.18 * h, '#1f4a2f', 0.7);
+      ctx.filter = 'none';
+      const rnd = gpnSeededRandom(44);
+      [['#163322', 0.62], ['#0c2016', 0.80]].forEach(([c, base]) => {
+        ctx.fillStyle = c;
+        ctx.beginPath();
+        ctx.moveTo(0, h);
+        const n = 18;
+        for (let i = 0; i <= n; i++) {
+          ctx.lineTo((i - 0.5) / n * w, base * h);
+          ctx.lineTo(i / n * w, (base - (0.08 + rnd() * 0.14)) * h);
+        }
+        ctx.lineTo(w, h);
+        ctx.closePath();
+        ctx.fill();
+      });
+      for (let i = 0; i < 45; i++) {
+        const x0 = rnd(), y0 = 0.25 + rnd() * 0.7, ph = rnd() * 6.28, sp = 0.15 + rnd() * 0.25, blink = 0.6 + rnd() * 0.6;
+        const x = (x0 + 0.04 * Math.sin(t * sp + ph)) * w;
+        const y = (y0 + 0.03 * Math.cos(t * sp * 1.3 + ph)) * h;
+        const glow = 0.15 + 0.85 * Math.max(0, Math.sin(t * blink + ph));
+        const r = (14 + rnd() * 10) * Math.max(k, 0.5);
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, `rgba(230,255,140,${0.9 * glow})`);
+        g.addColorStop(1, 'rgba(230,255,140,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    },
+  },
+  {
+    id: 'live-snow', label: '飄雪', tone: 'light', live: true,
+    // 淡藍灰的冬天，雪花慢慢飄下來、左右晃
+    draw(ctx, w, h, t = 0) {
+      const k = w / 1920;
+      ctx.fillStyle = gpnLinear(ctx, 0, 0, 0, h, [[0, '#c9d8ea'], [1, '#eef3f9']]);
+      ctx.fillRect(0, 0, w, h);
+      ctx.filter = `blur(${Math.round(90 * k)}px)`;
+      gpnBlob(ctx, 0.2 * w, 0.85 * h, 0.4 * w, 0.12 * h, '#ffffff', 0.9);
+      gpnBlob(ctx, 0.8 * w, 0.2 * h, 0.25 * w, 0.18 * w, '#b3c6e0', 0.6);
+      ctx.filter = 'none';
+      const rnd = gpnSeededRandom(21);
+      ctx.fillStyle = '#ffffff';
+      for (let i = 0; i < 90; i++) {
+        const x0 = rnd(), sp = 0.02 + rnd() * 0.04, r = (3 + rnd() * 7) * Math.max(k, 0.5), ph = rnd() * 6.28;
+        const y = ((rnd() + t * sp) % 1.1) - 0.05;
+        const x = x0 + 0.02 * Math.sin(t * 0.7 + ph);
+        ctx.globalAlpha = 0.6 + 0.4 * rnd();
+        ctx.beginPath();
+        ctx.arc(x * w, y * h, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
     },
   },
 ];
