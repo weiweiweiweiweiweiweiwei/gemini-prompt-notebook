@@ -1,7 +1,7 @@
 /**
  * 外掛裡的面板、工具列小視窗用的「雲端」：自己不連線，全部請背景程式（background.js）做。
  * 提供給 panel.js 的介面和網頁版一樣：getState / onState / connect / signOut / syncNow / putWallpaper / getWallpaper，
- * 還有分身的 cloneSignIn / enterClone / leaveClone / listClones / createClone / destroyClone / readClone / pushClone / setCloneAvatar
+ * 還有分身的 cloneSignIn / enterClone / leaveClone / listClones / createClone / extendClone / destroyClone / readClone / pushClone / setCloneAvatar
  */
 function gpnExtensionCloud() {
   'use strict';
@@ -55,11 +55,12 @@ function gpnExtensionCloud() {
     getWallpaper: (id) => send('getWallpaper', { id }),
     /* 分身（見 sync.js 的「分身」） */
     cloneSignIn: (id) => send('cloneSignIn', { id }),
-    enterClone: (id) => send('enterClone', { id }),
+    enterClone: (c) => send('enterClone', { clone: c }),
     leaveClone: (opts = {}) => send('leaveClone', { force: !!opts.force }),
     listClones: () => send('listClones'),
     createClone: (label, doc, avatar) => send('createClone', { label, doc, avatar }),
     setCloneAvatar: (c, avatar) => send('setCloneAvatar', { clone: c, avatar }),
+    extendClone: (c, expiresAt) => send('extendClone', { clone: c, expiresAt }),
     destroyClone: (c) => send('destroyClone', { clone: c }),
     readClone: (fileId) => send('readClone', { fileId }),
     pushClone: (fileId, doc) => send('pushClone', { fileId, doc }),

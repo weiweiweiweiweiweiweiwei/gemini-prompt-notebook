@@ -51,6 +51,7 @@ const GPN_PKCE_KEY = 'gpn_gdrive_pkce_v1';         // 登入途中的密語
 const GPN_BASE_KEY = 'gpn_gdrive_base_v1';         // 上次同步好的內容（三方合併的共同起點）
 const GPN_PRELOGIN_KEY = 'gpn_prelogin_v1';        // 登入時被雲端換掉的「這台原本的提示詞」（設定 → 備份 可以下載）
 const GPN_OWNER_STASH_KEY = 'gpn_owner_stash_v1';  // 建立分身的人「進入分身」時，先收起來的自己的登入和提示詞（回到自己的帳號用）
+const GPN_CLONE_HINT_KEY = 'gpn_clone_hint_v1';    // 分身停用時被登出：記著代號，延長後在登入畫面幫他填好
 /** 改用 Google 雲端硬碟之前（Supabase 時代）留下的登入資料，用不到了，啟動時清掉 */
 const GPN_OLD_KEYS = ['gpn_session_v1', 'gpn_sync_v1', 'gpn_pkce_v1'];
 
@@ -88,6 +89,7 @@ function gpnCreateSync(o) {
     lastSyncAt: 0, message: '',
     clone: null,          // 用分身登入時：{ id, label, ownerEmail, expiresAt }
     owner: '',            // 建立分身的人進入了自己的分身：他自己的 Email（可以「回到我的帳號」）
+    cloneHint: '',        // 上次用的分身停用了：它的代號（登入畫面幫忙填好）
   };
   let running = null;
   let switching = null;   // 正在換帳號（連結、中斷）
@@ -108,7 +110,9 @@ function gpnCreateSync(o) {
     session = (await kv.get(GPN_SESSION_KEY)) || null;
     meta = { ...EMPTY_META, ...((await kv.get(GPN_SYNC_KEY)) || {}) };
     const stash = await kv.get(GPN_OWNER_STASH_KEY);
+    const hint = await kv.get(GPN_CLONE_HINT_KEY);
     setState({
+      cloneHint: !session && gpnIsCloneId(hint) ? hint : '',
       signedIn: !!session, email: session?.email || '', picture: session?.picture || '',
       fileId: isClone() ? '' : meta.fileId || '', lastSyncAt: meta.lastSyncAt || 0,
       clone: cloneView(session), owner: isClone() && stash?.session ? stash.session.email || '' : '',
@@ -163,30 +167,42 @@ function gpnCreateSync(o) {
   }
 
   /** 拿一個還有效的 access token；快過期就先換一張新的 */
+  /**
+   * Google 的 token 放在哪裡：平常是登入本身；建立的人進入自己的分身時，是分身登入裡的 owner
+   * （用分身代號登入的人沒有 Google 的 token）
+   */
+  const googleOf = (s) => (s?.kind === 'clone' ? s.owner : s) || null;
+
   async function accessToken(force = false) {
-    if (!session || isClone()) throw Object.assign(new Error('signed out'), { auth: true });
-    if (!force && session.expires_at - Date.now() > 60_000) return session.access_token;
+    let g = googleOf(session);
+    if (!g) throw Object.assign(new Error('signed out'), { auth: true });
+    if (!force && g.expires_at - Date.now() > 60_000) return g.access_token;
 
     // 別的分頁可能剛換過：儲存裡的比較新就直接用
     const stored = await kv.get(GPN_SESSION_KEY);
-    if (!force && stored && stored.expires_at - Date.now() > 60_000) {
+    const sg = googleOf(stored);
+    if (!force && sg && stored.sub === session.sub && sg.expires_at - Date.now() > 60_000) {
       session = stored;
-      return session.access_token;
+      return sg.access_token;
     }
-    if (!session.refresh_token) return expired();
+    if (!g.refresh_token) return expired();
     try {
-      const r = await tokenCall({ refresh_token: session.refresh_token });
-      // 換新 token 時 Google 也會附上最新的頭像（4.16.0 以前登入的沒有，重新登入一次才有）
-      const who = readIdToken(r.id_token);
-      if (who.picture && who.picture !== session.picture) setState({ picture: who.picture });
-      await saveSession({
-        ...session,
-        ...(who.picture ? { picture: who.picture } : {}),
+      const r = await tokenCall({ refresh_token: g.refresh_token });
+      g = {
+        ...g,
         access_token: r.access_token,
         expires_at: Date.now() + (Number(r.expires_in) || 3600) * 1000,
         ...(r.refresh_token ? { refresh_token: r.refresh_token } : {}),
-      });
-      return session.access_token;
+      };
+      if (isClone()) {
+        await saveSession({ ...session, owner: g });
+      } else {
+        // 換新 token 時 Google 也會附上最新的頭像（4.16.0 以前登入的沒有，重新登入一次才有）
+        const who = readIdToken(r.id_token);
+        if (who.picture && who.picture !== session.picture) setState({ picture: who.picture });
+        await saveSession({ ...g, ...(who.picture ? { picture: who.picture } : {}) });
+      }
+      return googleOf(session).access_token;
     } catch (e) {
       // 斷線、或中繼暫時有問題：先別登出，等一下再試
       if (e.offline || !e.status || e.status >= 500) throw e;
@@ -245,6 +261,14 @@ function gpnCreateSync(o) {
 
   /** 找雲端硬碟上的筆記本：先試記住的那個；不見了（被刪、被丟垃圾桶）就用 appProperties 找 */
   async function findFile() {
+    if (isClone() && session.owner) {
+      // 建立的人進入自己的分身：直接用他的雲端硬碟權限讀寫（分身停用了也進得去）
+      const f = await drive(`/drive/v3/files/${encodeURIComponent(session.fileId)}?fields=id,version,trashed,appProperties`);
+      if (f.trashed) throw Object.assign(new Error('clone_not_found'), { code: 'clone_not_found', clone: true });
+      const p = f.appProperties || {};
+      await cloneSeen({ label: p.label, avatar: p.avatar, expiresAt: Number(p.expires) || 0, ownerEmail: session.ownerEmail });
+      return { id: f.id, version: String(f.version) };
+    }
     if (isClone()) {
       // 分身：檔案在建立的人的雲端硬碟裡，由中繼代為存取
       const r = await cloneCall('head', { id: session.cloneId });
@@ -284,7 +308,7 @@ function gpnCreateSync(o) {
 
   /** 讀出筆記本；檔案被改壞（不是 JSON）就回 null */
   async function readFile(id) {
-    const text = isClone() ? (await cloneCall('read', { id: session.cloneId })).data
+    const text = viaRelay() ? (await cloneCall('read', { id: session.cloneId })).data
       : await drive(`/drive/v3/files/${encodeURIComponent(id)}?alt=media`, { as: 'text' });
     try {
       return gpnNormalize(JSON.parse(text));
@@ -297,7 +321,7 @@ function gpnCreateSync(o) {
   const fileBody = (doc) => JSON.stringify(doc, null, 2);
 
   async function writeFile(id, doc) {
-    if (isClone()) {
+    if (viaRelay()) {
       const r = await cloneCall('write', { id: session.cloneId, data: fileBody(doc) });
       return { id: r.fileId, version: String(r.version) };
     }
@@ -341,7 +365,8 @@ function gpnCreateSync(o) {
     }
     if (/accessNotConfigured|SERVICE_DISABLED/i.test(s)) return '雲端硬碟功能還沒在後台開啟（管理員要到 Google Cloud 啟用 Google Drive API）';
     if (/clone_not_found/i.test(s)) return '找不到這個分身：代號打錯了，或已經被建立的人銷毀了';
-    if (/clone_expired/i.test(s)) return '這個分身已經到期（建立滿一年）自動銷毀了';
+    if (/clone_expired/i.test(s)) return '這個分身已經到期，暫時停用了。請建立的人延長期限，之後用同一組代號再登入';
+    if (/bad_date/i.test(s)) return '日期不對：請選今天以後、十年以內的日期';
     if (/owner_token_invalid/i.test(s)) return '建立這個分身的人的 Google 登入失效了，請他打開罐頭P 重新登入一次，分身就能再同步';
     if (/server_not_configured/i.test(s)) return '雲端同步的伺服器還沒設定好（管理員要設定 Google 用戶端密鑰）';
     if (/rateLimit|userRateLimitExceeded|RESOURCE_EXHAUSTED/i.test(s) || e?.status === 429) return '同步太頻繁了，等一下會自動再試';
@@ -785,7 +810,8 @@ function gpnCreateSync(o) {
        建立分身時，把建立的人的 refresh token 加密交給中繼保管；中繼只存「代號的雜湊 → 哪個檔案」，
        提示詞不存在中繼，讀寫時直接轉給雲端硬碟。權限一樣只有 drive.file（只碰得到罐頭P 建立的檔案）。
      代號就是密碼：16 碼、每碼 32 種，約 2^80 種組合，猜不到。中繼只存它的雜湊。
-     一年後到期：中繼不再接受這個代號，雲端硬碟上的檔案丟進垃圾桶（建立的人下次打開罐頭P 時也會清一次）。
+     一年後到期就「停用」：中繼不再接受這個代號，但什麼都不刪。建立的人可以延長期限（自己選到哪一天），
+       或銷毀；停用期間建立的人照樣可以進入分身（他直接用自己的雲端硬碟權限，不經過中繼）。
 
      建立的人（用自己的 Google 帳號登入時）在 設定 → 分身：
        建立、列出、複製代號、銷毀，「再推一次」把最新的提示詞推進分身（分身自己新增的不動），
@@ -796,6 +822,8 @@ function gpnCreateSync(o) {
   const CLONE_Q = "appProperties has { key='gpnClone' and value='1' } and trashed = false";
 
   function isClone() { return session?.kind === 'clone'; }
+  /** 用分身代號登入的人（不是建立的人自己進來）：讀寫都要經過中繼 */
+  function viaRelay() { return isClone() && !session.owner; }
 
   function cloneView(s) {
     if (s?.kind !== 'clone') return null;
@@ -824,10 +852,12 @@ function gpnCreateSync(o) {
     } catch (e) {
       e.clone = true;
       if (session && isClone() && /^clone_(not_found|expired)$/.test(e.code)) {
+        const hint = e.code === 'clone_expired' ? session.cloneId : '';
+        if (hint) await kv.set(GPN_CLONE_HINT_KEY, hint);
         await saveSession(null);
         await kv.remove(GPN_OWNER_STASH_KEY);
         setState({ signedIn: false, email: '', picture: '', phase: 'idle', pending: false,
-          clone: null, owner: '', message: explain(e) });
+          clone: null, owner: '', cloneHint: hint, message: explain(e) });
         e.auth = true;
       }
       throw e;
@@ -853,7 +883,8 @@ function gpnCreateSync(o) {
     try { r = await relayCall(CLONE_URL, { op: 'head', id }); } catch (e) { return { ok: false, error: explain(e) }; }
     const s = cloneSession(id, r);
     await switchUser(() => becomeUser(s));
-    setState({ signedIn: true, email: s.email, picture: '', fileId: '', clone: cloneView(s), owner: '', message: '' });
+    await kv.remove(GPN_CLONE_HINT_KEY);
+    setState({ signedIn: true, email: s.email, picture: '', fileId: '', clone: cloneView(s), owner: '', cloneHint: '', message: '' });
     const note = await syncNow();
     return { ok: true, label: s.label, ...note };
   }
@@ -861,25 +892,31 @@ function gpnCreateSync(o) {
   /**
    * 建立的人「進入分身」：自己的登入、同步進度、提示詞先收起來（GPN_OWNER_STASH_KEY），換成分身。
    * 自己的提示詞要先同步好才換：收起來的那份，就是之後回來時的起點。
+   * 分身的登入裡帶著他自己的 Google token（owner），直接讀寫雲端硬碟上的分身檔案，不經過中繼——
+   * 所以分身停用（到期）了，他照樣進得去。c 是 listClones 給的那個分身。
    */
-  async function enterClone(raw) {
+  async function enterClone(c) {
     await ready;
     if (!session || isClone()) return { ok: false, error: '要先用自己的 Google 帳號登入' };
-    const id = gpnCleanCloneId(raw);
+    if (!c?.fileId || !gpnIsCloneId(c.id)) return { ok: false, error: '找不到這個分身' };
     const first = await syncNow();
     if (first?.error) return { ok: false, error: '自己的提示詞還沒同步好，先不切換：' + first.error };
-    let r;
-    try { r = await relayCall(CLONE_URL, { op: 'head', id }); } catch (e) { return { ok: false, error: explain(e) }; }
-    const s = cloneSession(id, r);
     const ownerEmail = session.email || '';
+    let s = null;
     await switchUser(async () => {
+      const mine = (await kv.get(GPN_SESSION_KEY)) || session;
       await kv.set(GPN_OWNER_STASH_KEY, {
         at: Date.now(),
-        session: (await kv.get(GPN_SESSION_KEY)) || session,
+        session: mine,
         meta: { ...EMPTY_META, ...((await kv.get(GPN_SYNC_KEY)) || {}) },
         base: (await kv.get(GPN_BASE_KEY)) || null,
         local: gpnNormalize(await readLocal()),
       });
+      s = {
+        ...cloneSession(c.id, { label: c.label, avatar: c.avatar, expiresAt: c.expiresAt, ownerEmail }),
+        fileId: c.fileId,
+        owner: { access_token: mine.access_token, refresh_token: mine.refresh_token, expires_at: mine.expires_at },
+      };
       await saveSession(s);
       meta = { ...EMPTY_META, userId: s.sub, adopt: 'replace' };   // 這台換成分身雲端上的樣子
       await saveMeta();
@@ -909,7 +946,9 @@ function gpnCreateSync(o) {
       else await kv.remove(GPN_BASE_KEY);
       meta = { ...EMPTY_META, ...stash.meta };
       await saveMeta();
-      await saveSession(stash.session);
+      // 在分身裡換過新的 token 的話，用新的
+      const g = googleOf(session);
+      await saveSession(g && isClone() ? { ...stash.session, ...g } : stash.session);
       await kv.remove(GPN_OWNER_STASH_KEY);
     });
     setState({
@@ -946,20 +985,14 @@ function gpnCreateSync(o) {
   });
 
   /**
-   * 每次開啟做一次：到期的分身丟進垃圾桶；還有分身的話，把最新的 refresh token 交給中繼。
+   * 每次開啟做一次：有分身的話（停用的也算，延長後還要用），把最新的 refresh token 交給中繼。
    * Google 每個帳號最多留 100 張 refresh token，舊的會失效——常常登入的人，中繼手上那張可能被擠掉，
    * 所以每次打開都換一張新的給它，分身才不會突然連不上。
    */
   async function cloneUpkeep() {
     if (!CLONE_URL) return;
     const all = await listCloneFiles();
-    if (!all.length) return;
-    const now = Date.now();
-    for (const c of all.filter((x) => x.expiresAt && x.expiresAt <= now)) {
-      try { await relayCall(CLONE_URL, { op: 'revoke', token: await accessToken(), id: c.id }); } catch { /* 中繼那邊本來就會拒絕 */ }
-      await trashFile(c.fileId);
-    }
-    if (all.some((x) => !x.expiresAt || x.expiresAt > now) && session.refresh_token) {
+    if (all.length && session.refresh_token) {
       await relayCall(CLONE_URL, { op: 'token', token: await accessToken(), refresh_token: session.refresh_token });
     }
   }
@@ -968,8 +1001,7 @@ function gpnCreateSync(o) {
     await ready;
     if (ownerOnly()) return { ok: false, error: ownerOnly() };
     try {
-      const now = Date.now();
-      return { ok: true, clones: (await listCloneFiles()).filter((c) => !c.expiresAt || c.expiresAt > now) };
+      return { ok: true, clones: await listCloneFiles() };     // 停用（到期）的也列出來：可以延長或銷毀
     } catch (e) {
       return { ok: false, error: explain(e) };
     }
@@ -1004,6 +1036,23 @@ function gpnCreateSync(o) {
     }
   }
 
+  /** 延長期限（或改成任何一天）：中繼和雲端硬碟上的檔案都記下新的到期日 */
+  async function extendClone(c, expiresAt) {
+    await ready;
+    if (ownerOnly()) return { ok: false, error: ownerOnly() };
+    const at = Number(expiresAt);
+    if (!(at > Date.now())) return { ok: false, error: '請選今天以後的日期' };
+    try {
+      await relayCall(CLONE_URL, { op: 'extend', token: await accessToken(), id: c.id, expiresAt: at });
+      await drive(`/drive/v3/files/${encodeURIComponent(c.fileId)}?fields=id`, {
+        method: 'PATCH', type: 'application/json', body: JSON.stringify({ appProperties: { expires: String(at) } }),
+      });
+      return { ok: true, expiresAt: at };
+    } catch (e) {
+      return { ok: false, error: explain(e) };
+    }
+  }
+
   /** 銷毀分身：中繼不再接受這個代號，檔案丟進雲端硬碟的垃圾桶（30 天內還救得回來，但代號不能再用） */
   async function destroyClone(c) {
     await ready;
@@ -1030,6 +1079,7 @@ function gpnCreateSync(o) {
     const pet = avatarId(avatar);
     if (!pet) return { ok: false, error: '沒有這個頭像' };
     try {
+      if (!c && isClone() && session.owner) c = { fileId: session.fileId };   // 建立的人在自己的分身裡：直接改檔案
       if (!c) {
         if (!isClone()) return { ok: false, error: '現在不是用分身登入' };
         await cloneCall('avatar', { id: session.cloneId, avatar: pet });
@@ -1038,10 +1088,14 @@ function gpnCreateSync(o) {
         setState({ clone: cloneView(session) });
         return { ok: true };
       }
-      if (ownerOnly()) return { ok: false, error: ownerOnly() };
+      if (!googleOf(session)) return { ok: false, error: ownerOnly() };
       await drive(`/drive/v3/files/${encodeURIComponent(c.fileId)}?fields=id`, {
         method: 'PATCH', type: 'application/json', body: JSON.stringify({ appProperties: { avatar: pet } }),
       });
+      if (isClone()) {
+        await saveSession({ ...session, avatar: pet });
+        setState({ clone: cloneView(session) });
+      }
       return { ok: true };
     } catch (e) {
       return { ok: false, error: explain(e) };
@@ -1080,7 +1134,7 @@ function gpnCreateSync(o) {
 
   return {
     getState, syncNow, markDirty, flush, authUrl, finishAuth, signOut, putWallpaper, getWallpaper,
-    cloneSignIn, enterClone, leaveClone, listClones, createClone, destroyClone, readClone, pushClone, setCloneAvatar,
+    cloneSignIn, enterClone, leaveClone, listClones, createClone, extendClone, destroyClone, readClone, pushClone, setCloneAvatar,
   };
 }
 

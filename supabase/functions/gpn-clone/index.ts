@@ -10,8 +10,9 @@
  *   - 提示詞不存在這裡，讀寫時直接轉手；也不記錄。
  *   - 權限只有 drive.file：那張 token 只碰得到罐頭P 自己建立的檔案，看不到雲端硬碟裡的其他東西。
  *   - 代號就是密碼（約 2^80 種組合，猜不到），這裡只存它的 SHA-256 雜湊。
- *   - 建立滿一年到期：不再接受這個代號，檔案丟進建立的人雲端硬碟的垃圾桶。
- *   - 一個人的分身全部銷毀（或到期）了，他的 refresh token 和紀錄也一起刪掉，不再保管。
+ *   - 建立滿一年到期就「停用」：不再接受這個代號，但什麼都不刪；建立的人可以延長（extend）或銷毀（revoke）。
+ *     停用期間建立的人自己照樣進得去（他直接用自己的雲端硬碟權限，不經過這裡）。
+ *   - 一個人的分身全部銷毀了，他的 refresh token 和紀錄也一起刪掉，不再保管。
  *
  * 資料表（supabase/migrations/20261013_gpn_clones.sql）：
  *   gpn_clone_owners  建立的人：Google 帳號代號（sub）、Email、加密過的 refresh token
@@ -29,6 +30,7 @@
  *   建立的人（token = 他的 Google access token，這裡向 Google 確認是誰）
  *     register { token, refresh_token, id, fileId, label }  登記一個剛建好的分身
  *     token    { token, refresh_token }                     換一張新的 refresh token 給這裡保管
+ *     extend   { token, id, expiresAt }                     延長期限（改成哪一天，毫秒）
  *     revoke   { token, id }                                銷毀（代號不能再用）
  *   用分身的人（id = 分身代號）
  *     head   { id }          → { fileId, version, label, avatar, ownerEmail, expiresAt }
@@ -194,17 +196,8 @@ async function loadClone(rawId: unknown) {
   const rows = await db(`/gpn_clones?id_hash=eq.${q(hash)}&select=*,owner:gpn_clone_owners(sub,email,rt_enc)`);
   const c = rows?.[0];
   if (!c || !c.owner) throw new Fail(404, 'clone_not_found');
-  if (Date.parse(c.expires_at) <= Date.now()) {
-    // 到期了：代號作廢，檔案丟進建立的人的垃圾桶
-    await db(`/gpn_clones?id_hash=eq.${q(hash)}`, { method: 'DELETE' });
-    try {
-      await drive(await ownerToken(c.owner), `/drive/v3/files/${q(c.file_id)}?fields=id`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trashed: true }),
-      });
-    } catch { /* 建立的人下次打開罐頭P 時也會清 */ }
-    await forgetOwnerIfDone(c.owner.sub);
-    throw new Fail(410, 'clone_expired');
-  }
+  // 到期了就停用：什麼都不刪，等建立的人延長或銷毀
+  if (Date.parse(c.expires_at) <= Date.now()) throw new Fail(410, 'clone_expired');
   const token = await ownerToken(c.owner);
   const f = await fileMeta(token, c.file_id);
   if (f.trashed) throw new Fail(404, 'clone_not_found');   // 建立的人自己把檔案丟進垃圾桶了
@@ -255,6 +248,19 @@ const ops: Record<string, (b: Record<string, unknown>) => Promise<unknown>> = {
     });
     tokenCache.delete(me.sub);
     return { ok: true };
+  },
+
+  async extend(b) {
+    const me = await whoIs(String(b.token || ''));
+    const id = cleanId(b.id);
+    if (!isId(id)) throw new Fail(404, 'clone_not_found');
+    const at = Number(b.expiresAt);
+    if (!Number.isFinite(at) || at <= Date.now() || at > Date.now() + 10 * YEAR) throw new Fail(400, 'bad_date');
+    const rows = await db(`/gpn_clones?id_hash=eq.${q(await sha256(id))}&owner_sub=eq.${q(me.sub)}`, {
+      method: 'PATCH', body: JSON.stringify({ expires_at: new Date(at).toISOString() }),
+    });
+    if (!rows?.length) throw new Fail(404, 'clone_not_found');
+    return { ok: true, expiresAt: at };
   },
 
   async revoke(b) {

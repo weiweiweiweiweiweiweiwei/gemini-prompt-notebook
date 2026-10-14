@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.24.0';
+const GPN_APP_VERSION = '4.25.0';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -97,6 +97,17 @@ function gpnCreatePanel(opts) {
   /** 圓圈裡一個人（外框）：設定裡的「帳號」。單一 path，理由同上面的齒輪 */
   const ICON_ACCOUNT =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM7.07 18.28c.43-.9 3.05-1.78 4.93-1.78s4.51.88 4.93 1.78C15.57 19.36 13.86 20 12 20s-3.57-.64-4.93-1.72zm11.29-1.45c-1.43-1.74-4.9-2.33-6.36-2.33s-4.93.59-6.36 2.33A7.95 7.95 0 0 1 4 12c0-4.41 3.59-8 8-8s8 3.59 8 8c0 1.82-.62 3.49-1.64 4.83zM12 6c-1.94 0-3.5 1.56-3.5 3.5S10.06 13 12 13s3.5-1.56 3.5-3.5S13.94 6 12 6zm0 5c-.83 0-1.5-.67-1.5-1.5S11.17 8 12 8s1.5.67 1.5 1.5S12.83 11 12 11z"/></svg>';
+
+  /** 圓圈裡一個 i：分身頁右上角的說明 */
+  const ICON_INFO =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.2" fill="none" stroke="currentColor" stroke-width="1.8"/>' +
+    '<circle cx="12.8" cy="7.6" r="1.35" fill="currentColor"/>' +
+    '<path d="M10.7 10.9h2.2l-1.45 5.3c-.16.62.34.86.76.5l.95-.78" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  /** 放大／縮小：兩個斜向箭頭（線條圓角） */
+  const ICON_EXPAND =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4.5h5.5V10M19.5 4.5l-6 6M10 19.5H4.5V14M4.5 19.5l6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const ICON_SHRINK =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 10H14V4.5M14 10l6-6M4.5 14H10v5.5M10 14l-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
   /** 兩個人：設定裡的「分身」 */
   const ICON_CLONE =
@@ -250,6 +261,7 @@ function gpnCreatePanel(opts) {
   const hasClones = () => !!cloud && typeof cloud.listClones === 'function' && !!GPN_CLOUD.cloneUrl;
   let clones = null, clonesBusy = false, cPick = null, cDelArmed = '', cDelTimer = 0, leaveArmed = false;
   let cAvatarOpen = '';          // 哪個分身的「換頭像」打開著（分身代號）
+  let cExtendOpen = '';          // 哪個分身的「延長期限」打開著（分身代號）
   const hasAvatars = () => typeof GPN_AVATARS !== 'undefined';
   /** 對話框開著時雲端送來新資料，先不重畫（免得打到一半的字不見），關掉對話框再畫 */
   let staleWhileLayer = false;
@@ -540,7 +552,7 @@ function gpnCreatePanel(opts) {
     buildNewTabLayer();
     buildFolderLayer();
     buildSettingsLayer();
-    root.append(ui.overlay, ui.editLayer, ui.newTabLayer, ui.folderLayer, ui.settingsLayer, ui.toast);
+    root.append(...[ui.overlay, ui.editLayer, ui.newTabLayer, ui.folderLayer, ui.settingsLayer, ui.cPickLayer, ui.toast].filter(Boolean));
   }
 
   /* ---- 筆記本寬度 ----
@@ -1944,7 +1956,7 @@ function gpnCreatePanel(opts) {
 
   const layerOpen = (layer) => layer.classList.contains('is-open');
   const anyLayerOpen = () =>
-    [ui.editLayer, ui.newTabLayer, ui.folderLayer, ui.settingsLayer].some(layerOpen);
+    [ui.editLayer, ui.newTabLayer, ui.folderLayer, ui.settingsLayer, ui.cPickLayer].filter(Boolean).some(layerOpen);
 
   function showLayer(layer) {
     closeCardMenu();
@@ -2545,6 +2557,7 @@ function gpnCreatePanel(opts) {
     hideFolderConfirm();
     disarmTabDelete();
     disarmWipe();
+    toggleCloneInfo(false);
     if (key === 'clones') openClones();
   }
 
@@ -2963,6 +2976,11 @@ function gpnCreatePanel(opts) {
       ui.gateMore.hidden = !hasClones();
       ui.gateMore.setAttribute('aria-expanded', 'false');
     }
+    if (gated && cloudState.cloneHint && hasClones() && !ui.gateCloneInput.value) {
+      ui.gateMore.hidden = true;
+      ui.gateClone.hidden = false;
+      ui.gateCloneInput.value = gpnFormatCloneId(cloudState.cloneHint);
+    }
     if (gated) {
       closeCardMenu();
       closeEditor();
@@ -3173,7 +3191,7 @@ function gpnCreatePanel(opts) {
     ui.aKind.textContent = c ? '已登入分身' : '已登入（提示詞存在 Google 雲端硬碟）';
     ui.aWhere.textContent = c
       ? `這個分身由 ${c.ownerEmail || '建立的人'} 建立和管理，提示詞存在他的 Google 雲端硬碟。` +
-        `一改就會自動同步。到期日 ${ymd(c.expiresAt)}，到期後會自動銷毀，想留著的話先到「備份」下載一份。`
+        `一改就會自動同步。到期日 ${ymd(c.expiresAt)}，到期後會停用（建立的人可以延長）。`
       : `提示詞存在你的 Google 雲端硬碟，檔名是「${GPN_DRIVE_FILE_NAME}」。一改就會自動同步，平常不用按「立即同步」。`;
     ui.aBack.hidden = !st.owner;
     if (!leaveArmed) ui.aBack.textContent = `回到我的帳號（${st.owner}）`;
@@ -3187,8 +3205,9 @@ function gpnCreatePanel(opts) {
   }
 
   /* ---- 分身 ----
-     建立的人（用自己的 Google 帳號登入時）：建立、列出、複製代號、進入、再推一次、銷毀。
-     用分身登入時：看這個分身是誰建的、什麼時候到期；建立的人自己進來的話，可以回到自己的帳號。
+     建立的人（用自己的 Google 帳號登入時）：建立、列出、複製代號、進入、再推一次、延長期限、銷毀。
+     用分身登入時：看這個分身是誰建的、什麼時候到期、換頭像；建立的人自己進來的話，可以回到自己的帳號。
+     勾選提示詞是另外一個視窗（不放在會捲動的設定頁裡：按鈕永遠在最下面看得到，不會誤按「完成」離開）。
      資料怎麼存、代號怎麼產生，見 sync.js 的「分身」。 */
 
   /** 2027/10/13 */
@@ -3197,6 +3216,13 @@ function gpnCreatePanel(opts) {
     const d = new Date(ts);
     return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
   }
+  /** <input type="date"> 用的 2027-10-13 */
+  function isoDay(ts) {
+    const d = new Date(ts);
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
+  const cloneExpired = (c) => !!c.expiresAt && c.expiresAt <= Date.now();
 
   function buildClonesSection() {
     ui.cMsg = el('div', { class: 'gpn-note gpn-note--status', role: 'status' });
@@ -3205,61 +3231,63 @@ function gpnCreatePanel(opts) {
     ui.cList = el('div', { class: 'gpn-clone-list' });
     ui.cDone = el('div', { class: 'gpn-clone-done', hidden: '' });
 
-    /* 勾選要放進分身的提示詞 */
-    ui.cPickTitle = el('div', { class: 'gpn-label' });
-    ui.cName = el('input', {
-      class: 'gpn-input', type: 'text', maxlength: '30', placeholder: '例如：業務組',
-      onkeydown: (e) => { if (e.key === 'Enter') e.preventDefault(); },
-    });
-    ui.cNameField = field('分身名稱', '（同事登入後會看到）', ui.cName);
-    ui.cAvatarBox = el('div');
-    ui.cAvatarField = field('頭像', '（之後也可以換）', ui.cAvatarBox);
-    ui.cAvatarField.hidden = !hasAvatars();
-    ui.cTree = el('div', { class: 'gpn-clone-tree', role: 'tree' });
-    ui.cCount = el('div', { class: 'gpn-note' });
-    ui.cGo = el('button', { class: 'gpn-btn gpn-btn--save', type: 'button', onclick: onPickGo });
-    ui.cPick = el('div', { class: 'gpn-clone-pick', hidden: '' },
-      ui.cNameField, ui.cAvatarField,
-      ui.cPickTitle,
-      el('div', { class: 'gpn-brow gpn-clone-all' },
-        el('button', { class: 'gpn-btn2', type: 'button', onclick: () => pickAll(true) }, '全部勾選'),
-        el('button', { class: 'gpn-btn2', type: 'button', onclick: () => pickAll(false) }, '全部不勾')),
-      ui.cTree, ui.cCount,
-      el('div', { class: 'gpn-brow gpn-clone-go' },
-        el('button', { class: 'gpn-btn2', type: 'button', onclick: closePick }, '取消'), ui.cGo));
-
-    ui.cOwner = el('div', {},
-      el('p', { class: 'gpn-lede', text:
+    /* 標題右邊的 i：分身是什麼（點一下打開說明，點別的地方就收起來） */
+    ui.cInfo = el('div', { class: 'gpn-info-pop', role: 'note', hidden: '' },
+      el('p', { text:
         '分身是一個不用 Google 帳號的小帳號：勾選要給的書籤、資料夾、提示詞，複製一份成分身，' +
         '會拿到一組 16 碼的分身代號。同事在登入畫面輸入代號，就能使用、新增、修改、刪除，就跟一般帳號一樣。' }),
-      el('div', { class: 'gpn-note', text:
-        '分身的提示詞存在你的 Google 雲端硬碟（一個分身一個檔案），你隨時可以「進入分身」幫忙編輯，或把它銷毀。' +
-        '分身和你的筆記本各自獨立，你之後改了自己的，可以按「再推一次」送過去。建立滿一年會自動銷毀。' }),
-      ui.cNew, ui.cMsg, ui.cDone, ui.cPick, ui.cList);
+      el('p', { text:
+        '分身的提示詞存在你的 Google 雲端硬碟（一個分身一個檔案），你隨時可以「進入分身」幫忙編輯。' +
+        '分身和你的筆記本各自獨立，你之後改了自己的，可以按「再推一次」送過去。' }),
+      el('p', { text:
+        '建立滿一年會停用（同事登入不了，資料都還在）：你可以延長期限、或把它銷毀；停用期間你自己照樣可以進入分身。' }));
+    ui.cInfoBtn = el('button', {
+      class: 'gpn-info-btn', type: 'button', html: ICON_INFO, title: '分身是什麼',
+      'aria-label': '分身是什麼', 'aria-expanded': 'false', onclick: () => toggleCloneInfo(),
+    });
+
+    ui.cOwner = el('div', {}, ui.cNew, ui.cMsg, ui.cDone, ui.cList);
 
     /* 用分身登入時 */
     ui.cMineName = el('div', { class: 'gpn-account-email' });
     ui.cMineNote = el('div', { class: 'gpn-note' });
     ui.cMineBack = el('button', { class: 'gpn-btn2 gpn-btn--block', type: 'button', hidden: '', onclick: onLeaveClone });
     ui.cMineFace = el('span', { class: 'gpn-account-avatar' });
-    ui.cMineAvatars = el('div');
+    ui.cMinePicker = hasAvatars() ? buildAvatarPicker(onMyAvatar) : null;
     ui.cMine = el('div', { hidden: '' },
       el('div', { class: 'gpn-account-card' },
         ui.cMineFace,
         el('div', { class: 'gpn-account-info' }, el('div', { class: 'gpn-note', text: '你現在用的是分身' }), ui.cMineName)),
       ui.cMineNote, ui.cMineBack,
-      hasAvatars() ? el('div', { class: 'gpn-field gpn-clone-myavatar' },
-        el('div', { class: 'gpn-label' }, '頭像', el('span', { text: '　點一下就換（每台電腦都會跟著換）' })), ui.cMineAvatars) : null);
+      ui.cMinePicker ? field('頭像', '（每台電腦都會跟著換）', ui.cMinePicker.node) : null);
+    if (ui.cMinePicker) ui.cMinePicker.node.parentElement.classList.add('gpn-clone-myavatar');
 
-    return el('section', { class: 'gpn-section', 'data-section': 'clones' },
-      el('h3', { text: '分身' }), ui.cOwner, ui.cMine);
+    buildPickLayer();
+
+    const sec = el('section', { class: 'gpn-section', 'data-section': 'clones' },
+      el('div', { class: 'gpn-section-head' }, el('h3', { text: '分身' }), ui.cInfoBtn, ui.cInfo),
+      ui.cOwner, ui.cMine);
+    // 說明打開時，點說明以外的地方就收起來
+    sec.addEventListener('mousedown', (e) => {
+      const path = e.composedPath();
+      if (!ui.cInfo.hidden && !path.includes(ui.cInfo) && !path.includes(ui.cInfoBtn)) toggleCloneInfo(false);
+    });
+    return sec;
+  }
+
+  function toggleCloneInfo(open = ui.cInfo.hidden) {
+    if (!ui.cInfo) return;
+    ui.cInfo.hidden = !open;
+    ui.cInfoBtn.setAttribute('aria-expanded', String(open));
+    ui.cInfoBtn.classList.toggle('is-on', open);
   }
 
   /** 打開分身頁：建立的人就去雲端硬碟拿最新的清單 */
   function openClones() {
     disarmCloneDelete();
     cAvatarOpen = '';
-    if (!cPick) ui.cDone.hidden = true;
+    cExtendOpen = '';
+    ui.cDone.hidden = true;
     refreshClones();
     if (cloudState.signedIn && !cloudState.clone) loadClones();
   }
@@ -3291,16 +3319,16 @@ function gpnCreatePanel(opts) {
     if (c) {
       ui.cMineName.textContent = c.label || '分身';
       ui.cMineNote.textContent = `由 ${c.ownerEmail || '建立的人'} 建立和管理，提示詞存在他的 Google 雲端硬碟。` +
-        `到期日 ${ymd(c.expiresAt)}，到期後會自動銷毀，想留著的話先到「備份」下載一份。`;
+        (cloneExpired(c)
+          ? `已經在 ${ymd(c.expiresAt)} 到期，停用中（只有建立的人自己進得來）。`
+          : `到期日 ${ymd(c.expiresAt)}，到期後會停用（建立的人可以延長），想留一份的話先到「備份」下載。`);
       ui.cMineBack.hidden = !st.owner;
       if (!leaveArmed) ui.cMineBack.textContent = `回到我的帳號（${st.owner}）`;
       paintFace(ui.cMineFace, st);
-      if (hasAvatars()) ui.cMineAvatars.replaceChildren(avatarGrid(c.avatar, onMyAvatar));
+      ui.cMinePicker?.set(c.avatar);
       return;
     }
     if (!st.signedIn) { clones = null; return; }
-    ui.cNew.hidden = !!cPick;
-    ui.cList.hidden = !!cPick;
     if (!clones) { ui.cList.replaceChildren(); return; }
     ui.cList.replaceChildren(
       el('div', { class: 'gpn-label gpn-clone-head', text: clones.length ? `建立過的分身（${clones.length}）` : '還沒有建立分身' }),
@@ -3327,6 +3355,32 @@ function gpnCreatePanel(opts) {
       ]));
   }
 
+  /**
+   * 頭像：和書籤顏色一樣，平常只有一顆小按鈕（頭像＋名稱），點了才展開全部，選好就收起來。
+   * 回傳 { node, set(id), get(), close() }；onPick(id)
+   */
+  function buildAvatarPicker(onPick) {
+    const face = el('span', { class: 'gpn-avatar-mini' });
+    const name = el('span', { class: 'gpn-color-name' });
+    const btn = el('button', {
+      class: 'gpn-color-btn gpn-avatar-btn', type: 'button', 'aria-expanded': 'false', onclick: () => toggle(),
+    }, face, name, el('span', { class: 'gpn-color-caret', 'aria-hidden': 'true' }));
+    const box = el('div', { class: 'gpn-avatar-drop', hidden: '' });
+    let current = '';
+    function toggle(open = box.hidden) {
+      box.hidden = !open;
+      btn.setAttribute('aria-expanded', String(open));
+      box.replaceChildren(open ? avatarGrid(current, (id) => { set(id); close(); onPick(id); }) : '');
+    }
+    const close = () => toggle(false);
+    function set(id) {
+      current = id || '';
+      face.replaceChildren(avatarFace(current));
+      name.textContent = GPN_AVATARS.find((a) => a.id === current)?.label || '選一個頭像';
+    }
+    return { node: el('div', { class: 'gpn-color' }, btn, box), set, get: () => current, close };
+  }
+
   /** 建立的人幫某個分身換頭像：畫面先換，存不進去再換回來 */
   async function onCloneAvatar(c, id) {
     const old = c.avatar;
@@ -3345,45 +3399,84 @@ function gpnCreatePanel(opts) {
   async function onMyAvatar(id) {
     if (cloudState.clone?.avatar === id) return;
     const r = await cloud.setCloneAvatar(null, id);
-    if (!r || !r.ok) { toast(r?.error || '頭像沒有換成功，請稍後再試', true); return; }
+    if (!r || !r.ok) { toast(r?.error || '頭像沒有換成功，請稍後再試', true); refreshClones(); return; }
     refreshCloud(await cloud.getState());
   }
 
   function cloneCard(c) {
     const armed = cDelArmed === c.id;
     const petOpen = cAvatarOpen === c.id && hasAvatars();
-    return el('div', { class: 'gpn-clone-card' },
+    const off = cloneExpired(c);
+    const extending = cExtendOpen === c.id;
+    let dateInput = null;
+    if (extending) {
+      // 預設延長一年（從今天或原本的到期日，看哪個比較晚）
+      const from = Math.max(Date.now(), c.expiresAt || 0);
+      dateInput = el('input', {
+        class: 'gpn-input gpn-clone-date', type: 'date', 'aria-label': '新的到期日',
+        min: isoDay(Date.now() + 86400000), max: isoDay(Date.now() + 10 * 365 * 86400000),
+      });
+      dateInput.value = isoDay(from + 365 * 86400000);
+    }
+    return el('div', { class: 'gpn-clone-card' + (off ? ' is-off' : '') },
       el('div', { class: 'gpn-clone-top' },
         el('button', {
           class: 'gpn-clone-face', type: 'button', title: '換頭像', 'aria-label': `換「${c.label}」的頭像`,
           'aria-expanded': String(petOpen), disabled: hasAvatars() ? null : '',
           onclick: () => { cAvatarOpen = petOpen ? '' : c.id; refreshClones(); },
         }, avatarFace(c.avatar)),
-        el('div', { class: 'gpn-clone-name', text: c.label || '分身' })),
+        el('div', { class: 'gpn-clone-name', text: c.label || '分身' }),
+        off ? el('span', { class: 'gpn-clone-off', text: '已停用' }) : null),
       petOpen ? avatarGrid(c.avatar, (id) => onCloneAvatar(c, id)) : null,
       el('div', { class: 'gpn-clone-id' },
         el('code', { text: gpnFormatCloneId(c.id) }),
         el('button', { class: 'gpn-link gpn-clone-copy', type: 'button', onclick: () => copyInvite(c) }, '複製代號和網址')),
-      el('div', { class: 'gpn-note', text: `建立 ${ymd(c.createdAt)}　・　到期 ${ymd(c.expiresAt)}` +
+      el('div', { class: 'gpn-note', text: `建立 ${ymd(c.createdAt)}　・　` +
+        (off ? `${ymd(c.expiresAt)} 到期，停用中（同事登入不了，你自己還進得去）` : `到期 ${ymd(c.expiresAt)}`) +
         (c.modifiedAt ? `　・　最後修改 ${ago(c.modifiedAt)}` : '') }),
+      extending ? el('div', { class: 'gpn-clone-extend' },
+        el('span', { class: 'gpn-note', text: '新的到期日' }), dateInput,
+        el('button', { class: 'gpn-btn2', type: 'button', onclick: () => onExtendClone(c, dateInput.value) }, '確定'),
+        el('button', { class: 'gpn-btn2', type: 'button', onclick: () => { cExtendOpen = ''; refreshClones(); } }, '取消')) : null,
       el('div', { class: 'gpn-brow' },
         el('button', { class: 'gpn-btn2', type: 'button', onclick: () => onEnterClone(c) }, '進入分身'),
         el('button', { class: 'gpn-btn2', type: 'button', onclick: () => openPick('push', c) }, '再推一次'),
+        el('button', {
+          class: 'gpn-btn2' + (off ? ' gpn-clone-renew' : ''), type: 'button',
+          onclick: () => { cExtendOpen = extending ? '' : c.id; refreshClones(); },
+          title: off ? '延長期限，重新啟用這個分身' : '改到期日',
+        }, '延長期限'),
         el('button', {
           class: 'gpn-btn2 gpn-clone-del' + (armed ? ' gpn-btn2--danger' : ''), type: 'button', onclick: () => onDestroyClone(c),
         }, armed ? '確定銷毀？再按一次' : '銷毀')));
   }
 
+  /** 延長期限到選的那一天（那天結束才到期） */
+  async function onExtendClone(c, day) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day || '');
+    if (!m) { toast('請選一個日期', true); return; }
+    const at = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 23, 59, 59).getTime();
+    setCloneMsg('延長中…', 'ok');
+    const r = await cloud.extendClone(c, at);
+    if (!r || !r.ok) { setCloneMsg(r?.error || '沒辦法延長，請稍後再試'); return; }
+    setCloneMsg('');
+    const was = cloneExpired(c);
+    c.expiresAt = r.expiresAt;
+    cExtendOpen = '';
+    refreshClones();
+    toast(was ? `分身「${c.label}」重新啟用了，到期日改成 ${ymd(at)}` : `分身「${c.label}」的到期日改成 ${ymd(at)}`);
+  }
+
   /** 給同事的一段話：網址＋代號，貼到 LINE、Email 就能用 */
   async function copyInvite(c) {
     const text = `罐頭P 分身「${c.label}」\n網址：${GPN_CLOUD.site}\n分身代號：${gpnFormatCloneId(c.id)}\n` +
-      '打開網址，在登入畫面選「用分身代號登入」，輸入上面的代號就能使用。';
+      '打開網址，在登入畫面按最下面的「選擇其他登入方式」，輸入上面的代號就能使用。';
     toast((await gpnShareCopy(text)) ? '已複製代號和網址，貼給同事就好' : '複製失敗，請手動選取代號', false);
   }
 
   async function onEnterClone(c) {
     setCloneMsg('切換中…', 'ok');
-    const r = await cloud.enterClone(c.id);
+    const r = await cloud.enterClone(c);
     if (!r || !r.ok) { setCloneMsg(r?.error || '沒辦法進入分身，請稍後再試'); return; }
     setCloneMsg('');
     clones = null;
@@ -3440,9 +3533,55 @@ function gpnCreatePanel(opts) {
     toast(`已銷毀分身「${c.label}」，這組代號不能再登入了`);
   }
 
-  /* ---- 勾選要放進分身的書籤、資料夾、提示詞 ----
+  /* ---- 勾選要放進分身的書籤、資料夾、提示詞（另外一個視窗）----
      勾書籤＝裡面全部；勾資料夾＝裡面全部；也可以只勾幾則。一部分有勾的顯示成「—」。
-     資料夾預設收起來（提示詞很多時才看得完），點名稱左邊的三角形展開。 */
+     書籤、資料夾預設都收起來（提示詞很多時才看得完），點左邊的三角形展開。
+     只有核取方塊能勾（點文字不會勾到），三角形負責展開。
+     右上角可以放大成整個畫面，提示詞很多時比較好找。 */
+
+  function buildPickLayer() {
+    ui.cPickTitle = el('h2', { class: 'gpn-clone-dtitle' });
+    ui.cZoom = el('button', {
+      class: 'gpn-round-btn', type: 'button', html: ICON_EXPAND, title: '放大', 'aria-label': '放大',
+      onclick: () => zoomPick(),
+    });
+    ui.cName = el('input', {
+      class: 'gpn-input', type: 'text', maxlength: '30', placeholder: '例如：業務組',
+      oninput: () => ui.cName.classList.remove('is-bad'),
+      onkeydown: (e) => { if (e.key === 'Enter') e.preventDefault(); },
+    });
+    ui.cNameField = field('分身名稱', '（同事登入後會看到）', ui.cName);
+    ui.cAvatarPicker = hasAvatars() ? buildAvatarPicker((id) => { if (cPick) cPick.avatar = id; }) : null;
+    ui.cAvatarField = ui.cAvatarPicker ? field('頭像', '（之後也可以換）', ui.cAvatarPicker.node) : el('div', { hidden: '' });
+    ui.cTreeLabel = el('div', { class: 'gpn-label' });
+    ui.cTree = el('div', { class: 'gpn-clone-tree', role: 'tree' });
+    ui.cCount = el('div', { class: 'gpn-note gpn-clone-count' });
+    ui.cPickMsg = el('div', { class: 'gpn-note gpn-note--status is-bad', role: 'status' });
+    ui.cGo = el('button', { class: 'gpn-btn gpn-btn--save', type: 'button', onclick: onPickGo });
+    ui.cPickDialog = el('div', { class: 'gpn-dialog gpn-clone-dialog', onmousedown: stop },
+      el('div', { class: 'gpn-clone-dhead' }, ui.cPickTitle, ui.cZoom),
+      el('div', { class: 'gpn-clone-dbody' },
+        ui.cNameField, ui.cAvatarField,
+        el('div', { class: 'gpn-clone-treehead' }, ui.cTreeLabel,
+          el('div', { class: 'gpn-clone-all' },
+            el('button', { class: 'gpn-link', type: 'button', onclick: () => pickAll(true) }, '全部勾選'),
+            el('button', { class: 'gpn-link', type: 'button', onclick: () => pickAll(false) }, '全部不勾'),
+            el('button', { class: 'gpn-link', type: 'button', onclick: () => openAll(true) }, '全部展開'),
+            el('button', { class: 'gpn-link', type: 'button', onclick: () => openAll(false) }, '全部收起'))),
+        ui.cTree),
+      el('div', { class: 'gpn-clone-dfoot' },
+        ui.cCount, ui.cPickMsg,
+        el('div', { class: 'gpn-clone-dbtns' },
+          el('button', { class: 'gpn-btn gpn-btn--cancel', type: 'button', onclick: closePick }, '取消'), ui.cGo)));
+    ui.cPickLayer = el('div', { class: 'gpn-edit-layer gpn-clone-layer' }, ui.cPickDialog);
+  }
+
+  function zoomPick(on = !ui.cPickDialog.classList.contains('is-zoomed')) {
+    ui.cPickDialog.classList.toggle('is-zoomed', on);
+    ui.cZoom.innerHTML = on ? ICON_SHRINK : ICON_EXPAND;
+    ui.cZoom.title = on ? '縮小' : '放大';
+    ui.cZoom.setAttribute('aria-label', ui.cZoom.title);
+  }
 
   async function openPick(mode, clone = null) {
     disarmCloneDelete();
@@ -3468,39 +3607,43 @@ function gpnCreatePanel(opts) {
         for (const l of gpnListsOf(t)) {
           for (const it of l.items) {
             const o = theirs.get(it.id);
-            if (o && (o.title !== it.title || o.content !== it.content)) pick.diff.add(it.id);
+            if (o && (o.title !== it.title || o.content !== it.content)) {
+              pick.diff.add(it.id);
+              // 有不一樣的，就把它所在的書籤、資料夾先展開，看得到是哪幾則
+              pick.open.add(t.id);
+              if (l !== t) pick.open.add(l.id);
+            }
           }
         }
       }
-      // 有不一樣的，就把那幾個資料夾先展開，看得到是哪幾則
-      for (const t of data.tabs) for (const f of t.folders || []) if (f.items.some((it) => pick.diff.has(it.id))) pick.open.add(f.id);
       // 只留我這邊也有的
       const mine = new Set();
       for (const t of data.tabs) { mine.add(t.id); for (const l of gpnListsOf(t)) { mine.add(l.id); for (const it of l.items) mine.add(it.id); } }
       for (const set of [pick.tabs, pick.folders, pick.items]) for (const id of [...set]) if (!mine.has(id)) set.delete(id);
     }
+    if (data.tabs.length === 1) pick.open.add(data.tabs[0].id);    // 只有一個書籤就直接展開
     if (hasAvatars()) pick.avatar = gpnRandomAvatar();
     cPick = pick;
     ui.cName.value = '';
+    ui.cName.classList.remove('is-bad');
     ui.cNameField.hidden = mode !== 'create';
     ui.cAvatarField.hidden = mode !== 'create' || !hasAvatars();
-    if (mode === 'create' && hasAvatars()) paintAvatarPick();
-    ui.cPickTitle.textContent = mode === 'create' ? '要放進分身的提示詞' : `要推進分身「${clone.label}」的提示詞`;
+    if (ui.cAvatarPicker) { ui.cAvatarPicker.set(pick.avatar); ui.cAvatarPicker.close(); }
+    ui.cPickTitle.textContent = mode === 'create' ? '建立分身' : `再推一次：分身「${clone.label}」`;
+    ui.cTreeLabel.textContent = mode === 'create' ? '要放進分身的提示詞' : '要推過去的提示詞';
     ui.cGo.textContent = mode === 'create' ? '建立分身' : '推過去';
-    ui.cPick.hidden = false;
+    ui.cGo.disabled = false;
+    ui.cPickMsg.textContent = '';
+    zoomPick(false);
     paintPick();
-    refreshClones();
+    ui.cTree.scrollTop = 0;
+    showLayer(ui.cPickLayer);
     if (mode === 'create') setTimeout(() => ui.cName.focus(), 30);
-  }
-
-  function paintAvatarPick() {
-    ui.cAvatarBox.replaceChildren(avatarGrid(cPick.avatar, (id) => { cPick.avatar = id; paintAvatarPick(); }));
   }
 
   function closePick() {
     cPick = null;
-    ui.cPick.hidden = true;
-    refreshClones();
+    if (ui.cPickLayer) hideLayer(ui.cPickLayer);
   }
 
   /** 這個書籤、資料夾裡的提示詞勾了幾則：'all' | 'some' | 'none'（空的看自己有沒有勾） */
@@ -3521,10 +3664,17 @@ function gpnCreatePanel(opts) {
     paintPick();
   }
 
+  function openAll(on) {
+    cPick.open = new Set();
+    if (on) for (const t of data.tabs) { cPick.open.add(t.id); for (const f of t.folders || []) cPick.open.add(f.id); }
+    paintPick();
+  }
+
   function paintPick() {
     if (!cPick) return;
+    const keep = ui.cTree.scrollTop;
     const box = (state, onchange, label) => {
-      const input = el('input', { type: 'checkbox', 'aria-label': label, onchange });
+      const input = el('input', { type: 'checkbox', class: 'gpn-clone-check', 'aria-label': label, onchange });
       input.checked = state === 'all';
       input.indeterminate = state === 'some';
       return input;
@@ -3533,13 +3683,24 @@ function gpnCreatePanel(opts) {
     const setMany = (on, tabId, lists) => {
       if (tabId) cPick.tabs[on ? 'add' : 'delete'](tabId);
       for (const l of lists) {
-        if (l.id && l !== tabById(tabId)) cPick.folders[on ? 'add' : 'delete'](l.id);
+        if (l.id && l.id !== tabId) cPick.folders[on ? 'add' : 'delete'](l.id);
         for (const it of l.items) cPick.items[on ? 'add' : 'delete'](it.id);
       }
       paintPick();
     };
-    const itemRow = (it, deep) => el('label', { class: 'gpn-clone-row gpn-clone-row--item' + (deep ? ' gpn-clone-row--deep' : '') },
-      box(cPick.items.has(it.id) ? 'all' : 'none', () => { toggle(cPick.items, it.id); paintPick(); }, it.title),
+    /** 展開／收起的三角形（裡面是空的就不能按） */
+    const caret = (id, label, has) => {
+      const open = cPick.open.has(id);
+      return el('button', {
+        class: 'gpn-clone-caret' + (open ? ' is-open' : ''), type: 'button', 'aria-expanded': String(open),
+        'aria-label': open ? `收起「${label}」` : `展開「${label}」`, disabled: has ? null : '',
+        onclick: () => { toggle(cPick.open, id); paintPick(); },
+      }, '▸');
+    };
+    const count = (ids) => el('span', { class: 'gpn-clone-n', text: `${ids.filter((id) => cPick.items.has(id)).length}/${ids.length}` });
+    const itemRow = (it, deep) => el('div', { class: 'gpn-clone-row gpn-clone-row--item' + (deep ? ' gpn-clone-row--deep' : '') },
+      el('span', { class: 'gpn-clone-caret-space' }),
+      box(cPick.items.has(it.id) ? 'all' : 'none', () => { toggle(cPick.items, it.id); paintPick(); }, it.title || '提示詞'),
       el('span', { class: 'gpn-clone-text', text: it.title || it.content.slice(0, 40) || '（沒有標題）' }),
       cPick.diff.has(it.id) ? el('span', {
         class: 'gpn-clone-diff', text: '分身裡的不一樣',
@@ -3551,11 +3712,14 @@ function gpnCreatePanel(opts) {
       const lists = gpnListsOf(t);
       const ids = lists.flatMap((l) => l.items.map((i) => i.id));
       const ts = pickState(ids, t.id, cPick.tabs);
-      rows.push(el('label', { class: 'gpn-clone-row gpn-clone-row--tab' },
+      const inside = t.folders ? t.folders.length : t.items.length;
+      rows.push(el('div', { class: 'gpn-clone-row gpn-clone-row--tab' },
+        caret(t.id, t.label, inside > 0),
         box(ts, () => setMany(ts !== 'all', t.id, lists), t.label),
         el('span', { class: 'gpn-clone-dot', 'data-color': t.color }),
         el('span', { class: 'gpn-clone-text', text: t.label }),
-        el('span', { class: 'gpn-clone-n', text: `${ids.filter((id) => cPick.items.has(id)).length}/${ids.length}` })));
+        count(ids)));
+      if (!cPick.open.has(t.id)) continue;
       if (!t.folders) {
         for (const it of t.items) rows.push(itemRow(it, false));
         continue;
@@ -3563,21 +3727,16 @@ function gpnCreatePanel(opts) {
       for (const f of t.folders) {
         const fids = f.items.map((i) => i.id);
         const fs = pickState(fids, f.id, cPick.folders);
-        const open = cPick.open.has(f.id);
         rows.push(el('div', { class: 'gpn-clone-row gpn-clone-row--folder' },
-          el('button', {
-            class: 'gpn-clone-caret' + (open ? ' is-open' : ''), type: 'button', 'aria-expanded': String(open),
-            'aria-label': open ? `收起「${f.label}」` : `展開「${f.label}」`, disabled: f.items.length ? null : '',
-            onclick: () => { toggle(cPick.open, f.id); paintPick(); },
-          }, '▸'),
-          el('label', { class: 'gpn-clone-folder' },
-            box(fs, () => setMany(fs !== 'all', null, [f]), f.label),
-            el('span', { class: 'gpn-clone-text', text: f.label }),
-            el('span', { class: 'gpn-clone-n', text: `${fids.filter((id) => cPick.items.has(id)).length}/${fids.length}` }))));
-        if (open) for (const it of f.items) rows.push(itemRow(it, true));
+          caret(f.id, f.label, f.items.length > 0),
+          box(fs, () => setMany(fs !== 'all', null, [f]), f.label),
+          el('span', { class: 'gpn-clone-text', text: f.label }),
+          count(fids)));
+        if (cPick.open.has(f.id)) for (const it of f.items) rows.push(itemRow(it, true));
       }
     }
     ui.cTree.replaceChildren(...rows);
+    ui.cTree.scrollTop = keep;
     const n = cPick.items.size;
     const over = [...cPick.diff].filter((id) => cPick.items.has(id)).length;
     ui.cCount.textContent = !n ? '還沒有勾選任何提示詞'
@@ -3589,29 +3748,30 @@ function gpnCreatePanel(opts) {
 
   async function onPickGo() {
     if (!cPick) return;
+    ui.cPickMsg.textContent = '';
+    if (!cPick.items.size && !cPick.tabs.size && !cPick.folders.size) { ui.cPickMsg.textContent = '請先勾選要放進分身的提示詞'; return; }
     const sub = gpnCloneSubset(data, cPick);
-    if (!cPick.items.size && !cPick.tabs.size && !cPick.folders.size) { toast('請先勾選要放進分身的提示詞', true); return; }
-    ui.cGo.disabled = true;
     if (cPick.mode === 'create') {
       const label = ui.cName.value.trim();
-      if (!label) { ui.cGo.disabled = false; ui.cName.classList.add('is-bad'); ui.cName.focus(); return; }
-      ui.cName.classList.remove('is-bad');
-      setCloneMsg('建立中…', 'ok');
-      const r = await cloud.createClone(label, sub, cPick.avatar || '');
+      if (!label) { ui.cName.classList.add('is-bad'); ui.cName.focus(); ui.cPickMsg.textContent = '請幫分身取個名字'; return; }
+      ui.cGo.disabled = true;
+      ui.cGo.textContent = '建立中…';
+      const r = await cloud.createClone(label, sub, cPick?.avatar || '');
       ui.cGo.disabled = false;
-      if (!r || !r.ok) { setCloneMsg(r?.error || '沒辦法建立分身，請稍後再試'); return; }
-      setCloneMsg('');
+      ui.cGo.textContent = '建立分身';
+      if (!r || !r.ok) { ui.cPickMsg.textContent = r?.error || '沒辦法建立分身，請稍後再試'; return; }
       closePick();
       clones = [r.clone, ...(clones || [])];
       refreshClones();
       showCloneDone(r.clone, gpnCountItems(sub));
     } else {
       const c = cPick.clone;
-      setCloneMsg('推送中…', 'ok');
+      ui.cGo.disabled = true;
+      ui.cGo.textContent = '推送中…';
       const r = await cloud.pushClone(c.fileId, sub);
       ui.cGo.disabled = false;
-      if (!r || !r.ok) { setCloneMsg(r?.error || '沒辦法推過去，請稍後再試'); return; }
-      setCloneMsg('');
+      ui.cGo.textContent = '推過去';
+      if (!r || !r.ok) { ui.cPickMsg.textContent = r?.error || '沒辦法推過去，請稍後再試'; return; }
       closePick();
       toast(r.added || r.updated
         ? `已推進分身「${c.label}」：新增 ${r.added} 則、更新 ${r.updated} 則`
@@ -3627,7 +3787,7 @@ function gpnCreatePanel(opts) {
       el('div', { class: 'gpn-brow' },
         el('button', { class: 'gpn-btn2', type: 'button', onclick: () => copyInvite(c) }, '複製代號和網址')),
       el('div', { class: 'gpn-note', text:
-        `把代號和網址給同事：打開 ${GPN_CLOUD.site}，在登入畫面選「用分身代號登入」，輸入代號就能使用。` +
+        `把代號和網址給同事：打開 ${GPN_CLOUD.site}，在登入畫面按「選擇其他登入方式」，輸入代號就能使用。` +
         '代號就像密碼，拿到的人都能使用、修改這個分身；不想給了就按「銷毀」。下面的清單隨時看得到代號。' }));
     ui.cDone.hidden = false;
   }
@@ -4261,8 +4421,12 @@ function gpnCreatePanel(opts) {
       btn.focus();
     } else if (searchQ !== null && !anyLayerOpen()) {
       exitSearch();
+    } else if (ui.cPickLayer && layerOpen(ui.cPickLayer)) {
+      if (ui.cAvatarPicker && ui.cAvatarPicker.node.querySelector('[aria-expanded="true"]')) ui.cAvatarPicker.close();
+      else closePick();
     } else if (layerOpen(ui.settingsLayer)) {
-      if (!ui.sConfirm.hidden) hideFolderConfirm();
+      if (ui.cInfo && !ui.cInfo.hidden) toggleCloneInfo(false);
+      else if (!ui.sConfirm.hidden) hideFolderConfirm();
       else closeSettings();
     } else if (layerOpen(ui.folderLayer)) {
       closeFolderEditor();
