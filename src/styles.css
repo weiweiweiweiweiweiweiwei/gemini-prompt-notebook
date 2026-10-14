@@ -1082,6 +1082,7 @@ button { cursor: pointer; }
 .gpn-menu-tile--wide { grid-column: 1 / -1; height: 48px; }
 .gpn-menu-tile--wide svg { width: 26px; height: 26px; }
 .gpn-menu-tile--del { color: var(--error); border-color: color-mix(in srgb, var(--error) 60%, transparent); }
+.gpn-menu-tile--del.is-confirm { background: #e5484d; border-color: #e5484d; color: #fff; font-size: 14px; font-weight: 700; }
 .gpn-menu-tile--del:hover { background: color-mix(in srgb, var(--error) 14%, transparent); border-color: var(--error); }
 
 /* 複製的那一下：把手、時間、標題、星號、鉛筆「全部」一起淡出，只留 "Copied"。
@@ -1855,18 +1856,18 @@ span.gpn-face-art > svg { display: block; width: 100%; height: 100%; }
 /* 卡片右上角的「更多」（圓圈裡三個點）和它打開的小選單 */
 .gpn-clone-more {
   flex: none;
-  width: 36px; height: 36px;
+  width: 40px; height: 40px;
   margin-left: auto;
-  padding: 7px;
-  border: 1.5px solid var(--outline-strong);
-  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  border: 0;
+  border-radius: 12px;
   background: none;
   color: var(--text-mute);
   cursor: pointer;
-  transition: background-color .14s ease, color .14s ease, border-color .14s ease;
+  transition: background-color .16s ease, color .16s ease;
 }
-.gpn-clone-more svg { width: 100%; height: 100%; display: block; fill: currentColor; }
-.gpn-clone-more:hover, .gpn-clone-more.is-on { background: var(--hover); color: var(--text); border-color: var(--text-mute); }
+.gpn-clone-more svg { width: 22px; height: 22px; display: block; fill: currentColor; }
+.gpn-clone-more:hover, .gpn-clone-more.is-on { background: var(--hover); color: var(--text); }
 .gpn-clone-more:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 .gpn-clone-menu {
   position: absolute;
@@ -1914,14 +1915,6 @@ span.gpn-face-art > svg { display: block; width: 100%; height: 100%; }
 .gpn-clone-dialog.is-step1 { width: 560px; height: auto; }
 .gpn-clone-dhead { flex: none; display: flex; align-items: center; gap: 12px; padding: 22px 26px 12px; }
 .gpn-dialog .gpn-clone-dtitle { flex: 1; min-width: 0; padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gpn-clone-step {
-  flex: none;
-  padding: 3px 11px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--primary) 14%, transparent);
-  color: var(--primary);
-  font-size: 13px; font-weight: 700; letter-spacing: .5px;
-}
 .gpn-clone-step1 { padding-bottom: 6px; }
 .gpn-clone-step2 { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .gpn-clone-step1[hidden], .gpn-clone-step2[hidden] { display: none; }
@@ -1952,7 +1945,7 @@ span.gpn-face-art > svg { display: block; width: 100%; height: 100%; }
   background: var(--surface-input);
   scrollbar-width: thin;
 }
-.gpn-clone-dfoot { flex: none; padding: 14px 26px 20px; border-top: 1px solid var(--glass-line); }
+.gpn-clone-dfoot { flex: none; padding: 14px 26px 20px; }
 .gpn-clone-dfoot .gpn-note--status { margin: 0 0 10px; }
 .gpn-clone-dbtns { display: flex; justify-content: flex-end; gap: 10px; }
 .gpn-clone-dbtns .gpn-btn { flex: 0 1 160px; min-width: 0; }
