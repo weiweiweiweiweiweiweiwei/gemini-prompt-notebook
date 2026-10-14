@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.30.1';
+const GPN_APP_VERSION = '4.30.2';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -1329,10 +1329,11 @@ function gpnCreatePanel(opts) {
   }
 
   /** grid：四格的那種（卡片的「⋯」）；不然是一行一行的清單 */
-  function openMenuWith(btn, nodes, grid = false) {
+  function openMenuWith(btn, nodes, grid = false, icons = false) {
     const card = btn.closest('.gpn-card');
     ui.menu.replaceChildren(...nodes);
     ui.menu.classList.toggle('is-grid', grid);
+    ui.menu.classList.toggle('is-icons', icons);
     menuFor = btn;
     btn.setAttribute('aria-expanded', 'true');
     card?.classList.add('has-menu');
@@ -1668,12 +1669,18 @@ function gpnCreatePanel(opts) {
     if (menuFor === btn) { closeCardMenu(); return; }
     closeCardMenu();
     sfx('click');
-    const del = menuEntry(ICON_DELETE, '永久刪除', '刪了就找不回來', () => {
-      const text = del.querySelector('.gpn-menu-text > span');
+    // 只有圖示（名稱在滑鼠提示）：上面還原、下面永久刪除（要按兩次）
+    const del = menuItemIcon(ICON_DELETE, '永久刪除（刪了就找不回來）', () => {
       if (!menuDelArmed) {
         menuDelArmed = true;
         del.classList.add('is-confirm');
-        text.textContent = '確定永久刪除？再按一次';
+        del.textContent = '確定？再按一次';
+        clearTimeout(menuDelTimer);
+        menuDelTimer = setTimeout(() => {
+          menuDelArmed = false;
+          del.classList.remove('is-confirm');
+          del.innerHTML = ICON_DELETE;
+        }, 4000);
         return;
       }
       closeCardMenu();
@@ -1685,10 +1692,18 @@ function gpnCreatePanel(opts) {
       toast(`已永久刪除「${r.title}」`);
     }, ' gpn-menu-item--del');
     openMenuWith(btn, [
-      menuEntry(ICON_RESTORE, '還原', '放回原本的書籤', () => { closeCardMenu(); restoreTrash([r.id]); }),
+      menuItemIcon(ICON_RESTORE, '還原（放回原本的書籤）', () => { closeCardMenu(); restoreTrash([r.id]); }),
       el('div', { class: 'gpn-menu-sep', role: 'separator' }),
       del,
-    ]);
+    ], false, true);
+  }
+
+  /** 只有圖示的一行（資源回收桶的 ⋮） */
+  function menuItemIcon(icon, label, onclick, cls = '') {
+    return el('button', {
+      class: 'gpn-menu-item gpn-menu-icononly' + cls, type: 'button', role: 'menuitem',
+      title: label, 'aria-label': label, html: icon, onclick,
+    });
   }
 
   /* ==========================================================================

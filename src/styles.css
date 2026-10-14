@@ -1056,6 +1056,13 @@ button { cursor: pointer; }
 .gpn-menu-item--del.is-confirm { background: var(--error); color: var(--surface); font-weight: 600; }
 .gpn-menu-item--del.is-confirm .gpn-menu-icon { color: var(--surface); }
 
+/* 資源回收桶的 ⋮：只有圖示，一樣高，窄一點；上面還原、下面永久刪除 */
+.gpn-menu.is-icons { min-width: 0; width: 116px; }
+.gpn-menu-icononly { justify-content: center; min-height: 62px; padding: 0; color: var(--text-mute); }
+.gpn-menu-icononly svg { width: 26px; height: 26px; display: block; fill: currentColor; }
+.gpn-menu-icononly.gpn-menu-item--del { color: var(--error); }
+.gpn-menu-icononly.is-confirm { font-size: 13.5px; }
+
 /* 卡片「⋯」的四格（4.28.0）：左上 Gemini、右上 ChatGPT、左下 拷貝、右下 分享，最下面一條刪除 */
 .gpn-menu.is-grid {
   min-width: 0;
