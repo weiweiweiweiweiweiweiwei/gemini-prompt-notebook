@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.30.2';
+const GPN_APP_VERSION = '4.30.3';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -167,7 +167,28 @@ function gpnCreatePanel(opts) {
     '<path d="M14 4.5 20.5 11 14 17.5"/><path d="M20.5 11h-8.5C7.4 11 4 14.3 4 19v.5"/></g></svg>';
   const ICON_TILE_DELETE =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
-    '<path d="M4 6.5h16M9.5 6.5V4.2h5v2.3M6.3 6.5l.9 13.1a1.6 1.6 0 0 0 1.6 1.4h6.4a1.6 1.6 0 0 0 1.6-1.4l.9-13.1M10 10.5v6.5M14 10.5v6.5"/></g></svg>';
+    '<g class="gpn-lid"><path d="M4 6.5h16M9.5 6.5V4.2h5v2.3"/></g>' +
+    '<path d="M6.3 6.5l.9 13.1a1.6 1.6 0 0 0 1.6 1.4h6.4a1.6 1.6 0 0 0 1.6-1.4l.9-13.1M10 10.5v6.5M14 10.5v6.5"/></g></svg>';
+  /**
+   * 刪除要按兩次（⋯ 選單的垃圾桶、資源回收桶的永久刪除）：第一下垃圾桶的蓋子掀開（.is-confirm 的 .gpn-lid 斜起來），
+   * 4 秒內再按一次才真的刪；沒按就蓋回去。回傳 true 表示這一下只是掀開蓋子。
+   */
+  function armTrash(btn, label) {
+    if (menuDelArmed) return false;
+    menuDelArmed = true;
+    btn.classList.add('is-confirm');
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    sfx('pick');
+    clearTimeout(menuDelTimer);
+    menuDelTimer = setTimeout(() => {
+      menuDelArmed = false;
+      btn.classList.remove('is-confirm');
+      btn.title = btn.dataset.label;
+      btn.setAttribute('aria-label', btn.dataset.label);
+    }, 4000);
+    return true;
+  }
   /** 信封：收到的分享（頭像換成它，右上角是還沒看過的數字） */
   const ICON_MAIL =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
@@ -1293,19 +1314,7 @@ function gpnCreatePanel(opts) {
       menuTile(ICON_TILE_COPY, '拷貝（在下面多一則一樣的）', () => { closeCardMenu(); duplicateItem(tabId, fid, item.id); }),
       menuTile(ICON_TILE_SHARE, '分享（給主人、分身）', () => { closeCardMenu(); openShare(item); }),
       menuTile(ICON_TILE_DELETE, '刪除（先放進資源回收桶）', (e) => {
-        const tile = e.currentTarget;
-        if (!menuDelArmed) {          // 第一下：變成「確定刪除？再按一次」
-          menuDelArmed = true;
-          tile.classList.add('is-confirm');
-          tile.textContent = '確定刪除？再按一次';
-          clearTimeout(menuDelTimer);
-          menuDelTimer = setTimeout(() => {
-            menuDelArmed = false;
-            tile.classList.remove('is-confirm');
-            tile.innerHTML = ICON_TILE_DELETE;
-          }, 4000);
-          return;
-        }
+        if (armTrash(e.currentTarget, '再按一次就刪除')) return;     // 第一下：蓋子掀開
         closeCardMenu();
         deleteItem(tabId, fid, item.id);
         toast(`已把「${item.title}」移到資源回收桶（設定 → 資源回收桶 可以還原）`, false, 4200);
@@ -1317,7 +1326,7 @@ function gpnCreatePanel(opts) {
   function menuTile(icon, label, onclick, cls = '') {
     return el('button', {
       class: 'gpn-menu-item gpn-menu-tile' + cls, type: 'button', role: 'menuitem',
-      title: label, 'aria-label': label, html: icon, onclick,
+      title: label, 'aria-label': label, 'data-label': label, html: icon, onclick,
     });
   }
 
@@ -1670,19 +1679,8 @@ function gpnCreatePanel(opts) {
     closeCardMenu();
     sfx('click');
     // 只有圖示（名稱在滑鼠提示）：上面還原、下面永久刪除（要按兩次）
-    const del = menuItemIcon(ICON_DELETE, '永久刪除（刪了就找不回來）', () => {
-      if (!menuDelArmed) {
-        menuDelArmed = true;
-        del.classList.add('is-confirm');
-        del.textContent = '確定？再按一次';
-        clearTimeout(menuDelTimer);
-        menuDelTimer = setTimeout(() => {
-          menuDelArmed = false;
-          del.classList.remove('is-confirm');
-          del.innerHTML = ICON_DELETE;
-        }, 4000);
-        return;
-      }
+    const del = menuItemIcon(ICON_TILE_DELETE, '永久刪除（刪了就找不回來）', () => {
+      if (armTrash(del, '再按一次就永久刪除')) return;           // 第一下：蓋子掀開
       closeCardMenu();
       data.trash = trashList().filter((x) => x.id !== r.id);
       trashSel.delete(r.id);
@@ -1702,7 +1700,7 @@ function gpnCreatePanel(opts) {
   function menuItemIcon(icon, label, onclick, cls = '') {
     return el('button', {
       class: 'gpn-menu-item gpn-menu-icononly' + cls, type: 'button', role: 'menuitem',
-      title: label, 'aria-label': label, html: icon, onclick,
+      title: label, 'aria-label': label, 'data-label': label, html: icon, onclick,
     });
   }
 

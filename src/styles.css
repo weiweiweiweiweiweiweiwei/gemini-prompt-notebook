@@ -1060,8 +1060,13 @@ button { cursor: pointer; }
 .gpn-menu.is-icons { min-width: 0; width: 116px; }
 .gpn-menu-icononly { justify-content: center; min-height: 62px; padding: 0; color: var(--text-mute); }
 .gpn-menu-icononly svg { width: 26px; height: 26px; display: block; fill: currentColor; }
-.gpn-menu-icononly.gpn-menu-item--del { color: var(--error); }
-.gpn-menu-icononly.is-confirm { font-size: 13.5px; }
+/* 永久刪除：和 ⋯ 選單的垃圾桶同一個樣子（紅框，滑鼠移上去淡紅底） */
+.gpn-menu-icononly.gpn-menu-item--del {
+  color: var(--error);
+  border: 1px solid color-mix(in srgb, var(--error) 60%, transparent);
+  border-radius: 14px;
+}
+.gpn-menu-icononly.gpn-menu-item--del:hover { background: color-mix(in srgb, var(--error) 14%, transparent); border-color: var(--error); }
 
 /* 卡片「⋯」的四格（4.28.0）：左上 Gemini、右上 ChatGPT、左下 拷貝、右下 分享，最下面一條刪除 */
 .gpn-menu.is-grid {
@@ -1089,7 +1094,17 @@ button { cursor: pointer; }
 .gpn-menu-tile--wide { grid-column: 1 / -1; height: 48px; }
 .gpn-menu-tile--wide svg { width: 26px; height: 26px; }
 .gpn-menu-tile--del { color: var(--error); border-color: color-mix(in srgb, var(--error) 60%, transparent); }
-.gpn-menu-tile--del.is-confirm { background: #e5484d; border-color: #e5484d; color: #fff; font-size: 14px; font-weight: 700; }
+/* 刪除按兩次：第一下垃圾桶蓋子掀開（斜起來），底色變深一點；不用文字 */
+.gpn-menu-tile--del.is-confirm,
+.gpn-menu-icononly.gpn-menu-item--del.is-confirm,
+.gpn-menu-icononly.gpn-menu-item--del.is-confirm:hover {
+  background: color-mix(in srgb, var(--error) 22%, transparent);
+  border-color: var(--error);
+  color: var(--error);
+  font-weight: inherit;
+}
+.gpn-lid { transform-box: view-box; transform-origin: 4px 6.5px; transition: transform .22s cubic-bezier(.3, 1.6, .5, 1); }
+.is-confirm .gpn-lid { transform: translate(-1px, -2.6px) rotate(-34deg); }
 .gpn-menu-tile--del:hover { background: color-mix(in srgb, var(--error) 14%, transparent); border-color: var(--error); }
 
 /* 複製的那一下：把手、時間、標題、星號、鉛筆「全部」一起淡出，只留 "Copied"。
