@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.29.0';
+const GPN_APP_VERSION = '4.30.0';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -103,15 +103,9 @@ function gpnCreatePanel(opts) {
     '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.2" fill="none" stroke="currentColor" stroke-width="1.8"/>' +
     '<circle cx="12.8" cy="7.6" r="1.35" fill="currentColor"/>' +
     '<path d="M10.7 10.9h2.2l-1.45 5.3c-.16.62.34.86.76.5l.95-.78" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  /** 放大／縮小：兩個斜向箭頭（線條圓角） */
-  /** 圓圈裡三個空心小圓點：分身卡片右上角的「更多」 */
-  const ICON_MORE_RING =
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.5">' +
-    '<circle cx="12" cy="12" r="10.25"/><circle cx="12" cy="7.3" r="1.55"/><circle cx="12" cy="12" r="1.55"/><circle cx="12" cy="16.7" r="1.55"/></g></svg>';
-  const ICON_EXPAND =
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4.5h5.5V10M19.5 4.5l-6 6M10 19.5H4.5V14M4.5 19.5l6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  const ICON_SHRINK =
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 10H14V4.5M14 10l6-6M4.5 14H10v5.5M10 14l-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  /** 分身卡片右上角的「更多」：三個實心小點（外面的圓圈是按鈕自己的框線，見 .gpn-clone-more） */
+  const ICON_MORE_DOTS =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="6.6" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="17.4" r="1.7"/></svg>';
 
   /** 兩個人：設定裡的「分身」 */
   const ICON_CLONE =
@@ -291,6 +285,7 @@ function gpnCreatePanel(opts) {
   let cAvatarOpen = '';          // 哪個分身的「換頭像」打開著（分身代號）
   let cExtendOpen = '';          // 哪個分身的「延長期限」打開著（分身代號）
   let cMenuOpen = '';            // 哪個分身卡片右上角的「更多」打開著（分身代號）
+  let pickOverSettings = false;  // 建立分身／再推一次的視窗是從設定打開的（關掉時回到設定）
   const hasAvatars = () => typeof GPN_AVATARS !== 'undefined';
   /** 對話框開著時雲端送來新資料，先不重畫（免得打到一半的字不見），關掉對話框再畫 */
   let staleWhileLayer = false;
@@ -3746,7 +3741,7 @@ function gpnCreatePanel(opts) {
       dateInput.value = isoDay(from + 365 * 86400000);
     }
     const more = el('button', {
-      class: 'gpn-clone-more' + (menuOpen ? ' is-on' : ''), type: 'button', html: ICON_MORE_RING,
+      class: 'gpn-clone-more' + (menuOpen ? ' is-on' : ''), type: 'button', html: ICON_MORE_DOTS,
       title: off ? '更多：再推一次、重新啟用、銷毀' : '更多：再推一次、延長期限、停用',
       'aria-label': `「${c.label}」的更多動作`, 'aria-haspopup': 'menu', 'aria-expanded': String(menuOpen),
       onclick: () => {
@@ -4186,54 +4181,77 @@ function gpnCreatePanel(opts) {
       : `「${senderName(x.from)}」分享了「${x.item.title || '提示詞'}」給你，點下面的信封看看`, false, 5200);
   }
 
-  /* ---- 勾選要放進分身的書籤、資料夾、提示詞（另外一個視窗）----
+  /* ---- 建立分身、再推一次的視窗 ----
+     建立分身分兩步：① 分身名稱、頭像（繼續）→ ② 選擇提示詞（上一步／建立分身）。
+     第二步整個視窗都給樹狀圖，提示詞很多時也看得清楚。再推一次只有第二步。
      勾書籤＝裡面全部；勾資料夾＝裡面全部；也可以只勾幾則。一部分有勾的顯示成「—」。
      書籤、資料夾預設都收起來（提示詞很多時才看得完），點左邊的三角形展開。
-     只有核取方塊能勾（點文字不會勾到），三角形負責展開。
-     右上角可以放大成整個畫面，提示詞很多時比較好找。 */
+     只有核取方塊能勾（點文字不會勾到），三角形負責展開。 */
 
   function buildPickLayer() {
     ui.cPickTitle = el('h2', { class: 'gpn-clone-dtitle' });
-    ui.cZoom = el('button', {
-      class: 'gpn-round-btn', type: 'button', html: ICON_EXPAND, title: '放大', 'aria-label': '放大',
-      onclick: () => zoomPick(),
-    });
+    ui.cStepTag = el('span', { class: 'gpn-clone-step' });
     ui.cName = el('input', {
       class: 'gpn-input', type: 'text', maxlength: '30', placeholder: '例如：業務組',
-      oninput: () => ui.cName.classList.remove('is-bad'),
-      onkeydown: (e) => { if (e.key === 'Enter') e.preventDefault(); },
+      oninput: () => { ui.cName.classList.remove('is-bad'); ui.cPickMsg.textContent = ''; },
+      onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); onPickGo(); } },
     });
     ui.cNameField = field('分身名稱', '（同事登入後會看到）', ui.cName);
     ui.cAvatarPicker = hasAvatars() ? buildAvatarPicker((id) => { if (cPick) cPick.avatar = id; }) : null;
     ui.cAvatarField = ui.cAvatarPicker ? field('頭像', '（之後也可以換）', ui.cAvatarPicker.node) : el('div', { hidden: '' });
     ui.cTreeLabel = el('div', { class: 'gpn-label' });
     ui.cTree = el('div', { class: 'gpn-clone-tree', role: 'tree' });
-    ui.cCount = el('div', { class: 'gpn-note gpn-clone-count' });
     ui.cPickMsg = el('div', { class: 'gpn-note gpn-note--status is-bad', role: 'status' });
+    ui.cBack = el('button', { class: 'gpn-btn gpn-btn--cancel', type: 'button', onclick: onPickBack });
     ui.cGo = el('button', { class: 'gpn-btn gpn-btn--save', type: 'button', onclick: onPickGo });
+    ui.cStep1 = el('div', { class: 'gpn-clone-step1' }, ui.cNameField, ui.cAvatarField);
+    ui.cStep2 = el('div', { class: 'gpn-clone-step2' },
+      el('div', { class: 'gpn-clone-treehead' }, ui.cTreeLabel,
+        el('div', { class: 'gpn-clone-all' },
+          el('button', { class: 'gpn-link', type: 'button', onclick: () => pickAll(true) }, '全部勾選'),
+          el('button', { class: 'gpn-link', type: 'button', onclick: () => pickAll(false) }, '全部不勾'),
+          el('button', { class: 'gpn-link', type: 'button', onclick: () => openAll(true) }, '全部展開'),
+          el('button', { class: 'gpn-link', type: 'button', onclick: () => openAll(false) }, '全部收起'))),
+      ui.cTree);
     ui.cPickDialog = el('div', { class: 'gpn-dialog gpn-clone-dialog', onmousedown: stop },
-      el('div', { class: 'gpn-clone-dhead' }, ui.cPickTitle, ui.cZoom),
-      el('div', { class: 'gpn-clone-dbody' },
-        ui.cNameField, ui.cAvatarField,
-        el('div', { class: 'gpn-clone-treehead' }, ui.cTreeLabel,
-          el('div', { class: 'gpn-clone-all' },
-            el('button', { class: 'gpn-link', type: 'button', onclick: () => pickAll(true) }, '全部勾選'),
-            el('button', { class: 'gpn-link', type: 'button', onclick: () => pickAll(false) }, '全部不勾'),
-            el('button', { class: 'gpn-link', type: 'button', onclick: () => openAll(true) }, '全部展開'),
-            el('button', { class: 'gpn-link', type: 'button', onclick: () => openAll(false) }, '全部收起'))),
-        ui.cTree),
+      el('div', { class: 'gpn-clone-dhead' }, ui.cPickTitle, ui.cStepTag),
+      el('div', { class: 'gpn-clone-dbody' }, ui.cStep1, ui.cStep2),
       el('div', { class: 'gpn-clone-dfoot' },
-        ui.cCount, ui.cPickMsg,
-        el('div', { class: 'gpn-clone-dbtns' },
-          el('button', { class: 'gpn-btn gpn-btn--cancel', type: 'button', onclick: closePick }, '取消'), ui.cGo)));
+        ui.cPickMsg,
+        el('div', { class: 'gpn-clone-dbtns' }, ui.cBack, ui.cGo)));
     ui.cPickLayer = el('div', { class: 'gpn-edit-layer gpn-clone-layer' }, ui.cPickDialog);
   }
 
-  function zoomPick(on = !ui.cPickDialog.classList.contains('is-zoomed')) {
-    ui.cPickDialog.classList.toggle('is-zoomed', on);
-    ui.cZoom.innerHTML = on ? ICON_SHRINK : ICON_EXPAND;
-    ui.cZoom.title = on ? '縮小' : '放大';
-    ui.cZoom.setAttribute('aria-label', ui.cZoom.title);
+  /** 換到第幾步（1：名稱、頭像；2：選擇提示詞）。再推一次一直都是第二步 */
+  function pickStep(step) {
+    cPick.step = step;
+    const create = cPick.mode === 'create';
+    ui.cPickDialog.classList.toggle('is-step1', step === 1);
+    ui.cStep1.hidden = step !== 1;
+    ui.cStep2.hidden = step !== 2;
+    ui.cStepTag.hidden = !create;
+    ui.cStepTag.textContent = `${step} / 2`;
+    ui.cPickMsg.textContent = '';
+    if (create) {
+      const label = ui.cName.value.trim();
+      ui.cPickTitle.textContent = step === 1 ? '建立分身' : '選擇提示詞';
+      ui.cTreeLabel.textContent = label ? `要放進「${label}」的提示詞` : '要放進分身的提示詞';
+      ui.cBack.textContent = step === 1 ? '取消' : '上一步';
+      ui.cGo.textContent = step === 1 ? '繼續' : '建立分身';
+    } else {
+      ui.cPickTitle.textContent = `再推一次：分身「${cPick.clone.label}」`;
+      ui.cTreeLabel.textContent = '要推過去的提示詞';
+      ui.cBack.textContent = '取消';
+      ui.cGo.textContent = '推過去';
+    }
+    ui.cGo.disabled = false;
+    if (step === 1) setTimeout(() => ui.cName.focus(), 30);
+    else { paintPick(); ui.cTree.scrollTop = 0; }
+  }
+
+  function onPickBack() {
+    if (cPick?.mode === 'create' && cPick.step === 2) pickStep(1);
+    else closePick();
   }
 
   async function openPick(mode, clone = null) {
@@ -4279,24 +4297,21 @@ function gpnCreatePanel(opts) {
     cPick = pick;
     ui.cName.value = '';
     ui.cName.classList.remove('is-bad');
-    ui.cNameField.hidden = mode !== 'create';
-    ui.cAvatarField.hidden = mode !== 'create' || !hasAvatars();
+    ui.cAvatarField.hidden = !hasAvatars();
     if (ui.cAvatarPicker) { ui.cAvatarPicker.set(pick.avatar); ui.cAvatarPicker.close(); }
-    ui.cPickTitle.textContent = mode === 'create' ? '建立分身' : `再推一次：分身「${clone.label}」`;
-    ui.cTreeLabel.textContent = mode === 'create' ? '要放進分身的提示詞' : '要推過去的提示詞';
-    ui.cGo.textContent = mode === 'create' ? '建立分身' : '推過去';
-    ui.cGo.disabled = false;
-    ui.cPickMsg.textContent = '';
-    zoomPick(false);
-    paintPick();
-    ui.cTree.scrollTop = 0;
+    pickStep(mode === 'create' ? 1 : 2);
+    // 不疊在設定上面：設定先收起來（停在分身那一頁），這個視窗關掉時再回來
+    pickOverSettings = layerOpen(ui.settingsLayer);
     showLayer(ui.cPickLayer);
-    if (mode === 'create') setTimeout(() => ui.cName.focus(), 30);
+    if (pickOverSettings) hideLayer(ui.settingsLayer);
   }
 
   function closePick() {
     cPick = null;
-    if (ui.cPickLayer) hideLayer(ui.cPickLayer);
+    if (!ui.cPickLayer || !layerOpen(ui.cPickLayer)) return;
+    if (pickOverSettings) ui.settingsLayer.classList.add('is-open');   // 回到設定的分身頁（不再播一次打開的聲音）
+    pickOverSettings = false;
+    hideLayer(ui.cPickLayer);
   }
 
   /** 這個書籤、資料夾裡的提示詞勾了幾則：'all' | 'some' | 'none'（空的看自己有沒有勾） */
@@ -4390,23 +4405,26 @@ function gpnCreatePanel(opts) {
     }
     ui.cTree.replaceChildren(...rows);
     ui.cTree.scrollTop = keep;
-    const n = cPick.items.size;
-    const over = [...cPick.diff].filter((id) => cPick.items.has(id)).length;
-    ui.cCount.textContent = !n ? '還沒有勾選任何提示詞'
-      : cPick.mode === 'push'
-        ? `勾了 ${n} 則。分身裡已經有的會換成你現在的版本` + (over ? `（其中 ${over} 則分身裡的不一樣，不想蓋掉就取消勾選）` : '') +
-          '；分身自己新增的不會動。'
-        : `勾了 ${n} 則提示詞`;
+    if (ui.cPickMsg.textContent && (cPick.items.size || cPick.tabs.size || cPick.folders.size)) ui.cPickMsg.textContent = '';
   }
 
   async function onPickGo() {
     if (!cPick) return;
     ui.cPickMsg.textContent = '';
-    if (!cPick.items.size && !cPick.tabs.size && !cPick.folders.size) { ui.cPickMsg.textContent = '請先勾選要放進分身的提示詞'; return; }
+    const label = ui.cName.value.trim();
+    if (cPick.mode === 'create' && cPick.step === 1) {
+      // 第一步：有名字才能繼續
+      if (!label) { ui.cName.classList.add('is-bad'); ui.cName.focus(); ui.cPickMsg.textContent = '請幫分身取個名字'; return; }
+      ui.cAvatarPicker?.close();
+      pickStep(2);
+      return;
+    }
+    if (!cPick.items.size && !cPick.tabs.size && !cPick.folders.size) {
+      ui.cPickMsg.textContent = cPick.mode === 'create' ? '請先勾選要放進分身的提示詞' : '請先勾選要推過去的提示詞';
+      return;
+    }
     const sub = gpnCloneSubset(data, cPick);
     if (cPick.mode === 'create') {
-      const label = ui.cName.value.trim();
-      if (!label) { ui.cName.classList.add('is-bad'); ui.cName.focus(); ui.cPickMsg.textContent = '請幫分身取個名字'; return; }
       ui.cGo.disabled = true;
       ui.cGo.textContent = '建立中…';
       const r = await cloud.createClone(label, sub, cPick?.avatar || '');

@@ -1855,18 +1855,18 @@ span.gpn-face-art > svg { display: block; width: 100%; height: 100%; }
 /* 卡片右上角的「更多」（圓圈裡三個點）和它打開的小選單 */
 .gpn-clone-more {
   flex: none;
-  width: 38px; height: 38px;
+  width: 36px; height: 36px;
   margin-left: auto;
-  padding: 4px;
-  border: 0;
+  padding: 7px;
+  border: 1.5px solid var(--outline-strong);
   border-radius: 50%;
   background: none;
   color: var(--text-mute);
   cursor: pointer;
-  transition: background-color .14s ease, color .14s ease;
+  transition: background-color .14s ease, color .14s ease, border-color .14s ease;
 }
-.gpn-clone-more svg { width: 100%; height: 100%; display: block; }
-.gpn-clone-more:hover, .gpn-clone-more.is-on { background: var(--hover); color: var(--text); }
+.gpn-clone-more svg { width: 100%; height: 100%; display: block; fill: currentColor; }
+.gpn-clone-more:hover, .gpn-clone-more.is-on { background: var(--hover); color: var(--text); border-color: var(--text-mute); }
 .gpn-clone-more:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 .gpn-clone-menu {
   position: absolute;
@@ -1905,33 +1905,26 @@ span.gpn-face-art > svg { display: block; width: 100%; height: 100%; }
 .gpn-clone-extend .gpn-btn2 { flex: none; min-width: 72px; }
 .gpn-clone-date { width: auto; height: 42px; padding: 0 12px; color-scheme: light dark; }
 
-/* 勾選提示詞的視窗：標題列（右邊放大）、中間（名稱、頭像、樹狀圖）、最下面固定的按鈕 */
+/* 建立分身、再推一次的視窗：標題列（右邊是第幾步）、中間、最下面固定的按鈕。
+   第一步（名稱、頭像）視窗跟著內容高；第二步（選擇提示詞）整個視窗給樹狀圖 */
 .gpn-clone-dialog {
-  width: 640px;
-  height: min(760px, calc((100vh - 48px) / var(--gpn-zoom, 1)));
-  transition: width .18s ease, height .18s ease;
+  width: 680px;
+  height: min(800px, calc((100vh - 48px) / var(--gpn-zoom, 1)));
 }
-.gpn-clone-dialog.is-zoomed {
-  width: calc((100vw - 48px) / var(--gpn-zoom, 1));
-  height: calc((100vh - 48px) / var(--gpn-zoom, 1));
-  max-width: none;
-}
-.gpn-clone-dhead { flex: none; display: flex; align-items: center; gap: 12px; padding: 20px 20px 12px 26px; }
+.gpn-clone-dialog.is-step1 { width: 560px; height: auto; }
+.gpn-clone-dhead { flex: none; display: flex; align-items: center; gap: 12px; padding: 22px 26px 12px; }
 .gpn-dialog .gpn-clone-dtitle { flex: 1; min-width: 0; padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gpn-round-btn {
+.gpn-clone-step {
   flex: none;
-  width: 42px; height: 42px;
-  padding: 10px;
-  border: 1px solid var(--outline);
-  border-radius: 50%;
-  background: var(--surface-input);
-  color: var(--text);
-  cursor: pointer;
-  transition: background-color .14s ease, border-color .14s ease;
+  padding: 3px 11px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: var(--primary);
+  font-size: 13px; font-weight: 700; letter-spacing: .5px;
 }
-.gpn-round-btn svg { width: 100%; height: 100%; display: block; }
-.gpn-round-btn:hover { background: var(--hover); border-color: var(--outline-strong); }
-.gpn-round-btn:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.gpn-clone-step1 { padding-bottom: 6px; }
+.gpn-clone-step2 { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.gpn-clone-step1[hidden], .gpn-clone-step2[hidden] { display: none; }
 .gpn-clone-dbody {
   flex: 1; min-height: 0;
   display: flex; flex-direction: column;
@@ -1959,10 +1952,9 @@ span.gpn-face-art > svg { display: block; width: 100%; height: 100%; }
   background: var(--surface-input);
   scrollbar-width: thin;
 }
-.gpn-clone-dfoot { flex: none; padding: 12px 26px 20px; border-top: 1px solid var(--glass-line); }
-.gpn-clone-count { margin: 0; }
-.gpn-clone-dfoot .gpn-note--status { margin-top: 6px; }
-.gpn-clone-dbtns { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
+.gpn-clone-dfoot { flex: none; padding: 14px 26px 20px; border-top: 1px solid var(--glass-line); }
+.gpn-clone-dfoot .gpn-note--status { margin: 0 0 10px; }
+.gpn-clone-dbtns { display: flex; justify-content: flex-end; gap: 10px; }
 .gpn-clone-dbtns .gpn-btn { flex: 0 1 160px; min-width: 0; }
 .gpn-clone-dbtns .gpn-btn--save { flex-basis: 200px; }
 
