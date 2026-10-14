@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.31.1';
+const GPN_APP_VERSION = '4.31.2';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -778,13 +778,12 @@ function gpnCreatePanel(opts) {
         onanimationend: () => node.classList.remove('is-popping'),
       }, main);
 
-      // 信箱固定排在自己的書籤後面，不能拖
-      if (!mail) attachHoldDrag({
-        handle: main, node, box: ui.tabs, selector: '.gpn-tab:not(.is-fixed):not(.is-mail)',
-        // 拖到最後面時排在信箱、「＋」前面；書籤滿了沒有「＋」，就排在右邊的固定書籤前面
-        anchor: () => ui.tabs.querySelector('.gpn-tab.is-mail') || ui.addTabBtn || ui.tabs.querySelector('.gpn-tab.is-fixed'),
+      attachHoldDrag({
+        handle: main, node, box: ui.tabs, selector: '.gpn-tab:not(.is-fixed)',
+        // 拖到最後面時排在「＋」前面；書籤滿了沒有「＋」，就排在右邊的固定書籤前面（信箱也可以拖）
+        anchor: () => ui.addTabBtn || ui.tabs.querySelector('.gpn-tab.is-fixed'),
         vertical: () => false,
-        canStart: () => ownTabs().length > 1,
+        canStart: () => data.tabs.length > 1,
         onDrop: (order) => { data.tabs = reorder(data.tabs, order); persist(); },
       });
       ui.tabEls.set(t.id, node);

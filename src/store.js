@@ -227,10 +227,10 @@ function gpnNormalize(raw) {
   let tabs;
 
   if (Array.isArray(raw.tabs)) {
-    // 信箱不算在上限裡，永遠排在自己的書籤後面
-    const all = raw.tabs.filter((t) => t && typeof t === 'object');
-    const mail = all.find((t) => t.id === GPN_MAIL_ID);
-    tabs = [...all.filter((t) => t !== mail).slice(0, GPN_MAX_TABS), ...(mail ? [mail] : [])]
+    // 信箱不算在上限裡（位置照使用者拖的）
+    let own = 0;
+    tabs = raw.tabs
+      .filter((t) => t && typeof t === 'object' && (t.id === GPN_MAIL_ID || own++ < GPN_MAX_TABS))
       .map((t) => gpnCleanTab(t, raw.version));
   } else if (raw.tabs && typeof raw.tabs === 'object') {
     // v1：把 favorite / other 轉成陣列，資料原封不動搬過去
