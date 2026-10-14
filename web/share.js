@@ -44,7 +44,7 @@ function gpnDecodeShare(code) {
 
 /** 把目前的資料包成可匯出的物件。look：這台電腦的背景（{ bg, wallpaper }，沒有就不放） */
 function gpnBuildExport(data, look = null) {
-  const items = (list) => list.map((i) => ({ id: i.id, title: i.title, content: i.content }));
+  const items = (list) => list.map((i) => ({ id: i.id, title: i.title, content: i.content, ...(i.from ? { from: i.from } : {}) }));
   return {
     app: GPN_SHARE_APP,
     version: GPN_VERSION,
@@ -176,7 +176,7 @@ function gpnMergeData(current, incoming) {
               out.tabs.find((t) => t.label === inTab.label);
 
     if (!tab) {
-      if (out.tabs.length >= GPN_MAX_TABS) {
+      if (out.tabs.filter((t) => t.id !== GPN_MAIL_ID).length >= GPN_MAX_TABS) {
         // 書籤滿了就把內容併進最後一個，總比整批丟掉好
         tab = out.tabs[out.tabs.length - 1];
       } else {

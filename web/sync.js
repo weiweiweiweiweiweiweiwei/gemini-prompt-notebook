@@ -571,12 +571,14 @@ function gpnCreateSync(o) {
       }));
       await rename((r.files || [])[0], '特務P 背景圖', '罐頭P 背景圖');
     } catch { /* 下次再說 */ }
-    if (!session?.picture) {
+    if (!session?.picture || !session?.name) {
+      // 分享給分身時用得到 Google 的名稱（4.31.0 以前登入的沒記）
       try {
-        const a = await drive('/drive/v3/about?fields=user(photoLink)');
-        const pic = a.user?.photoLink || '';
-        if (pic && session) {
-          await saveSession({ ...session, picture: pic });
+        const a = await drive('/drive/v3/about?fields=user(photoLink,displayName)');
+        const pic = session?.picture || a.user?.photoLink || '';
+        const name = session?.name || a.user?.displayName || '';
+        if (session && (pic !== (session.picture || '') || name !== (session.name || ''))) {
+          await saveSession({ ...session, picture: pic, name });
           setState({ picture: pic });
         }
       } catch { /* 拿不到就繼續用 Email 第一個字 */ }
@@ -706,6 +708,7 @@ function gpnCreateSync(o) {
       expires_at: Date.now() + (Number(r.expires_in) || 3600) * 1000,
       email: who.email || '',
       picture: who.picture || '',
+      name: who.name || '',
       sub: who.sub || who.email || 'google',
     };
 
@@ -929,6 +932,7 @@ function gpnCreateSync(o) {
       s = {
         ...cloneSession(c.id, { label: c.label, avatar: c.avatar, expiresAt: c.expiresAt, ownerEmail }),
         fileId: c.fileId,
+        ownerName: mine.name || '', ownerPicture: mine.picture || '',
         owner: { access_token: mine.access_token, refresh_token: mine.refresh_token, expires_at: mine.expires_at },
       };
       await saveSession(s);
@@ -1189,7 +1193,10 @@ function gpnCreateSync(o) {
     const item = raw?.item && typeof raw.item === 'object' ? cleanItem(raw.item) : null;
     return {
       id: String(raw?.id || ''),
-      from: { key: String(f.key || ''), label: String(f.label || '').slice(0, 60) || '分身', avatar: avatarId(f.avatar) },
+      from: {
+        key: String(f.key || ''), label: String(f.label || '').slice(0, 60) || '分身', avatar: avatarId(f.avatar),
+        picture: /^https:\/\/[^\s"'<>]{1,500}$/.test(String(f.picture || '')) ? String(f.picture) : '',
+      },
       item: item && (item.title || item.content) ? item : null,
       at: Number(raw?.at) || 0,
       kept: !!raw?.kept || keptHere.has(String(raw?.id || '')),
@@ -1204,7 +1211,10 @@ function gpnCreateSync(o) {
     const list = (await listCloneFiles())
       .filter((c) => c.fileId !== me && !(c.expiresAt && c.expiresAt <= now))
       .map((c) => ({ key: c.fileId, label: c.label || '分身', avatar: c.avatar || '' }));
-    return isClone() ? [{ key: 'owner', label: '主人', avatar: '', email: session.ownerEmail || '' }, ...list] : list;
+    return isClone()
+      ? [{ key: 'owner', label: session.ownerName || session.ownerEmail || '建立的人', avatar: '', picture: session.ownerPicture || '',
+        email: session.ownerEmail || '' }, ...list]
+      : list;
   }
 
   async function listPeers() {
@@ -1214,6 +1224,7 @@ function gpnCreateSync(o) {
     try {
       const peers = (await peersHere()).map((x) => ({
         key: String(x.key || ''), label: String(x.label || '分身'), avatar: avatarId(x.avatar), email: String(x.email || ''),
+        picture: /^https:\/\/[^\s"'<>]{1,500}$/.test(String(x.picture || '')) ? String(x.picture) : '',
       })).filter((x) => isShareKey(x.key));
       return { ok: true, peers };
     } catch (e) {
@@ -1239,7 +1250,7 @@ function gpnCreateSync(o) {
       if (to.some((k) => !ok.has(k))) return { ok: false, error: explain({ code: 'peer_gone' }) };
       const from = isClone()
         ? { key: session.fileId, label: session.label || '分身', avatar: session.avatar || '' }
-        : { key: 'owner', label: '主人', avatar: '' };
+        : { key: 'owner', label: session.name || (session.email || '').split('@')[0] || '建立的人', avatar: '', picture: session.picture || '' };
       for (const k of to) {
         await createDriveFile({
           name: '罐頭P 分享.json',
@@ -1376,7 +1387,9 @@ function gpnFlatten(d) {
       if (fid) folders.set(fid, { tab: t.id, label: l.label });
       lists.set(t.id + '\u0000' + fid, l.items.map((i) => i.id));
       // at：放在哪裡（書籤＋資料夾當成一個欄位比，搬家才不會一半用這台、一半用雲端的）
-      for (const it of l.items) items.set(it.id, { title: it.title, content: it.content, at: t.id + '\u0000' + fid });
+      for (const it of l.items) {
+        items.set(it.id, { title: it.title, content: it.content, from: it.from ? JSON.stringify(it.from) : '', at: t.id + '\u0000' + fid });
+      }
     }
   }
   return {
@@ -1434,7 +1447,7 @@ function gpnMerge3(base, local, cloud) {
 
   const tabs = gpnMergeMap(B.tabs, L.tabs, C.tabs, ['label', 'color', 'folders']);
   const folders = gpnMergeMap(B.folders, L.folders, C.folders, ['label', 'tab']);
-  const items = gpnMergeMap(B.items, L.items, C.items, ['title', 'content', 'at'], ['title', 'content']);
+  const items = gpnMergeMap(B.items, L.items, C.items, ['title', 'content', 'from', 'at'], ['title', 'content']);
   for (const it of items.values()) {
     const i = it.at.indexOf('\u0000');
     it.tab = it.at.slice(0, i);
@@ -1452,8 +1465,10 @@ function gpnMerge3(base, local, cloud) {
   // 書籤的順序；超過上限（兩邊各加了幾個）的書籤，提示詞併進最後一個，一則都不丟
   const tabOrder = gpnMergeOrder(B.tabOrder, L.tabOrder, C.tabOrder).filter((id) => tabs.has(id));
   for (const id of tabs.keys()) if (!tabOrder.includes(id)) tabOrder.push(id);
-  const extraTabs = new Set(tabOrder.splice(GPN_MAX_TABS));
-  const lastTab = tabOrder[tabOrder.length - 1];
+  // 信箱不算在上限裡
+  const extraTabs = new Set(tabOrder.filter((id) => id !== GPN_MAIL_ID).slice(GPN_MAX_TABS));
+  for (const id of extraTabs) tabOrder.splice(tabOrder.indexOf(id), 1);
+  const lastTab = tabOrder.filter((id) => id !== GPN_MAIL_ID).pop();
   for (const it of items.values()) {
     if (extraTabs.has(it.tab)) { it.tab = lastTab; it.folder = ''; }
   }
@@ -1508,7 +1523,7 @@ function gpnMerge3(base, local, cloud) {
     for (const id of set) if (!order.includes(id)) order.push(id);
     return order.map((id) => {
       const it = items.get(id);
-      return { id, title: it.title, content: it.content };
+      return { id, title: it.title, content: it.content, ...(it.from ? { from: JSON.parse(it.from) } : {}) };
     });
   };
 

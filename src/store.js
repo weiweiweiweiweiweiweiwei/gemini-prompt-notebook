@@ -57,6 +57,7 @@ const GPN_RECENT_MAX = 50;               // 最近使用最多記幾筆
 const GPN_TRASH_ID = 't_trash';          // 「資源回收桶」的 id（設定最下面點進去；不在書籤列上）
 const GPN_TRASH_MAX = 1000;              // 回收桶的上限只是防呆，正常用不到
 const GPN_FAV_ID = 't_star';             // 「我的最愛」書籤的 id（固定、不能刪；注意不是預設書籤「常用」的 t_fav）
+const GPN_MAIL_ID = 't_mail';            // 「信箱」書籤：別人分享來的提示詞。點左下角的信封才建立，空了就自動拿掉；不算在書籤的上限裡
 const GPN_COLORS = ['amber', 'green', 'blue', 'rose', 'purple', 'teal'];
 const GPN_COLOR_LABELS = {
   amber: '牛皮黃', green: '森林綠', blue: '天空藍',
@@ -159,14 +160,30 @@ function gpnCleanRecent(arr) {
     .slice(0, GPN_RECENT_MAX);
 }
 
+/**
+ * 信箱裡的提示詞記著是誰分享的：{ name, avatar（分身的頭像代號）, picture（Google 大頭貼網址）}。
+ * 搬出信箱就拿掉（畫面只在信箱裡顯示）。
+ */
+function gpnCleanFrom(f) {
+  if (!f || typeof f !== 'object') return null;
+  const name = String(f.name ?? '').slice(0, 60);
+  const avatar = /^[a-z]{1,20}$/.test(String(f.avatar || '')) ? String(f.avatar) : '';
+  const picture = /^https:\/\/[^\s"'<>]{1,500}$/.test(String(f.picture || '')) ? String(f.picture) : '';
+  return name || avatar || picture ? { name, avatar, picture } : null;
+}
+
 function gpnCleanItems(arr) {
   return (Array.isArray(arr) ? arr : [])
     .filter((it) => it && typeof it === 'object')
-    .map((it) => ({
-      id: typeof it.id === 'string' && it.id ? it.id : gpnNewId(),
-      title: String(it.title ?? '').slice(0, 60),
-      content: String(it.content ?? ''),
-    }));
+    .map((it) => {
+      const from = gpnCleanFrom(it.from);
+      return {
+        id: typeof it.id === 'string' && it.id ? it.id : gpnNewId(),
+        title: String(it.title ?? '').slice(0, 60),
+        content: String(it.content ?? ''),
+        ...(from ? { from } : {}),
+      };
+    });
 }
 
 /**
@@ -210,9 +227,10 @@ function gpnNormalize(raw) {
   let tabs;
 
   if (Array.isArray(raw.tabs)) {
-    tabs = raw.tabs
-      .filter((t) => t && typeof t === 'object')
-      .slice(0, GPN_MAX_TABS)
+    // 信箱不算在上限裡，永遠排在自己的書籤後面
+    const all = raw.tabs.filter((t) => t && typeof t === 'object');
+    const mail = all.find((t) => t.id === GPN_MAIL_ID);
+    tabs = [...all.filter((t) => t !== mail).slice(0, GPN_MAX_TABS), ...(mail ? [mail] : [])]
       .map((t) => gpnCleanTab(t, raw.version));
   } else if (raw.tabs && typeof raw.tabs === 'object') {
     // v1：把 favorite / other 轉成陣列，資料原封不動搬過去

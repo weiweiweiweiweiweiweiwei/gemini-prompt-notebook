@@ -39,7 +39,7 @@
  *     write  { id, data }    → { fileId, version }
  *     avatar { id, avatar }  換頭像（頭像的代號）
  *   分享（主人和分身之間互相傳提示詞，見 src/sync.js 的「分享」）
- *     peers  { id }                  → { me, peers: [{ key, label, avatar, email? }] }  可以分享給誰
+ *     peers  { id }                  → { me, peers: [{ key, label, avatar, picture?, email? }] }  可以分享給誰
  *     share  { id, to: [key], item }  寄出一則提示詞 { title, content }（一個收件人一個小檔案，放在建立的人的雲端硬碟）
  *     inbox  { id }                  → { shares: [{ id, from, item, at, kept }] }  寄給我的
  *     keep   { id, ids }              暫留：還留在信箱，但不算未讀
@@ -237,7 +237,13 @@ async function peersOf(c: Loaded) {
   const list = await (await drive(c.token, '/drive/v3/files?' + new URLSearchParams({
     q: CLONE_Q, spaces: 'drive', fields: 'files(id,appProperties)', pageSize: '100',
   }))).json();
-  const peers = [{ key: 'owner', label: '主人', avatar: '', email: c.info.ownerEmail }];
+  // 建立的人：用他 Google 帳號的名稱、大頭貼（拿不到就用 Email）
+  let me: { displayName?: string; photoLink?: string } = {};
+  try { me = (await (await drive(c.token, '/drive/v3/about?fields=user(displayName,photoLink)')).json()).user || {}; } catch { /* 用 Email */ }
+  const peers = [{
+    key: 'owner', label: String(me.displayName || c.info.ownerEmail.split('@')[0] || '建立的人'), avatar: '',
+    picture: String(me.photoLink || ''), email: c.info.ownerEmail,
+  }];
   for (const f of list.files || []) {
     const r = live.get(String(f.id));
     if (!r) continue;

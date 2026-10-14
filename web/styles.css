@@ -1105,6 +1105,8 @@ button { cursor: pointer; }
 }
 .gpn-lid { transform-box: view-box; transform-origin: 4px 6.5px; transition: transform .22s cubic-bezier(.3, 1.6, .5, 1); }
 .is-confirm .gpn-lid { transform: translate(-1px, -2.6px) rotate(-34deg); }
+/* 蓋子掀開會超出圖示的方框：讓它畫得出去，不要被切掉 */
+.gpn-menu-tile svg, .gpn-menu-icononly svg { overflow: visible; }
 .gpn-menu-tile--del:hover { background: color-mix(in srgb, var(--error) 14%, transparent); border-color: var(--error); }
 
 /* 複製的那一下：把手、時間、標題、星號、鉛筆「全部」一起淡出，只留 "Copied"。
@@ -2051,8 +2053,8 @@ section[data-section="markTab"] .gpn-note--roomy { margin: 4px 0 16px; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-/* 頭像兼信箱（4.28.0）：有沒看過的分享 → 一封信＋右上角紅色數字；只剩暫留的 → 頭像角落一個小信封 */
-.gpn-avatar.has-mail, .gpn-avatar.has-kept { position: relative; overflow: visible; }
+/* 頭像兼信箱（4.28.0）：有別人分享來的 → 一封信＋右上角紅色數字 */
+.gpn-avatar.has-mail { position: relative; overflow: visible; }
 .gpn-avatar.has-mail { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 60%, transparent); }
 .gpn-avatar .gpn-face-art { border-radius: 50%; overflow: hidden; }
 .gpn-avatar .gpn-mail-icon { display: flex; }
@@ -2070,21 +2072,11 @@ section[data-section="markTab"] .gpn-note--roomy { margin: 4px 0 16px; }
   animation: gpn-badge-pop .32s cubic-bezier(.2, 1.4, .4, 1);
 }
 @keyframes gpn-badge-pop { from { transform: scale(.4); opacity: 0 } }
-.gpn-mail-mini {
-  position: absolute;
-  right: -4px; bottom: -4px;
-  width: 22px; height: 22px;
-  padding: 3px;
-  border-radius: 50%;
-  background: var(--surface);
-  color: var(--primary);
-  box-shadow: 0 0 0 1px var(--outline);
-}
-.gpn-avatar .gpn-mail-mini svg { width: 100%; height: 100%; }
 
-/* 寄的人、收件人的頭像：分身的頭像，主人是「主」字 */
+/* 寄的人、收件人的頭像：Google 大頭貼、分身的頭像，或名字的第一個字 */
 .gpn-peer-face { flex: none; width: 36px; height: 36px; border-radius: 50%; overflow: hidden; display: flex; }
 .gpn-peer-face > * { width: 100%; height: 100%; }
+.gpn-peer-face .gpn-face-img { object-fit: cover; }
 .gpn-peer-owner {
   display: flex; align-items: center; justify-content: center;
   background: var(--primary); color: var(--on-primary);
@@ -2094,7 +2086,7 @@ section[data-section="markTab"] .gpn-note--roomy { margin: 4px 0 16px; }
 /* 分享：選要給誰 */
 .gpn-share-what { padding: 12px 14px; border: 1px solid var(--outline); border-radius: 14px; background: var(--surface-input); }
 .gpn-share-ptitle { font-size: 15.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gpn-share-pbody, .gpn-inbox-pbody {
+.gpn-share-pbody {
   margin-top: 4px;
   color: var(--text-mute);
   white-space: pre-wrap;
@@ -2126,48 +2118,31 @@ section[data-section="markTab"] .gpn-note--roomy { margin: 4px 0 16px; }
 .gpn-share-empty p { margin: 0 0 6px; }
 .gpn-share-empty .gpn-btn2 { flex: none; margin-top: 10px; }
 
-/* 信箱：每一則一張卡片（寄的人、標題、內容、暫留／採用） */
-.gpn-inbox-dialog { width: 600px; }
-.gpn-inbox-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
-.gpn-inbox-count { font-size: 14px; font-weight: 600; color: var(--primary); white-space: nowrap; }
-.gpn-inbox-list { display: flex; flex-direction: column; gap: 12px; padding-bottom: 6px; }
-.gpn-inbox-card { position: relative; padding: 14px 16px; border: 1px solid var(--outline); border-radius: 18px; background: var(--surface-input); }
-.gpn-inbox-card:not(.is-kept) { border-color: color-mix(in srgb, var(--primary) 55%, var(--outline)); }
-/* 窄的時候往下排；右上角的 × 固定在卡片角落，不會被擠出去 */
-.gpn-inbox-from { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 32px; padding-right: 34px; }
-.gpn-inbox-from .gpn-peer-face { width: 32px; height: 32px; }
-.gpn-inbox-who { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14.5px; }
-.gpn-inbox-who > span { color: var(--text-mute); }
-.gpn-inbox-new, .gpn-inbox-tag { flex: none; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
-.gpn-inbox-new { background: #e5484d; color: #fff; }
-.gpn-inbox-tag { background: var(--hover); color: var(--text-mute); }
-.gpn-inbox-when { flex: none; margin-left: auto; font-size: 12.5px; color: var(--text-mute); white-space: nowrap; }
-.gpn-inbox-del {
+/* 「信箱」書籤（4.31.0）：名稱前面一個小信封；固定排在自己的書籤後面 */
+.gpn-tab-mailicon { flex: none; display: inline-flex; margin-right: 6px; vertical-align: -3px; }
+.gpn-tab-mailicon svg { width: 17px; height: 17px; display: block; }
+.gpn-tab.is-mail .gpn-tab-main { display: flex; align-items: center; justify-content: center; }
+
+/* 信箱裡的卡片：標題上面一行寄的人（小頭像＋名字） */
+.gpn-sender { display: flex; align-items: center; gap: 7px; min-width: 0; margin-bottom: 2px; }
+.gpn-sender .gpn-peer-face { width: 20px; height: 20px; }
+.gpn-sender .gpn-peer-owner { font-size: 11px; }
+.gpn-sender-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; color: var(--text-mute); }
+
+/* 拖著提示詞停在別的書籤上：底下一條線 1.8 秒慢慢填滿，滿了就切過去（panel.js 的 GPN_DRAG_OPEN_MS） */
+.gpn-tab.is-hold { filter: brightness(1.15); box-shadow: inset 0 0 0 2px var(--primary); }
+.gpn-tab.is-hold::after {
+  content: '';
   position: absolute;
-  top: 14px; right: 12px;
-  width: 30px; height: 30px;
-  padding: 5px;
-  border: 0;
-  border-radius: 50%;
-  background: none;
-  color: var(--text-mute);
-  cursor: pointer;
+  left: 12%; right: 12%; bottom: 5px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--primary);
+  transform-origin: left center;
+  animation: gpn-tab-hold 1.8s linear forwards;
 }
-.gpn-inbox-del svg { width: 100%; height: 100%; display: block; fill: currentColor; }
-.gpn-inbox-del:hover { background: var(--hover); color: var(--text); }
-.gpn-inbox-del:focus-visible { outline: 3px solid var(--primary); outline-offset: 1px; }
-.gpn-inbox-del.is-confirm { width: auto; padding: 0 10px; border-radius: 999px; background: #e5484d; color: #fff; font-size: 12.5px; font-weight: 600; }
-.gpn-inbox-ptitle { margin-top: 10px; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
-.gpn-inbox-pbody { font-size: 14px; line-height: 1.6; -webkit-line-clamp: 4; }
-.gpn-inbox-btns { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
-.gpn-inbox-btns .gpn-btn { flex: 0 1 120px; min-width: 0; height: 42px; padding: 0 12px; }
-.gpn-inbox-empty { display: flex; flex-direction: column; align-items: center; padding: 36px 10px 30px; text-align: center; }
-.gpn-inbox-empty-icon { width: 56px; height: 56px; color: var(--text-mute); opacity: .6; }
-.gpn-inbox-empty-icon svg { width: 100%; height: 100%; display: block; }
-.gpn-inbox-empty-title { margin-top: 10px; font-size: 16px; font-weight: 600; }
-.gpn-inbox-dialog .gpn-actions { flex-wrap: wrap; justify-content: space-between; }
-.gpn-inbox-account { flex: 0 1 auto; padding: 0 18px; }
-.gpn-inbox-close { flex: 0 1 140px; min-width: 110px; }
+@keyframes gpn-tab-hold { from { transform: scaleX(0); opacity: .6 } to { transform: scaleX(1); opacity: 1 } }
+.gpn-list.is-drop { outline: 2px dashed var(--primary); outline-offset: -4px; border-radius: 14px; }
 
 /* 設定視窗被擠窄時：選單改成上面一排 */
 @container gpn-settings (max-width: 560px) {
