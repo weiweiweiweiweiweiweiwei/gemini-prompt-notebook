@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.26.0';
+const GPN_APP_VERSION = '4.27.0';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -647,8 +647,11 @@ function gpnCreatePanel(opts) {
     // 書籤很多、又開了好幾種符號（或筆記本拉得很窄）時放不下：只有圖示的那幾個先縮窄
     const width = parseFloat(getComputedStyle(ui.tabs).width) || 0;
     const crowded = width > 0 && reserveWith(GPN_TAB_FIXED_W, GPN_TAB_MARK_W) + GPN_TAB_MIN_W * n > width;
+    // 還是放不下（書籤滿 8 個、符號也開滿 6 種）：每一個都再縮到最窄（styles.css 的 .is-squeezed）
+    const squeezed = crowded && reserveWith(44, 40) + 44 * n > width;
     ui.tabs.classList.toggle('is-crowded', crowded);
-    const reserve = crowded ? reserveWith(44, 40) : reserveWith(GPN_TAB_FIXED_W, GPN_TAB_MARK_W);
+    ui.tabs.classList.toggle('is-squeezed', squeezed);
+    const reserve = squeezed ? reserveWith(34, 32) : crowded ? reserveWith(44, 40) : reserveWith(GPN_TAB_FIXED_W, GPN_TAB_MARK_W);
     const share = (GPN_TAB_SHARE[n] ?? 0.96) / n;
     for (const t of data.tabs) {
       const node = ui.tabEls.get(t.id);
@@ -1738,6 +1741,33 @@ function gpnCreatePanel(opts) {
     return null;
   }
 
+  /**
+   * 拖曳時跟著滑鼠的「殘影」，像在檔案總管拖檔案：半透明的卡片縮圖，
+   * 移到資料夾、書籤上面時，底下多一行「→ 移動至 工作 › 一般」。
+   * 只在離開清單（拖出去找地方放）或對準了資料夾、書籤時出現；在清單裡上下排順序時，卡片本身就在動，不用殘影。
+   * 放在 shadow root 最上層（position: fixed），不受筆記本的毛玻璃影響。
+   */
+  function makeGhost(card) {
+    const label = el('div', { class: 'gpn-drag-label' });
+    const g = el('div', { class: 'gpn-drag-ghost', 'aria-hidden': 'true' },
+      el('div', { class: 'gpn-drag-card' },
+        el('div', { class: 'gpn-drag-title', text: card.querySelector('.gpn-title-text')?.textContent || '' }),
+        el('div', { class: 'gpn-drag-sub', text: card.querySelector('.gpn-title-sub')?.textContent || '' })),
+      label);
+    root.append(g);
+    g._label = label;
+    return g;
+  }
+
+  function moveGhost(g, ev, target, show) {
+    // 網頁版整個放大了（zoom），fixed 的位置要除回去
+    const k = root.host?.currentCSSZoom || parseFloat(getComputedStyle(root.host || document.body).zoom) || 1;
+    g.style.transform = `translate(${(ev.clientX + 14) / k}px, ${(ev.clientY + 18) / k}px)`;
+    g.classList.toggle('is-on', show);
+    g._label.hidden = !target;
+    if (target) g._label.textContent = `→ 移動至 ${whereLabel(target.tabId, target.folderId)}`;
+  }
+
   function moveItemTo(fromTab, fromFolder, id, to) {
     const src = listOf(fromTab, fromFolder);
     const dest = listOf(to.tabId, to.folderId);
@@ -1791,6 +1821,7 @@ function gpnCreatePanel(opts) {
       card.classList.add('is-dragging');
       list.classList.add('is-dragging');
       if (canMove) ui.book.classList.add('is-carrying');
+      const ghost = canMove ? makeGhost(card) : null;
 
       const onMove = (ev) => {
         moved = true;
@@ -1801,7 +1832,10 @@ function gpnCreatePanel(opts) {
             t?.node.classList.add('is-drop');
             target = t;
           }
-          if (target) return;          // 在資料夾、書籤上面：先不排順序
+          const lb = list.getBoundingClientRect();
+          const outside = ev.clientX < lb.left || ev.clientX > lb.right || ev.clientY < lb.top || ev.clientY > lb.bottom;
+          moveGhost(ghost, ev, target, !!target || outside);
+          if (target || outside) return;   // 在資料夾、書籤上面（或拖出清單）：先不排順序
         }
         const y = ev.clientY;
         const box = list.getBoundingClientRect();
@@ -1816,6 +1850,7 @@ function gpnCreatePanel(opts) {
         }
       };
       const onUp = () => {
+        ghost?.remove();
         card.classList.remove('is-dragging');
         list.classList.remove('is-dragging');
         ui.book.classList.remove('is-carrying');

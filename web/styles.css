@@ -408,6 +408,12 @@ button { cursor: pointer; }
 .gpn-tabs.is-crowded .gpn-tab.is-mark { width: 40px; }
 .gpn-tabs.is-crowded .gpn-tab.is-fixed .gpn-tab-icon svg { width: 19px; height: 19px; }
 .gpn-tabs.is-crowded .gpn-tab-main { padding-left: 6px; padding-right: 6px; }
+/* 書籤滿 8 個、符號又開滿 6 種，連上面都放不下時：全部再縮到最窄（panel.js 的 layoutTabs 判斷） */
+.gpn-tabs.is-squeezed .gpn-tab { min-width: 34px; }
+.gpn-tabs.is-squeezed .gpn-tab.is-fixed { width: 34px; }
+.gpn-tabs.is-squeezed .gpn-tab.is-mark { width: 32px; }
+.gpn-tabs.is-squeezed .gpn-tab.is-fixed .gpn-tab-icon svg { width: 17px; height: 17px; }
+.gpn-tabs.is-squeezed .gpn-tab-main { padding-left: 3px; padding-right: 3px; }
 
 /* 新增書籤 */
 .gpn-tab-add {
@@ -1914,6 +1920,44 @@ span.gpn-face-art > svg { display: block; width: 100%; height: 100%; }
 section[data-section="markTab"] .gpn-note--roomy { margin: 4px 0 16px; }
 .gpn-mt-icon svg { width: 100%; height: 100%; }
 .gpn-mt-danger .gpn-btn2 { white-space: normal; height: auto; min-height: 46px; padding: 8px 14px; }
+
+/* 拖提示詞時跟著滑鼠的殘影（像檔案總管）：半透明卡片＋「→ 移動至 ○○」 */
+.gpn-drag-ghost {
+  position: fixed;
+  left: 0; top: 0;
+  z-index: 2147483000;
+  width: 240px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .12s ease;
+}
+.gpn-drag-ghost.is-on { opacity: 1; }
+.gpn-drag-card {
+  padding: 8px 12px;
+  border: 1px solid var(--outline);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  box-shadow: var(--shadow-lg);
+  color: var(--text);
+  opacity: .82;
+}
+.gpn-drag-title, .gpn-drag-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gpn-drag-title { font-size: 14px; font-weight: 600; }
+.gpn-drag-sub { margin-top: 2px; font-size: 12px; color: var(--text-mute); }
+.gpn-drag-label {
+  display: inline-block;
+  max-width: 100%;
+  margin: 6px 0 0 8px;
+  padding: 3px 9px;
+  border: 1px solid var(--outline-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 /* 設定視窗被擠窄時：選單改成上面一排 */
 @container gpn-settings (max-width: 560px) {

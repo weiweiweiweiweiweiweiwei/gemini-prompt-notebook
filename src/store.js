@@ -79,7 +79,7 @@ const GPN_MARK_LABELS = {
   'red-bang': '紅色驚嘆號', 'orange-guillemet': '橘色雙箭頭', 'yellow-bang': '黃色驚嘆號',
   'green-check': '綠色勾勾', 'blue-info': '藍色資訊', 'purple-question': '紫色問號',
 };
-const GPN_MAX_MARKS = 4;                 // 黃色星星以外最多再用幾種（每種在書籤列多一個書籤，太多會擠不下）
+const GPN_MAX_MARKS = 6;                 // 黃色星星以外最多再用幾種（每種在書籤列多一個書籤，太多會擠不下）
 const GPN_MARK_TAB = 't_mark_';          // 符號書籤的 id：t_mark_ 加上種類，例如 t_mark_purple-question
 const gpnMarkOfTab = (id) => (typeof id === 'string' && id.startsWith(GPN_MARK_TAB) ? id.slice(GPN_MARK_TAB.length) : '');
 
