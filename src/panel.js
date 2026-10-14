@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.25.0';
+const GPN_APP_VERSION = '4.26.0';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -2413,6 +2413,8 @@ function gpnCreatePanel(opts) {
     }, el('span', { class: 'gpn-nav-icon', html: icon }), el('span', { class: 'gpn-nav-text', text }));
     ui.sNavItems = [
       navItem('tab', ICON_TAB, '名稱與資料夾'),
+      // 從「我的最愛」、符號書籤打開設定時，第一組換成這一頁（和一般書籤的「名稱與資料夾」同一個位置）
+      navItem('markTab', ICON_STAR, '這個符號'),
       navItem('marks', ICON_STAR, '星號'),
       // 沒有雲端功能的地方（例如測試）就不出現這一項
       cloud ? navItem('account', ICON_ACCOUNT, '帳號') : null,
@@ -2421,7 +2423,7 @@ function gpnCreatePanel(opts) {
       // 背景圖只鋪在「面板就是整個畫面」的地方（網頁版、工具列小視窗）；AI 網站裡的面板背後是網站本身
       standalone ? navItem('look', ICON_IMAGE, '背景') : null,
     ].filter(Boolean);
-    const [navTab, ...navAll] = ui.sNavItems;
+    const [navTab, navMarkTab, ...navAll] = ui.sNavItems;
     // 最下面兩個不是設定頁，是「去別的地方」：全部提示詞（只有網頁版）、資源回收桶
     const navGo = (icon, text, onclick, extra = {}) => el(extra.href ? 'a' : 'button', {
       class: 'gpn-nav-item gpn-nav-item--go', type: extra.href ? null : 'button', onclick, ...extra,
@@ -2429,7 +2431,7 @@ function gpnCreatePanel(opts) {
     ui.sTrashNav = navGo(ICON_DELETE, '資源回收桶', openTrash);
     const nav = el('nav', { class: 'gpn-settings-nav', role: 'tablist', 'aria-orientation': 'vertical' },
       el('h2', { text: '設定' }),
-      ui.sNavGroup, navTab,
+      ui.sNavGroup, navTab, navMarkTab,
       el('div', { class: 'gpn-nav-group', text: '所有書籤' }), ...navAll,
       el('div', { class: 'gpn-nav-group', text: '其他' }),
       allPageUrl ? navGo(ICON_LIST, '全部提示詞', null, {
@@ -2485,6 +2487,9 @@ function gpnCreatePanel(opts) {
     /* ---- 星號 ---- */
     const secMarks = buildMarksSection();
 
+    /* ---- 這個符號（從我的最愛、符號書籤打開設定時）---- */
+    const secMarkTab = buildMarkTabSection();
+
 
     /* ---- 雲端同步 ---- */
     const secAccount = cloud ? buildAccountSection() : null;
@@ -2498,7 +2503,7 @@ function gpnCreatePanel(opts) {
     /* ---- 背景 ---- */
     const secLook = standalone ? buildLookSection() : null;
 
-    ui.sSections = [secTab, secMarks, secAccount, secClones, secBackup, secLook].filter(Boolean);
+    ui.sSections = [secTab, secMarkTab, secMarks, secAccount, secClones, secBackup, secLook].filter(Boolean);
     ui.sBody = el('div', { class: 'gpn-settings-body' }, ...ui.sSections);
 
     ui.settings = el('div', { class: 'gpn-dialog gpn-settings', onmousedown: stop },
@@ -2520,7 +2525,9 @@ function gpnCreatePanel(opts) {
     // 「最近使用」「我的最愛」、符號書籤沒有名稱、顏色、資料夾可以改，直接打開全部書籤共用的那幾頁
     // （我的最愛、符號書籤打開「星號」）
     const hasAccount = !!cloud && !!cloudState.configured;
-    if (tab.mark && section === 'tab') section = 'marks';
+    if (tab.mark && section === 'tab') section = 'markTab';
+    if (!tab.mark && section === 'markTab') section = 'tab';
+    if (tab.mark) resetMarkTab(tab);
     if (tab.fixed && section === 'tab') section = hasAccount ? 'account' : 'backup';
     if ((section === 'account' || section === 'clones') && !hasAccount) section = tab.fixed ? 'backup' : 'tab';
     settingsTabId = tabId;
@@ -2557,6 +2564,7 @@ function gpnCreatePanel(opts) {
     hideFolderConfirm();
     disarmTabDelete();
     disarmWipe();
+    disarmMarkTab();
     toggleCloneInfo(false);
     if (key === 'clones') openClones();
   }
@@ -2576,10 +2584,13 @@ function gpnCreatePanel(opts) {
     // 「最近使用」「我的最愛」：藏起「這個書籤」那一組（名稱與資料夾）
     // 雲端還沒設定好：「雲端同步」整頁不出現，免得使用者看到一堆給管理員的說明
     const fixed = !!tab.fixed;
-    ui.sNavGroup.hidden = fixed;
+    ui.sNavGroup.hidden = fixed && !tab.mark;
+    if (tab.mark) ui.sNavGroup.textContent = `「${markLabel(tab.mark)}」這個書籤`;
+    refreshMarkTab(tab);
     for (const b of ui.sNavItems) {
       const key = b.getAttribute('data-section');
       if (key === 'tab') b.hidden = fixed;
+      if (key === 'markTab') b.hidden = !tab.mark;
       if (key === 'account') b.hidden = !cloudState.configured;
     }
     if (fixed) return;
@@ -2753,6 +2764,174 @@ function gpnCreatePanel(opts) {
       });
     }
     ui.mOff.replaceChildren(...GPN_MARKS.filter((m) => !using.includes(m)).map((m) => chip(m, false)));
+  }
+
+  /* ---- 這個符號（我的最愛、符號書籤的設定）----
+     符號書籤只是把「標了同一種符號」的提示詞集中起來看，提示詞本身還在原本的書籤。這一頁可以：
+       建立成新書籤：把這些提示詞複製一份，變成一個一般的書籤（和「＋ 新增書籤」的一樣，可以改名、開資料夾…）。
+                    複製的不帶符號；原本的提示詞、這個符號書籤都不動。
+       清除全部標記：這些提示詞都拿掉這個符號（提示詞本身留著）。
+       刪除這些提示詞：全部移到資源回收桶（需要時可以還原）。
+       拿掉這個符號書籤：書籤列上不再出現（和 設定 → 星號 移到「沒使用」一樣；我的最愛不能拿掉）。
+     後面三個都是「按兩次」。 */
+
+  let mtColor = 'amber', mtArmed = '', mtTimer = 0;
+
+  /** 標了這個符號、而且還找得到的提示詞（照符號書籤裡的順序） */
+  function markedItems(m) {
+    const where = indexItems();
+    return markedIds(m).map((id) => where.get(id)).filter(Boolean);
+  }
+
+  function buildMarkTabSection() {
+    ui.mtHead = el('h3');
+    ui.mtStats = el('p', { class: 'gpn-lede' });
+    ui.mtName = el('input', {
+      class: 'gpn-input', type: 'text', maxlength: String(GPN_MAX_LABEL), placeholder: '新書籤的名稱',
+      oninput: () => { ui.mtName.classList.remove('is-bad'); ui.mtNameHint.classList.remove('is-on'); },
+      onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); onMarkToTab(); } },
+    });
+    ui.mtNameHint = el('div', { class: 'gpn-hint', text: '名稱不能空白' });
+    ui.mtColor = buildColorPicker((c) => { mtColor = c; });
+    ui.mtMake = el('button', { class: 'gpn-btn gpn-btn--save gpn-btn--block', type: 'button', onclick: onMarkToTab }, '建立成新書籤');
+    ui.mtMakeNote = el('div', { class: 'gpn-note' });
+
+    ui.mtUnmark = el('button', { class: 'gpn-btn2', type: 'button', onclick: () => onMarkTabDanger('unmark') });
+    ui.mtDelete = el('button', { class: 'gpn-btn2 gpn-clone-del', type: 'button', onclick: () => onMarkTabDanger('delete') });
+    ui.mtRemove = el('button', { class: 'gpn-btn2', type: 'button', onclick: () => onMarkTabDanger('remove') });
+    ui.mtRemoveNote = el('div', { class: 'gpn-note' });
+
+    return el('section', { class: 'gpn-section', 'data-section': 'markTab' },
+      ui.mtHead, ui.mtStats,
+      el('div', { class: 'gpn-label', text: '建立成新書籤' }),
+      el('div', { class: 'gpn-note gpn-note--roomy', text:
+        '把這些提示詞複製一份，變成一個一般的書籤（和「＋ 新增書籤」建立的一樣，可以改名、開資料夾、拖曳排序）。' +
+        '複製出來的不帶符號；原本的提示詞和這個符號書籤都不會變。' }),
+      field('新書籤的名稱', null, ui.mtName, ui.mtNameHint),
+      field('書籤顏色', null, ui.mtColor.node),
+      ui.mtMake, ui.mtMakeNote,
+      el('div', { class: 'gpn-sep' }),
+      el('div', { class: 'gpn-label', text: '一次處理全部' }),
+      el('div', { class: 'gpn-brow gpn-mt-danger' }, ui.mtUnmark, ui.mtDelete),
+      el('div', { class: 'gpn-note', text:
+        '「清除全部標記」只拿掉符號，提示詞還在原本的書籤；「刪除」會把這些提示詞移到資源回收桶（需要時可以還原）。兩個都要按兩次。' }),
+      el('div', { class: 'gpn-sep' }),
+      ui.mtRemoveBox = el('div', {},
+        el('div', { class: 'gpn-label', text: '書籤列' }),
+        el('div', { class: 'gpn-brow' }, ui.mtRemove),
+        ui.mtRemoveNote));
+  }
+
+  /** 每次從符號書籤打開設定：名稱預設成符號的名字，顏色挑一個還沒用過的 */
+  function resetMarkTab(tab) {
+    if (!ui.mtName) return;
+    disarmMarkTab();
+    ui.mtName.value = markLabel(tab.mark);
+    ui.mtName.classList.remove('is-bad');
+    ui.mtNameHint.classList.remove('is-on');
+    const used = new Set(data.tabs.map((t) => t.color));
+    mtColor = GPN_COLORS.find((c) => !used.has(c)) || GPN_COLORS[0];
+    ui.mtColor.set(mtColor);
+    ui.mtColor.close();
+  }
+
+  function refreshMarkTab(tab) {
+    if (!ui.mtHead || !tab?.mark) return;
+    const m = tab.mark, fav = m === GPN_MARK_FAV;
+    const n = markedItems(m).length;
+    const name = markLabel(m);
+    ui.mtHead.replaceChildren(el('span', { class: 'gpn-mt-icon', html: markIcon(m) }), el('span', { text: name }));
+    ui.mtStats.textContent = n
+      ? `標了「${name}」的提示詞有 ${n} 則。它們本身放在原本的書籤裡，這個書籤只是把它們集中起來看。`
+      : `還沒有標「${name}」的提示詞。`;
+    const full = data.tabs.length >= GPN_MAX_TABS;
+    ui.mtMake.disabled = !n || full;
+    ui.mtMakeNote.textContent = full ? `書籤已經有 ${GPN_MAX_TABS} 個（上限），請先刪掉一個再建立`
+      : !n ? '沒有提示詞可以複製' : `會建立一個有 ${n} 則提示詞的新書籤，放在書籤列最後面`;
+    if (mtArmed !== 'unmark') disarmButton(ui.mtUnmark, `清除全部標記（${n} 則）`);
+    if (mtArmed !== 'delete') disarmButton(ui.mtDelete, `刪除這 ${n} 則提示詞`);
+    if (mtArmed !== 'remove') disarmButton(ui.mtRemove, `從書籤列拿掉「${name}」`);
+    ui.mtUnmark.disabled = ui.mtDelete.disabled = !n;
+    ui.mtRemoveBox.hidden = fav;
+    ui.mtRemoveNote.textContent = n
+      ? `拿掉之後，這 ${n} 則的「${name}」還記著，到 設定 → 星號 加回來就會再出現。`
+      : `和 設定 → 星號 把「${name}」移到「沒使用」一樣，之後可以再加回來。`;
+  }
+
+  function disarmMarkTab() {
+    clearTimeout(mtTimer);
+    mtArmed = '';
+  }
+
+  /** 建立成新書籤：複製一份（新的 id、不帶符號），放在書籤列最後面，然後切過去 */
+  async function onMarkToTab() {
+    const tab = tabById(settingsTabId);
+    if (!tab?.mark) return;
+    const label = ui.mtName.value.trim();
+    if (!label) {
+      ui.mtName.classList.add('is-bad');
+      ui.mtNameHint.classList.add('is-on');
+      ui.mtName.focus();
+      return;
+    }
+    if (data.tabs.length >= GPN_MAX_TABS) { toast(`書籤已經有 ${GPN_MAX_TABS} 個（上限），請先刪掉一個`, true); return; }
+    const found = markedItems(tab.mark);
+    if (!found.length) return;
+    const items = found.map(({ it }) => ({ id: gpnNewId(), title: it.title, content: it.content }));
+    const fresh = { id: gpnNewId('t'), label, color: mtColor, items };
+    data.tabs.push(fresh);
+    data.activeId = fresh.id;
+    folderId = null;
+    sfx('save');
+    await persist();
+    closeSettings();
+    render();
+    toast(`已建立書籤「${label}」，放了 ${items.length} 則（「${markLabel(tab.mark)}」書籤還在）`, false, 4200);
+  }
+
+  /** 清除全部標記／刪除這些提示詞／從書籤列拿掉：第一次按先變成確認，6 秒內再按一次才做 */
+  function onMarkTabDanger(kind) {
+    const tab = tabById(settingsTabId);
+    if (!tab?.mark) return;
+    const m = tab.mark, name = markLabel(m);
+    const btn = { unmark: ui.mtUnmark, delete: ui.mtDelete, remove: ui.mtRemove }[kind];
+    const found = markedItems(m);
+    if (mtArmed !== kind) {
+      disarmMarkTab();
+      refreshMarkTab(tab);
+      mtArmed = kind;
+      armButton(btn, kind === 'unmark' ? `確定拿掉 ${found.length} 則的符號？再按一次`
+        : kind === 'delete' ? `確定刪除 ${found.length} 則？再按一次`
+        : '確定拿掉？再按一次');
+      mtTimer = setTimeout(() => { disarmMarkTab(); refreshMarkTab(tabById(settingsTabId)); }, 6000);
+      return;
+    }
+    disarmMarkTab();
+    if (kind === 'remove') {
+      closeSettings();
+      toggleMarkType(m);           // 和 設定 → 星號 移到「沒使用」一樣（會換到我的最愛、說明）
+      return;
+    }
+    if (kind === 'unmark') {
+      for (const { it } of found) setMark(it.id, '');
+      sfx('unstar');
+      persist();
+      render();
+      refreshSettings();
+      toast(`已拿掉 ${found.length} 則的「${name}」，提示詞都還在原本的書籤`);
+      return;
+    }
+    // 刪除：一則一則移到資源回收桶（記著原本在哪，可以還原）
+    for (const { it, tab: t, folder } of found) {
+      const list = folder || t;
+      const idx = list.items.indexOf(it);
+      if (idx >= 0) toTrash(list.items.splice(idx, 1)[0], t.id, folder ? folder.id : '');
+    }
+    sfx('del');
+    persist();
+    render();
+    refreshSettings();
+    toast(`已把 ${found.length} 則移到資源回收桶（需要時可以還原）`);
   }
 
   /** 拖曳換了符號的順序（書籤列上、設定裡都是這個） */

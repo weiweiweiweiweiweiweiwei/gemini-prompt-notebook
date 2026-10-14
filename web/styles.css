@@ -1908,6 +1908,13 @@ span.gpn-face-art > svg { display: block; width: 100%; height: 100%; }
   color: var(--text); font-size: 12px; font-weight: 600;
 }
 
+/* 設定 → 這個符號（從我的最愛、符號書籤打開）*/
+.gpn-section h3:has(.gpn-mt-icon) { display: flex; align-items: center; gap: 10px; }
+.gpn-mt-icon { display: flex; width: 24px; height: 24px; }
+section[data-section="markTab"] .gpn-note--roomy { margin: 4px 0 16px; }
+.gpn-mt-icon svg { width: 100%; height: 100%; }
+.gpn-mt-danger .gpn-btn2 { white-space: normal; height: auto; min-height: 46px; padding: 8px 14px; }
+
 /* 設定視窗被擠窄時：選單改成上面一排 */
 @container gpn-settings (max-width: 560px) {
   .gpn-settings-grid { flex-direction: column; }
