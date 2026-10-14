@@ -366,7 +366,7 @@ function gpnCreateSync(o) {
     }
     if (/accessNotConfigured|SERVICE_DISABLED/i.test(s)) return '雲端硬碟功能還沒在後台開啟（管理員要到 Google Cloud 啟用 Google Drive API）';
     if (/clone_not_found/i.test(s)) return '找不到這個分身：代號打錯了，或已經被建立的人銷毀了';
-    if (/clone_expired/i.test(s)) return '這個分身已經到期，暫時停用了。請建立的人延長期限，之後用同一組代號再登入';
+    if (/clone_expired/i.test(s)) return '這個分身已經停用了（到期，或建立的人把它停用了）。要再使用，請建立的人重新啟用，之後用同一組代號再登入';
     if (/peer_gone/i.test(s)) return '有的對象已經不在了（分身被銷毀或停用），請重新選一次';
     if (/too_large/i.test(s)) return '這則提示詞太長了，沒辦法分享';
     if (/bad_date/i.test(s)) return '日期不對：請選今天以後、十年以內的日期';
@@ -865,6 +865,11 @@ function gpnCreateSync(o) {
         if (hint) await kv.set(GPN_CLONE_HINT_KEY, hint);
         await saveSession(null);
         await kv.remove(GPN_OWNER_STASH_KEY);
+        // 分身被停用、銷毀了：這台留著的那份（建立的人的提示詞）一起清掉。雲端上的都還在，重新啟用後再登入就回來了
+        await writeRemote(gpnDefaultData());
+        meta = { ...EMPTY_META };
+        await saveMeta();
+        await kv.remove(GPN_BASE_KEY);
         setState({ inbox: [], signedIn: false, email: '', picture: '', phase: 'idle', pending: false,
           clone: null, owner: '', cloneHint: hint, message: explain(e) });
         e.auth = true;
@@ -1053,6 +1058,25 @@ function gpnCreateSync(o) {
     if (!(at > Date.now())) return { ok: false, error: '請選今天以後的日期' };
     try {
       await relayCall(CLONE_URL, { op: 'extend', token: await accessToken(), id: c.id, expiresAt: at });
+      await drive(`/drive/v3/files/${encodeURIComponent(c.fileId)}?fields=id`, {
+        method: 'PATCH', type: 'application/json', body: JSON.stringify({ appProperties: { expires: String(at) } }),
+      });
+      return { ok: true, expiresAt: at };
+    } catch (e) {
+      return { ok: false, error: explain(e) };
+    }
+  }
+
+  /**
+   * 停用分身：代號馬上失效（中繼和檔案上的到期日都改成現在），用這個分身的裝置下次連線時就被登出。
+   * 什麼都不刪：建立的人照樣可以進入分身，延長期限（重新啟用）之後同一組代號又能用。
+   */
+  async function disableClone(c) {
+    await ready;
+    if (ownerOnly()) return { ok: false, error: ownerOnly() };
+    try {
+      const r = await relayCall(CLONE_URL, { op: 'disable', token: await accessToken(), id: c.id });
+      const at = Number(r.expiresAt) || Date.now();
       await drive(`/drive/v3/files/${encodeURIComponent(c.fileId)}?fields=id`, {
         method: 'PATCH', type: 'application/json', body: JSON.stringify({ appProperties: { expires: String(at) } }),
       });
@@ -1328,8 +1352,8 @@ function gpnCreateSync(o) {
 
   return {
     getState, syncNow, markDirty, flush, authUrl, finishAuth, signOut, putWallpaper, getWallpaper,
-    cloneSignIn, enterClone, leaveClone, listClones, createClone, extendClone, destroyClone, readClone, pushClone, setCloneAvatar,
-    listPeers, sharePrompt, ackShares, keepShares, refreshInbox,
+    cloneSignIn, enterClone, leaveClone, listClones, createClone, extendClone, disableClone, destroyClone, readClone, pushClone,
+    setCloneAvatar, listPeers, sharePrompt, ackShares, keepShares, refreshInbox,
   };
 }
 

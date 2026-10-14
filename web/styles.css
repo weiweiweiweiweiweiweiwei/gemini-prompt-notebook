@@ -1744,6 +1744,7 @@ span.gpn-face-art > svg { display: block; width: 100%; height: 100%; }
 .gpn-clone-list { margin-top: 22px; }
 .gpn-clone-head { margin-bottom: 10px; }
 .gpn-clone-card {
+  position: relative;
   margin-bottom: 12px;
   padding: 14px 16px 16px;
   border: 1px solid var(--outline);
@@ -1834,15 +1835,71 @@ span.gpn-face-art > svg { display: block; width: 100%; height: 100%; }
 .gpn-avatar-mini { flex: none; width: 30px; height: 30px; border-radius: 50%; overflow: hidden; display: block; }
 .gpn-avatar-drop { margin-top: 12px; }
 
-/* 分身卡片：停用（到期）、延長期限 */
-.gpn-clone-card.is-off { border-style: dashed; }
-.gpn-clone-card.is-off .gpn-clone-face { filter: grayscale(.8); opacity: .75; }
+/* 分身卡片：停用了（到期、或主人按了停用）→ 黯淡的灰：虛線框、底色變淡、頭像去色、代號劃掉；「進入分身」照樣能按 */
+.gpn-clone-card.is-off {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--surface-input) 40%, transparent);
+}
+.gpn-clone-card.is-off .gpn-clone-face { filter: grayscale(1); opacity: .5; }
+.gpn-clone-card.is-off .gpn-clone-name,
+.gpn-clone-card.is-off .gpn-clone-id,
+.gpn-clone-card.is-off > .gpn-note { opacity: .55; }
+.gpn-clone-card.is-off .gpn-clone-id code { text-decoration: line-through; text-decoration-thickness: 1.5px; }
 .gpn-clone-off {
   flex: none; padding: 2px 10px; border-radius: 999px;
-  background: color-mix(in srgb, var(--error) 18%, transparent);
-  color: var(--error); font-size: 12.5px; font-weight: 600;
+  background: var(--hover);
+  color: var(--text-mute); font-size: 12.5px; font-weight: 600;
 }
-.gpn-clone-renew { border-color: var(--primary); color: var(--primary); }
+.gpn-clone-head--off { margin-top: 22px; }
+
+/* 卡片右上角的「更多」（圓圈裡三個點）和它打開的小選單 */
+.gpn-clone-more {
+  flex: none;
+  width: 38px; height: 38px;
+  margin-left: auto;
+  padding: 4px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-mute);
+  cursor: pointer;
+  transition: background-color .14s ease, color .14s ease;
+}
+.gpn-clone-more svg { width: 100%; height: 100%; display: block; }
+.gpn-clone-more:hover, .gpn-clone-more.is-on { background: var(--hover); color: var(--text); }
+.gpn-clone-more:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.gpn-clone-menu {
+  position: absolute;
+  top: 58px; right: 12px;
+  z-index: 6;
+  width: 210px;
+  max-width: calc(100% - 24px);
+  padding: 6px;
+  display: flex; flex-direction: column;
+  border: 1px solid var(--outline);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  animation: gpn-menu-in .14s cubic-bezier(.2, 0, 0, 1);
+}
+.gpn-clone-mi {
+  display: flex; align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--text);
+  font-size: 15px; font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color .12s ease;
+}
+.gpn-clone-mi:hover { background: var(--hover); }
+.gpn-clone-mi:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
+.gpn-clone-mi.is-danger { color: var(--error); }
+.gpn-clone-mi.is-armed, .gpn-clone-mi.is-armed:hover { background: #e5484d; color: #fff; }
+.gpn-clone-msep { height: 1px; margin: 4px 8px; background: var(--outline); }
 .gpn-clone-extend { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
 .gpn-clone-extend .gpn-note { margin: 0; }
 .gpn-clone-extend .gpn-btn2 { flex: none; min-width: 72px; }

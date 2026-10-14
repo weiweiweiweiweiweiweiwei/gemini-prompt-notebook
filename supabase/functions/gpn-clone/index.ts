@@ -31,6 +31,7 @@
  *     register { token, refresh_token, id, fileId, label }  登記一個剛建好的分身
  *     token    { token, refresh_token }                     換一張新的 refresh token 給這裡保管
  *     extend   { token, id, expiresAt }                     延長期限（改成哪一天，毫秒）
+ *     disable  { token, id }                                停用：代號馬上失效（到期日改成現在），什麼都不刪，延長期限就能重新啟用
  *     revoke   { token, id }                                銷毀（代號不能再用）
  *   用分身的人（id = 分身代號）
  *     head   { id }          → { fileId, version, label, avatar, ownerEmail, expiresAt }
@@ -317,6 +318,18 @@ const ops: Record<string, (b: Record<string, unknown>) => Promise<unknown>> = {
     if (!isId(id)) throw new Fail(404, 'clone_not_found');
     const at = Number(b.expiresAt);
     if (!Number.isFinite(at) || at <= Date.now() || at > Date.now() + 10 * YEAR) throw new Fail(400, 'bad_date');
+    const rows = await db(`/gpn_clones?id_hash=eq.${q(await sha256(id))}&owner_sub=eq.${q(me.sub)}`, {
+      method: 'PATCH', body: JSON.stringify({ expires_at: new Date(at).toISOString() }),
+    });
+    if (!rows?.length) throw new Fail(404, 'clone_not_found');
+    return { ok: true, expiresAt: at };
+  },
+
+  async disable(b) {
+    const me = await whoIs(String(b.token || ''));
+    const id = cleanId(b.id);
+    if (!isId(id)) throw new Fail(404, 'clone_not_found');
+    const at = Date.now();
     const rows = await db(`/gpn_clones?id_hash=eq.${q(await sha256(id))}&owner_sub=eq.${q(me.sub)}`, {
       method: 'PATCH', body: JSON.stringify({ expires_at: new Date(at).toISOString() }),
     });

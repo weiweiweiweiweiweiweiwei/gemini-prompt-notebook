@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.28.0';
+const GPN_APP_VERSION = '4.29.0';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -104,6 +104,10 @@ function gpnCreatePanel(opts) {
     '<circle cx="12.8" cy="7.6" r="1.35" fill="currentColor"/>' +
     '<path d="M10.7 10.9h2.2l-1.45 5.3c-.16.62.34.86.76.5l.95-.78" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   /** 放大／縮小：兩個斜向箭頭（線條圓角） */
+  /** 圓圈裡三個空心小圓點：分身卡片右上角的「更多」 */
+  const ICON_MORE_RING =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.5">' +
+    '<circle cx="12" cy="12" r="10.25"/><circle cx="12" cy="7.3" r="1.55"/><circle cx="12" cy="12" r="1.55"/><circle cx="12" cy="16.7" r="1.55"/></g></svg>';
   const ICON_EXPAND =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4.5h5.5V10M19.5 4.5l-6 6M10 19.5H4.5V14M4.5 19.5l6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   const ICON_SHRINK =
@@ -286,6 +290,7 @@ function gpnCreatePanel(opts) {
   let lastAdopt = null;      // 上次「採用」放到哪裡 { tabId, folderId }：下次預設同一個地方
   let cAvatarOpen = '';          // 哪個分身的「換頭像」打開著（分身代號）
   let cExtendOpen = '';          // 哪個分身的「延長期限」打開著（分身代號）
+  let cMenuOpen = '';            // 哪個分身卡片右上角的「更多」打開著（分身代號）
   const hasAvatars = () => typeof GPN_AVATARS !== 'undefined';
   /** 對話框開著時雲端送來新資料，先不重畫（免得打到一半的字不見），關掉對話框再畫 */
   let staleWhileLayer = false;
@@ -3530,6 +3535,9 @@ function gpnCreatePanel(opts) {
   const cloneExpired = (c) => !!c.expiresAt && c.expiresAt <= Date.now();
 
   function buildClonesSection() {
+    root.addEventListener('pointerdown', (e) => {
+      if (cMenuOpen && !e.target.closest?.('.gpn-clone-menu, .gpn-clone-more')) closeCloneMenu();
+    }, true);
     ui.cMsg = el('div', { class: 'gpn-note gpn-note--status', role: 'status' });
     ui.cNew = el('button', { class: 'gpn-btn gpn-btn--save gpn-btn--block', type: 'button', onclick: () => openPick('create') },
       '＋　建立分身');
@@ -3545,7 +3553,8 @@ function gpnCreatePanel(opts) {
         '分身的提示詞存在你的 Google 雲端硬碟（一個分身一個檔案），你隨時可以「進入分身」幫忙編輯。' +
         '分身和你的筆記本各自獨立，你之後改了自己的，可以按「再推一次」送過去。' }),
       el('p', { text:
-        '建立滿一年會停用（同事登入不了，資料都還在）：你可以延長期限、或把它銷毀；停用期間你自己照樣可以進入分身。' }),
+        '建立滿一年會自動停用；也可以隨時在卡片右上角的 ⋮ 按「停用」：代號馬上失效，用這個分身的裝置都會被登出，' +
+        '但資料都還在，你自己照樣可以進入分身。停用之後可以「重新啟用」（選新的到期日，同一組代號又能用），或「銷毀」。' }),
       el('p', { text:
         '你和分身、分身和分身之間可以互相分享提示詞：在提示詞右邊的 ⋯ 按「分享」，勾選要給誰。' +
         '收到的人頭像會變成一封信，打開按「採用」（選要放進哪個書籤、資料夾）或「暫留」。' }));
@@ -3595,6 +3604,7 @@ function gpnCreatePanel(opts) {
     disarmCloneDelete();
     cAvatarOpen = '';
     cExtendOpen = '';
+    cMenuOpen = '';
     ui.cDone.hidden = true;
     refreshClones();
     if (cloudState.signedIn && !cloudState.clone) loadClones();
@@ -3628,7 +3638,7 @@ function gpnCreatePanel(opts) {
       ui.cMineName.textContent = c.label || '分身';
       ui.cMineNote.textContent = `由 ${c.ownerEmail || '建立的人'} 建立和管理，提示詞存在他的 Google 雲端硬碟。` +
         (cloneExpired(c)
-          ? `已經在 ${ymd(c.expiresAt)} 到期，停用中（只有建立的人自己進得來）。`
+          ? `已經在 ${ymd(c.expiresAt)} 停用（代號失效了，只有建立的人自己進得來）。`
           : `到期日 ${ymd(c.expiresAt)}，到期後會停用（建立的人可以延長），想留一份的話先到「備份」下載。`);
       ui.cMineBack.hidden = !st.owner;
       if (!leaveArmed) ui.cMineBack.textContent = `回到我的帳號（${st.owner}）`;
@@ -3638,9 +3648,14 @@ function gpnCreatePanel(opts) {
     }
     if (!st.signedIn) { clones = null; return; }
     if (!clones) { ui.cList.replaceChildren(); return; }
-    ui.cList.replaceChildren(
+    // 停用的排在最後面（各自照建立的時間，新的在前）
+    const live = clones.filter((x) => !cloneExpired(x)), off = clones.filter(cloneExpired);
+    ui.cList.replaceChildren(...[
       el('div', { class: 'gpn-label gpn-clone-head', text: clones.length ? `建立過的分身（${clones.length}）` : '還沒有建立分身' }),
-      ...clones.map(cloneCard));
+      ...live.map(cloneCard),
+      off.length ? el('div', { class: 'gpn-label gpn-clone-head gpn-clone-head--off', text: `已停用（${off.length}）` }) : null,
+      ...off.map(cloneCard),
+    ].filter(Boolean));
   }
 
   /** 分身的頭像；沒選過（或認不得）的用兩個人的圖示 */
@@ -3711,11 +3726,15 @@ function gpnCreatePanel(opts) {
     refreshCloud(await cloud.getState());
   }
 
+  /**
+   * 分身卡片：上面頭像、名稱，右上角圓圈裡三個點（更多）；中間代號、日期；下面只有「進入分身」。
+   * 更多：再推一次、延長期限、停用。停用了 → 卡片變灰、排到最後，更多裡換成 再推一次、重新啟用、銷毀。
+   */
   function cloneCard(c) {
-    const armed = cDelArmed === c.id;
     const petOpen = cAvatarOpen === c.id && hasAvatars();
     const off = cloneExpired(c);
     const extending = cExtendOpen === c.id;
+    const menuOpen = cMenuOpen === c.id;
     let dateInput = null;
     if (extending) {
       // 預設延長一年（從今天或原本的到期日，看哪個比較晚）
@@ -3726,7 +3745,18 @@ function gpnCreatePanel(opts) {
       });
       dateInput.value = isoDay(from + 365 * 86400000);
     }
-    return el('div', { class: 'gpn-clone-card' + (off ? ' is-off' : '') },
+    const more = el('button', {
+      class: 'gpn-clone-more' + (menuOpen ? ' is-on' : ''), type: 'button', html: ICON_MORE_RING,
+      title: off ? '更多：再推一次、重新啟用、銷毀' : '更多：再推一次、延長期限、停用',
+      'aria-label': `「${c.label}」的更多動作`, 'aria-haspopup': 'menu', 'aria-expanded': String(menuOpen),
+      onclick: () => {
+        disarmCloneDelete();
+        cMenuOpen = menuOpen ? '' : c.id;
+        refreshClones();
+        if (!menuOpen) ui.cList.querySelector('.gpn-clone-menu .gpn-clone-mi')?.focus();
+      },
+    });
+    return el('div', { class: 'gpn-clone-card' + (off ? ' is-off' : ''), 'data-id': c.id },
       el('div', { class: 'gpn-clone-top' },
         el('button', {
           class: 'gpn-clone-face', type: 'button', title: '換頭像', 'aria-label': `換「${c.label}」的頭像`,
@@ -3734,29 +3764,84 @@ function gpnCreatePanel(opts) {
           onclick: () => { cAvatarOpen = petOpen ? '' : c.id; refreshClones(); },
         }, avatarFace(c.avatar)),
         el('div', { class: 'gpn-clone-name', text: c.label || '分身' }),
-        off ? el('span', { class: 'gpn-clone-off', text: '已停用' }) : null),
+        off ? el('span', { class: 'gpn-clone-off', text: '已停用' }) : null,
+        more),
+      menuOpen ? cloneMenu(c, off) : null,
       petOpen ? avatarGrid(c.avatar, (id) => onCloneAvatar(c, id)) : null,
       el('div', { class: 'gpn-clone-id' },
-        el('code', { text: gpnFormatCloneId(c.id) }),
+        el('code', { text: gpnFormatCloneId(c.id), title: off ? '這組代號已經失效（重新啟用後又能用）' : null }),
         el('button', { class: 'gpn-link gpn-clone-copy', type: 'button', onclick: () => copyInvite(c) }, '複製代號和網址')),
       el('div', { class: 'gpn-note', text: `建立 ${ymd(c.createdAt)}　・　` +
-        (off ? `${ymd(c.expiresAt)} 到期，停用中（同事登入不了，你自己還進得去）` : `到期 ${ymd(c.expiresAt)}`) +
+        (off ? `${ymd(c.expiresAt)} 停用（代號失效，你自己還進得去）` : `到期 ${ymd(c.expiresAt)}`) +
         (c.modifiedAt ? `　・　最後修改 ${ago(c.modifiedAt)}` : '') }),
       extending ? el('div', { class: 'gpn-clone-extend' },
-        el('span', { class: 'gpn-note', text: '新的到期日' }), dateInput,
+        el('span', { class: 'gpn-note', text: off ? '啟用到哪一天' : '新的到期日' }), dateInput,
         el('button', { class: 'gpn-btn2', type: 'button', onclick: () => onExtendClone(c, dateInput.value) }, '確定'),
         el('button', { class: 'gpn-btn2', type: 'button', onclick: () => { cExtendOpen = ''; refreshClones(); } }, '取消')) : null,
       el('div', { class: 'gpn-brow' },
-        el('button', { class: 'gpn-btn2', type: 'button', onclick: () => onEnterClone(c) }, '進入分身'),
-        el('button', { class: 'gpn-btn2', type: 'button', onclick: () => openPick('push', c) }, '再推一次'),
-        el('button', {
-          class: 'gpn-btn2' + (off ? ' gpn-clone-renew' : ''), type: 'button',
-          onclick: () => { cExtendOpen = extending ? '' : c.id; refreshClones(); },
-          title: off ? '延長期限，重新啟用這個分身' : '改到期日',
-        }, '延長期限'),
-        el('button', {
-          class: 'gpn-btn2 gpn-clone-del' + (armed ? ' gpn-btn2--danger' : ''), type: 'button', onclick: () => onDestroyClone(c),
-        }, armed ? '確定銷毀？再按一次' : '銷毀')));
+        el('button', { class: 'gpn-btn2 gpn-clone-enter', type: 'button', onclick: () => onEnterClone(c) }, '進入分身')));
+  }
+
+  /** 卡片右上角「更多」打開的小選單；停用、銷毀都要按兩次 */
+  function cloneMenu(c, off) {
+    const item = (text, title, onclick, cls = '') => el('button', {
+      class: 'gpn-clone-mi' + cls, type: 'button', role: 'menuitem', title, onclick,
+    }, text);
+    const key = (off ? 'destroy:' : 'disable:') + c.id;
+    const armed = cDelArmed === key;
+    return el('div', { class: 'gpn-clone-menu', role: 'menu', onkeydown: onCloneMenuKey },
+      item('再推一次', '把你現在的提示詞推進這個分身', () => { closeCloneMenu(); openPick('push', c); }),
+      item(off ? '重新啟用' : '延長期限', off ? '選一個新的到期日，同一組代號就能再用' : '改到期日',
+        () => { cMenuOpen = ''; cExtendOpen = c.id; refreshClones(); ui.cList.querySelector('.gpn-clone-date')?.focus(); }),
+      el('div', { class: 'gpn-clone-msep', role: 'separator' }),
+      off
+        ? item(armed ? '確定銷毀？再按一次' : '銷毀', '代號不能再用，檔案丟進你雲端硬碟的垃圾桶',
+          () => onDestroyClone(c), ' is-danger' + (armed ? ' is-armed' : ''))
+        : item(armed ? '確定停用？再按一次' : '停用', '代號馬上失效，用這個分身的裝置都會被登出；你自己還是可以進入分身',
+          () => onDisableClone(c), ' is-danger' + (armed ? ' is-armed' : '')));
+  }
+
+  function closeCloneMenu(focusBack = false) {
+    if (!cMenuOpen) return;
+    const id = cMenuOpen;
+    cMenuOpen = '';
+    disarmCloneDelete();
+    refreshClones();
+    if (focusBack) ui.cList.querySelector(`.gpn-clone-card[data-id="${id}"] .gpn-clone-more`)?.focus();
+  }
+
+  /** 小選單裡用上下鍵移動 */
+  function onCloneMenuKey(e) {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    const items = [...e.currentTarget.querySelectorAll('.gpn-clone-mi')];
+    const i = items.indexOf(root.activeElement);
+    items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus();
+  }
+
+  /** 停用、銷毀的第一下：按鈕變成「確定？再按一次」，6 秒內沒按就恢復 */
+  function armClone(key) {
+    cDelArmed = key;
+    clearTimeout(cDelTimer);
+    cDelTimer = setTimeout(() => { disarmCloneDelete(); refreshClones(); }, 6000);
+    refreshClones();
+    ui.cList.querySelector('.gpn-clone-mi.is-armed')?.focus();
+  }
+
+  /** 停用：代號馬上失效，用這個分身的裝置下次連線就被登出；什麼都不刪，自己照樣進得去 */
+  async function onDisableClone(c) {
+    if (cDelArmed !== 'disable:' + c.id) { armClone('disable:' + c.id); return; }
+    disarmCloneDelete();
+    cMenuOpen = '';
+    setCloneMsg('停用中…', 'ok');
+    refreshClones();
+    const r = await cloud.disableClone(c);
+    if (!r || !r.ok) { setCloneMsg(r?.error || '沒辦法停用，請稍後再試'); refreshClones(); return; }
+    setCloneMsg('');
+    c.expiresAt = r.expiresAt;
+    refreshClones();
+    sfx('del');
+    toast(`已停用分身「${c.label}」：這組代號失效了，用它的裝置下次連線就會被登出。你自己還是可以進入分身`, false, 6000);
   }
 
   /** 延長期限到選的那一天（那天結束才到期） */
@@ -3824,15 +3909,11 @@ function gpnCreatePanel(opts) {
   }
 
   async function onDestroyClone(c) {
-    if (cDelArmed !== c.id) {
-      cDelArmed = c.id;
-      clearTimeout(cDelTimer);
-      cDelTimer = setTimeout(() => { disarmCloneDelete(); refreshClones(); }, 6000);
-      refreshClones();
-      return;
-    }
+    if (cDelArmed !== 'destroy:' + c.id) { armClone('destroy:' + c.id); return; }
     disarmCloneDelete();
+    cMenuOpen = '';
     setCloneMsg('銷毀中…', 'ok');
+    refreshClones();
     const r = await cloud.destroyClone(c);
     if (!r || !r.ok) { setCloneMsg(r?.error || '沒辦法銷毀，請稍後再試'); refreshClones(); return; }
     clones = (clones || []).filter((x) => x.id !== c.id);
@@ -5003,6 +5084,7 @@ function gpnCreatePanel(opts) {
       else closePick();
     } else if (layerOpen(ui.settingsLayer)) {
       if (ui.cInfo && !ui.cInfo.hidden) toggleCloneInfo(false);
+      else if (cMenuOpen) closeCloneMenu(true);
       else if (!ui.sConfirm.hidden) hideFolderConfirm();
       else closeSettings();
     } else if (layerOpen(ui.folderLayer)) {
