@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.27.0';
+const GPN_APP_VERSION = '4.28.0';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -158,6 +158,27 @@ function gpnCreatePanel(opts) {
   const ICON_DELETE =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
 
+  /* 「⋯」選單的四格＋刪除（4.28.0）：Gemini、ChatGPT 用它們自己的標誌，其他是線條圖示 */
+  const ICON_GEMINI =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="gpn-gemini-g" x1="4" y1="20" x2="20" y2="4" gradientUnits="userSpaceOnUse">' +
+    '<stop offset="0" stop-color="#4893fc"/><stop offset=".55" stop-color="#969dff"/><stop offset="1" stop-color="#bd99fe"/></linearGradient></defs>' +
+    '<path fill="url(#gpn-gemini-g)" d="M12 2.2c.55 5.2 4.6 9.25 9.8 9.8-5.2.55-9.25 4.6-9.8 9.8-.55-5.2-4.6-9.25-9.8-9.8 5.2-.55 9.25-4.6 9.8-9.8z"/></svg>';
+  const ICON_CHATGPT =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22.28 9.82a5.98 5.98 0 0 0-.52-4.91 6.05 6.05 0 0 0-6.51-2.9A6.07 6.07 0 0 0 4.98 4.18a5.98 5.98 0 0 0-4 2.9 6.05 6.05 0 0 0 .74 7.1 5.98 5.98 0 0 0 .51 4.91 6.05 6.05 0 0 0 6.52 2.9A5.98 5.98 0 0 0 13.26 24a6.06 6.06 0 0 0 5.77-4.21 5.99 5.99 0 0 0 4-2.9 6.06 6.06 0 0 0-.75-7.07zm-9.02 12.61a4.48 4.48 0 0 1-2.88-1.04l.14-.08 4.78-2.76a.8.8 0 0 0 .39-.68v-6.74l2.02 1.17a.07.07 0 0 1 .04.05v5.58a4.5 4.5 0 0 1-4.49 4.5zm-9.66-4.13a4.47 4.47 0 0 1-.53-3.01l.14.09 4.78 2.76a.77.77 0 0 0 .78 0l5.84-3.37v2.33a.08.08 0 0 1-.03.06L9.74 19.95a4.5 4.5 0 0 1-6.14-1.65zM2.34 7.9a4.49 4.49 0 0 1 2.37-1.98v5.68a.77.77 0 0 0 .39.68l5.81 3.35-2.02 1.17a.08.08 0 0 1-.07 0l-4.83-2.79A4.5 4.5 0 0 1 2.34 7.87zm16.6 3.86-5.84-3.39 2.02-1.16a.08.08 0 0 1 .07 0l4.83 2.79a4.49 4.49 0 0 1-.68 8.1v-5.68a.79.79 0 0 0-.4-.66zm2-3.02-.14-.09-4.77-2.78a.78.78 0 0 0-.79 0L9.41 9.23V6.9a.07.07 0 0 1 .03-.06l4.83-2.79a4.5 4.5 0 0 1 6.68 4.66zM8.31 12.86 6.29 11.7a.08.08 0 0 1-.04-.06V6.07a4.5 4.5 0 0 1 7.38-3.45l-.14.08L8.7 5.46a.79.79 0 0 0-.39.68zm1.1-2.37 2.6-1.5 2.61 1.5v3l-2.6 1.5-2.6-1.5z"/></svg>';
+  const ICON_TILE_COPY =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">' +
+    '<rect x="8.5" y="7.5" width="11" height="13.5" rx="2.4"/><path d="M15.5 7.5V5.4A2.4 2.4 0 0 0 13.1 3H6.9A2.4 2.4 0 0 0 4.5 5.4v9.2A2.4 2.4 0 0 0 6.9 17h1.6"/></g></svg>';
+  const ICON_TILE_SHARE =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M14 4.5 20.5 11 14 17.5"/><path d="M20.5 11h-8.5C7.4 11 4 14.3 4 19v.5"/></g></svg>';
+  const ICON_TILE_DELETE =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M4 6.5h16M9.5 6.5V4.2h5v2.3M6.3 6.5l.9 13.1a1.6 1.6 0 0 0 1.6 1.4h6.4a1.6 1.6 0 0 0 1.6-1.4l.9-13.1M10 10.5v6.5M14 10.5v6.5"/></g></svg>';
+  /** 信封：收到的分享（頭像換成它，右上角是還沒看過的數字） */
+  const ICON_MAIL =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="3" y="5.5" width="18" height="13" rx="2.6"/><path d="m4.2 7.4 7.8 5.7 7.8-5.7"/></g></svg>';
+
   /**
    * 星號的長相，照 Gmail：六種顏色的星星，和六種方塊符號（！、»、✓、i、？）。
    * [形狀, 底色, 符號色]；黃色星星跟著主題的金黃色（和以前「我的最愛」的星星一樣）。
@@ -260,6 +281,9 @@ function gpnCreatePanel(opts) {
   // 分身（設定 → 分身）：clones 是建立過的分身；cPick 是正在勾選的 { mode: 'create' | 'push', clone, tabs, folders, items, open }
   const hasClones = () => !!cloud && typeof cloud.listClones === 'function' && !!GPN_CLOUD.cloneUrl;
   let clones = null, clonesBusy = false, cPick = null, cDelArmed = '', cDelTimer = 0, leaveArmed = false;
+  // 分享（卡片「⋯ → 分享」）：sharing 是正在分享的 { item, peers, picked }；信箱見 cloudState.inbox
+  let sharing = null;
+  let lastAdopt = null;      // 上次「採用」放到哪裡 { tabId, folderId }：下次預設同一個地方
   let cAvatarOpen = '';          // 哪個分身的「換頭像」打開著（分身代號）
   let cExtendOpen = '';          // 哪個分身的「延長期限」打開著（分身代號）
   const hasAvatars = () => typeof GPN_AVATARS !== 'undefined';
@@ -452,7 +476,7 @@ function gpnCreatePanel(opts) {
        有兩個帳號時一眼看得出現在是哪一個。和齒輪一樣大、排在同一列，點了打開「雲端同步」。 */
     ui.avatar = el('button', {
       class: 'gpn-tool gpn-avatar', type: 'button', hidden: '',
-      onclick: () => openSettings(data.activeId, 'account'),
+      onclick: () => (inboxOf().length ? openInbox() : openSettings(data.activeId, 'account')),
     });
 
     /* ---- 資料夾欄（寬的時候在左邊直排，窄的時候變成上面一排） ---- */
@@ -552,7 +576,10 @@ function gpnCreatePanel(opts) {
     buildNewTabLayer();
     buildFolderLayer();
     buildSettingsLayer();
-    root.append(...[ui.overlay, ui.editLayer, ui.newTabLayer, ui.folderLayer, ui.settingsLayer, ui.cPickLayer, ui.toast].filter(Boolean));
+    if (hasClones()) { buildShareLayer(); buildInboxLayer(); }
+    // 信箱放在編輯視窗前面：在信箱按「採用」打開的編輯視窗，要蓋在信箱上面
+    root.append(...[ui.overlay, ui.inboxLayer, ui.editLayer, ui.newTabLayer, ui.folderLayer, ui.settingsLayer, ui.cPickLayer,
+      ui.shareLayer, ui.toast].filter(Boolean));
   }
 
   /* ---- 筆記本寬度 ----
@@ -943,7 +970,7 @@ function gpnCreatePanel(opts) {
     });
 
     const moreBtn = el('button', {
-      class: 'gpn-more', type: 'button', title: '更多：用 Gemini、ChatGPT 開啟，或刪除',
+      class: 'gpn-more', type: 'button', title: '更多：用 Gemini、ChatGPT 開啟、拷貝、分享，或刪除',
       'aria-label': `更多動作：${item.title}`, 'aria-haspopup': 'menu', 'aria-expanded': 'false',
       html: ICON_MORE,
       onclick: (e) => { e.stopPropagation(); toggleCardMenu(moreBtn, item, tabId, fid); },
@@ -1207,9 +1234,11 @@ function gpnCreatePanel(opts) {
   }
 
   /* ==========================================================================
-     卡片右邊的「⋯」：開啟問問 Gemini、開啟 Gemini、開啟 ChatGPT、刪除
+     卡片右邊的「⋯」（4.28.0 起是四格＋最下面一條）：
+       左上 Gemini、右上 ChatGPT（在新分頁打開）、左下 拷貝、右下 分享，最下面 刪除
+     只有圖示，名稱在滑鼠提示（title）和讀螢幕軟體用的 aria-label。
      選單只有一個，放在筆記本上（不放在卡片裡：卡片的清單會捲動、會切掉超出去的部分），
-     打開時對齊按下去的那顆「⋯」，下面放不下就往上開。
+     打開時對齊按下去的那顆「⋯」，下面放不下就往上開。資源回收桶的「⋮」還是一行一行的清單。
      ========================================================================== */
 
   let menuFor = null;                 // 選單目前開在哪一顆「⋯」上
@@ -1260,20 +1289,28 @@ function gpnCreatePanel(opts) {
     closeCardMenu();
     sfx('click');
     const card = btn.closest('.gpn-card');
-    const entry = menuEntry;
     const open = (site) => () => { closeCardMenu(); openInAI(site, item, card, tabId, fid); };
+    const fills = autoFills() ? '（在新分頁打開，自動填好）' : '（在新分頁打開）';
 
     openMenuWith(btn, [
-      entry(ICON_OPEN, '開啟 Gemini', autoFills() ? '在新分頁打開，自動填好' : '在新分頁打開', open('gemini')),
-      entry(ICON_OPEN, '開啟 ChatGPT', autoFills() ? '在新分頁打開，自動填好' : '在新分頁打開', open('chatgpt')),
-      entry(ICON_DUPLICATE, '拷貝', '在下面多一則一樣的', () => { closeCardMenu(); duplicateItem(tabId, fid, item.id); }),
-      el('div', { class: 'gpn-menu-sep', role: 'separator' }),
-      entry(ICON_DELETE, '刪除', '先放進資源回收桶', () => {
+      menuTile(ICON_GEMINI, '開啟 Gemini' + fills, open('gemini')),
+      menuTile(ICON_CHATGPT, '開啟 ChatGPT' + fills, open('chatgpt')),
+      menuTile(ICON_TILE_COPY, '拷貝（在下面多一則一樣的）', () => { closeCardMenu(); duplicateItem(tabId, fid, item.id); }),
+      menuTile(ICON_TILE_SHARE, '分享（給主人、分身）', () => { closeCardMenu(); openShare(item); }),
+      menuTile(ICON_TILE_DELETE, '刪除（先放進資源回收桶）', () => {
         closeCardMenu();
         deleteItem(tabId, fid, item.id);
         toast(`已把「${item.title}」移到資源回收桶（設定 → 資源回收桶 可以還原）`, false, 4200);
-      }, ' gpn-menu-item--del'),
-    ]);
+      }, ' gpn-menu-tile--wide gpn-menu-tile--del'),
+    ], true);
+  }
+
+  /** 選單裡的一格：只有圖示 */
+  function menuTile(icon, label, onclick, cls = '') {
+    return el('button', {
+      class: 'gpn-menu-item gpn-menu-tile' + cls, type: 'button', role: 'menuitem',
+      title: label, 'aria-label': label, html: icon, onclick,
+    });
   }
 
   function menuEntry(icon, text, sub, onclick, cls = '') {
@@ -1283,9 +1320,11 @@ function gpnCreatePanel(opts) {
       el('span', { class: 'gpn-menu-text' }, el('span', { text }), sub ? el('small', { text: sub }) : null));
   }
 
-  function openMenuWith(btn, nodes) {
+  /** grid：四格的那種（卡片的「⋯」）；不然是一行一行的清單 */
+  function openMenuWith(btn, nodes, grid = false) {
     const card = btn.closest('.gpn-card');
     ui.menu.replaceChildren(...nodes);
+    ui.menu.classList.toggle('is-grid', grid);
     menuFor = btn;
     btn.setAttribute('aria-expanded', 'true');
     card?.classList.add('has-menu');
@@ -1320,13 +1359,32 @@ function gpnCreatePanel(opts) {
     ui.menu.hidden = true;
   }
 
-  /** 選單裡用上下鍵移動 */
+  /** 選單裡用方向鍵移動：清單只看上下（頭尾相接）；四格的往按的方向找最近的一格 */
   function onMenuKey(e) {
-    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-    e.preventDefault();
+    const dir = { ArrowDown: [0, 1], ArrowUp: [0, -1], ArrowRight: [1, 0], ArrowLeft: [-1, 0] }[e.key];
+    if (!dir) return;
     const items = [...ui.menu.querySelectorAll('.gpn-menu-item')];
     const i = items.indexOf(root.activeElement);
-    items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus();
+    if (!ui.menu.classList.contains('is-grid')) {
+      if (!dir[1]) return;
+      e.preventDefault();
+      items[(i + dir[1] + items.length) % items.length].focus();
+      return;
+    }
+    e.preventDefault();
+    if (i < 0) { items[0]?.focus(); return; }
+    const mid = (n) => { const r = n.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+    const [cx, cy] = mid(items[i]);
+    let best = null, bestD = Infinity;
+    for (const n of items) {
+      if (n === items[i]) continue;
+      const [x, y] = mid(n);
+      const along = dir[0] ? (x - cx) * dir[0] : (y - cy) * dir[1];
+      if (along <= 1) continue;
+      const d = along + 2 * (dir[0] ? Math.abs(y - cy) : Math.abs(x - cx));
+      if (d < bestD) { bestD = d; best = n; }
+    }
+    best?.focus();
   }
 
   /**
@@ -1991,7 +2049,8 @@ function gpnCreatePanel(opts) {
 
   const layerOpen = (layer) => layer.classList.contains('is-open');
   const anyLayerOpen = () =>
-    [ui.editLayer, ui.newTabLayer, ui.folderLayer, ui.settingsLayer, ui.cPickLayer].filter(Boolean).some(layerOpen);
+    [ui.inboxLayer, ui.editLayer, ui.newTabLayer, ui.folderLayer, ui.settingsLayer, ui.cPickLayer, ui.shareLayer]
+      .filter(Boolean).some(layerOpen);
 
   function showLayer(layer) {
     closeCardMenu();
@@ -2096,7 +2155,7 @@ function gpnCreatePanel(opts) {
           field('按鈕顯示標題', '（卡片上看到的字）', ui.eTitle, ui.eTitleHint),
           field('實際的 Prompt 內容', '（點標題時用的文字）', ui.eBody,
             el('div', { class: 'gpn-under' }, ui.eBodyHint, ui.eCount)),
-          field('放在哪裡', '（改這裡就能搬到別的書籤或資料夾）',
+          ui.eWhereField = field('放在哪裡', '（改這裡就能搬到別的書籤或資料夾）',
             el('div', { class: 'gpn-select-wrap' }, ui.eWhere))
         ),
         el('div', { class: 'gpn-actions' },
@@ -2149,6 +2208,7 @@ function gpnCreatePanel(opts) {
     editing = { tabId, folderId: fid, id: item ? id : null };
 
     ui.eHead.textContent = item ? '編輯提示詞' : `在「${list.label}」新增提示詞`;
+    ui.eWhereField.querySelector('.gpn-label > span').textContent = '　（改這裡就能搬到別的書籤或資料夾）';
     ui.eTitle.value = item ? item.title : '';
     ui.eBody.value = item ? item.content : '';
     updateCount();
@@ -2197,13 +2257,21 @@ function gpnCreatePanel(opts) {
       toast(moved ? `已搬到「${whereLabel(to.tabId, to.folderId)}」` : '已儲存修改');
     } else {
       dest.items.push({ id: gpnNewId(), title, content });
-      toast(moved ? `已新增到「${whereLabel(to.tabId, to.folderId)}」` : '已新增提示詞');
+      if (editing.share) toast(`已採用，放在「${whereLabel(to.tabId, to.folderId)}」`, false, 3600);
+      else toast(moved ? `已新增到「${whereLabel(to.tabId, to.folderId)}」` : '已新增提示詞');
     }
 
     sfx('save');
     await persist();
+    const share = editing?.share;
     closeEditor();
     render();
+    if (share) {
+      // 採用了：信箱裡拿掉（雲端硬碟上的那份分享刪掉）；信箱空了就順便關掉
+      lastAdopt = { tabId: to.tabId, folderId: to.folderId };
+      cloud?.ackShares([share]);
+      if (!inboxOf().some((x) => x.id !== share)) closeInbox();
+    }
   }
 
   function onDelete() {
@@ -2229,11 +2297,11 @@ function gpnCreatePanel(opts) {
 
   /** 編輯到一半按 Esc：有改過就不關，避免打好的字不見 */
   function editorDirty() {
-    const item = editing?.id
+    const item = editing?.orig || (editing?.id
       ? listOf(editing.tabId, editing.folderId)?.items.find((it) => it.id === editing.id)
-      : null;
-    return ui.eTitle.value.trim() !== (item?.title ?? '') ||
-           ui.eBody.value.trim() !== (item?.content ?? '') ||
+      : null);
+    return ui.eTitle.value.trim() !== (item?.title ?? '').trim() ||
+           ui.eBody.value.trim() !== (item?.content ?? '').trim() ||
            ui.eWhere.value !== ui.eWhere.dataset.start;
   }
 
@@ -3233,12 +3301,33 @@ function gpnCreatePanel(opts) {
     node.replaceChildren(img);
   }
 
+  /**
+   * 頭像兼信箱：有還沒看過的分享，頭像換成一封信、右上角是數字；
+   * 只剩暫留的，換回頭像、角落一個小信封。有信的時候點頭像打開信箱（帳號設定在信箱最下面）。
+   */
   function paintAvatar(st) {
     const on = !!cloud && !!st.configured && !!st.signedIn;
     ui.avatar.hidden = !on;
     if (!on) return;
-    paintFace(ui.avatar, st);
-    ui.avatar.title = `已登入：${st.email || 'Google 帳號'}（點一下看帳號、登出）`;
+    const box = inboxOf(st);
+    const unread = box.filter((x) => !x.kept).length;
+    ui.avatar.classList.toggle('has-mail', unread > 0);
+    ui.avatar.classList.toggle('has-kept', !unread && box.length > 0);
+    if (unread) {
+      if (ui.avatar._face !== 'mail') {
+        ui.avatar._face = 'mail';
+        ui.avatar.replaceChildren(el('span', { class: 'gpn-mail-icon', html: ICON_MAIL }), el('span', { class: 'gpn-mail-badge' }));
+      }
+      ui.avatar.querySelector('.gpn-mail-badge').textContent = unread > 99 ? '99+' : String(unread);
+      ui.avatar.title = `收到 ${unread} 則新的分享（點一下打開信箱）`;
+    } else {
+      paintFace(ui.avatar, st);
+      ui.avatar.querySelector('.gpn-mail-mini')?.remove();
+      if (box.length) ui.avatar.append(el('span', { class: 'gpn-mail-mini', html: ICON_MAIL }));
+      ui.avatar.title = box.length
+        ? `已登入：${st.email || 'Google 帳號'}。信箱裡有 ${box.length} 則暫留的分享（點一下打開信箱）`
+        : `已登入：${st.email || 'Google 帳號'}（點一下看帳號、登出）`;
+    }
     ui.avatar.setAttribute('aria-label', ui.avatar.title);
   }
 
@@ -3343,6 +3432,8 @@ function gpnCreatePanel(opts) {
     paintAvatar(cloudState);
     refreshAccount();
     refreshClones();
+    paintInbox();
+    noticeInbox();
     if (cloudState.signedIn && cloudState.phase === 'idle') retryWallpaper();
   }
 
@@ -3454,7 +3545,10 @@ function gpnCreatePanel(opts) {
         '分身的提示詞存在你的 Google 雲端硬碟（一個分身一個檔案），你隨時可以「進入分身」幫忙編輯。' +
         '分身和你的筆記本各自獨立，你之後改了自己的，可以按「再推一次」送過去。' }),
       el('p', { text:
-        '建立滿一年會停用（同事登入不了，資料都還在）：你可以延長期限、或把它銷毀；停用期間你自己照樣可以進入分身。' }));
+        '建立滿一年會停用（同事登入不了，資料都還在）：你可以延長期限、或把它銷毀；停用期間你自己照樣可以進入分身。' }),
+      el('p', { text:
+        '你和分身、分身和分身之間可以互相分享提示詞：在提示詞右邊的 ⋯ 按「分享」，勾選要給誰。' +
+        '收到的人頭像會變成一封信，打開按「採用」（選要放進哪個書籤、資料夾）或「暫留」。' }));
     ui.cInfoBtn = el('button', {
       class: 'gpn-info-btn', type: 'button', html: ICON_INFO, title: '分身是什麼',
       'aria-label': '分身是什麼', 'aria-expanded': 'false', onclick: () => toggleCloneInfo(),
@@ -3745,6 +3839,270 @@ function gpnCreatePanel(opts) {
     setCloneMsg('');
     refreshClones();
     toast(`已銷毀分身「${c.label}」，這組代號不能再登入了`);
+  }
+
+  /* ==========================================================================
+     分享（4.28.0）：主人和分身（們）之間互相傳提示詞。見 sync.js 的「分享」。
+       寄的人：卡片「⋯ → 分享」，勾選要給誰（主人、其他分身，可以很多個）。
+       收的人：頭像變成一封信、有數字。打開信箱，每一則可以
+         採用 → 打開編輯視窗（標題、內容先填好），選「放在哪裡」再按儲存；信箱裡就拿掉
+         暫留 → 留在信箱，不算未讀（之後再決定）
+         右上角 × → 不要了，從信箱刪掉（要按兩次）
+     ========================================================================== */
+
+  const inboxOf = (st = cloudState) => (st.signedIn && Array.isArray(st.inbox) ? st.inbox.filter((x) => x?.item) : []);
+  const senderName = (from) => (from?.key === 'owner' ? '主人' : from?.label || '分身');
+
+  /** 寄的人、收件人的頭像：分身用它選的頭像；主人用「主」字 */
+  function peerFace(p) {
+    return el('span', { class: 'gpn-peer-face' },
+      p.key === 'owner' ? el('span', { class: 'gpn-peer-owner', text: '主' }) : avatarFace(p.avatar));
+  }
+
+  function buildShareLayer() {
+    ui.shWhat = el('div', { class: 'gpn-share-what' });
+    ui.shAll = el('button', { class: 'gpn-link', type: 'button', onclick: () => pickAllPeers() }, '全部勾選');
+    ui.shList = el('div', { class: 'gpn-share-list', role: 'group', 'aria-label': '分享給誰' });
+    ui.shMsg = el('div', { class: 'gpn-note gpn-note--status', role: 'status' });
+    ui.shGo = el('button', { class: 'gpn-btn gpn-btn--save', type: 'button', onclick: onShareGo }, '分享');
+    ui.shareLayer = el('div', { class: 'gpn-edit-layer' },
+      el('div', { class: 'gpn-dialog gpn-dialog--sm gpn-share-dialog', onmousedown: stop },
+        el('h2', { text: '分享提示詞' }),
+        el('div', { class: 'gpn-dialog-body' },
+          ui.shWhat,
+          el('div', { class: 'gpn-share-head' }, el('div', { class: 'gpn-label', text: '分享給誰（可以選很多個）' }), ui.shAll),
+          ui.shList, ui.shMsg),
+        el('div', { class: 'gpn-actions' },
+          el('button', { class: 'gpn-btn gpn-btn--cancel', type: 'button', onclick: closeShare }, '取消'), ui.shGo)));
+  }
+
+  async function openShare(item) {
+    if (!ui.shareLayer || !cloudState.signedIn) {
+      toast('要先登入，主人和分身之間才能互相分享', true);
+      return;
+    }
+    const me = { item: { title: item.title, content: item.content }, peers: null, picked: new Set() };
+    sharing = me;
+    ui.shWhat.replaceChildren(
+      el('div', { class: 'gpn-share-ptitle', text: item.title || '（沒有標題）' }),
+      el('div', { class: 'gpn-share-pbody', text: item.content }));
+    ui.shMsg.textContent = '';
+    ui.shAll.hidden = true;
+    ui.shList.replaceChildren(el('div', { class: 'gpn-note', text: '讀取可以分享的對象…' }));
+    paintShareGo();
+    showLayer(ui.shareLayer);
+    const r = await cloud.listPeers();
+    if (sharing !== me) return;                  // 等的時候關掉了
+    if (!r || !r.ok) {
+      ui.shList.replaceChildren(el('div', { class: 'gpn-note gpn-note--status is-bad', text: r?.error || '讀不到可以分享的對象，請稍後再試' }));
+      return;
+    }
+    me.peers = r.peers || [];
+    if (me.peers.length === 1) me.picked.add(me.peers[0].key);   // 只有一個對象：直接幫他勾好
+    paintPeers();
+  }
+
+  function paintPeers() {
+    const { peers, picked } = sharing;
+    ui.shAll.hidden = peers.length < 2;
+    ui.shAll.textContent = peers.length && picked.size === peers.length ? '全部不勾' : '全部勾選';
+    if (!peers.length) {
+      ui.shList.replaceChildren(el('div', { class: 'gpn-share-empty' },
+        el('p', { text: cloudState.clone ? '目前沒有可以分享的對象。' : '還沒有分身，所以還沒有可以分享的對象。' }),
+        el('p', { class: 'gpn-note', text: '到 設定 → 分身 建立分身之後，主人和分身之間就能互相分享。' }),
+        cloudState.clone ? null : el('button', {
+          class: 'gpn-btn2', type: 'button', onclick: () => { closeShare(); openSettings(data.activeId, 'clones'); },
+        }, '前往分身設定')));
+      paintShareGo();
+      return;
+    }
+    ui.shList.replaceChildren(...peers.map((x) => {
+      const box = el('input', {
+        class: 'gpn-share-check', type: 'checkbox',
+        onchange: () => {
+          if (box.checked) picked.add(x.key); else picked.delete(x.key);
+          row.classList.toggle('is-on', box.checked);
+          ui.shAll.textContent = picked.size === peers.length ? '全部不勾' : '全部勾選';
+          paintShareGo();
+        },
+      });
+      box.checked = picked.has(x.key);
+      const row = el('label', { class: 'gpn-share-row' + (box.checked ? ' is-on' : '') },
+        box, peerFace(x),
+        el('span', { class: 'gpn-share-name' },
+          el('span', { text: x.key === 'owner' ? '主人' : x.label }),
+          x.key === 'owner' && x.email ? el('small', { text: x.email }) : null));
+      return row;
+    }));
+    paintShareGo();
+  }
+
+  function pickAllPeers() {
+    if (!sharing?.peers) return;
+    const all = sharing.picked.size < sharing.peers.length;
+    sharing.picked = new Set(all ? sharing.peers.map((x) => x.key) : []);
+    paintPeers();
+  }
+
+  function paintShareGo() {
+    const n = sharing?.peers ? sharing.picked.size : 0;
+    ui.shGo.disabled = !n || !!sharing?.busy;
+    ui.shGo.textContent = n ? `分享給 ${n} 位` : '分享';
+  }
+
+  async function onShareGo() {
+    const me = sharing;
+    if (!me?.peers || !me.picked.size || me.busy) return;
+    me.busy = true;
+    paintShareGo();
+    ui.shMsg.className = 'gpn-note gpn-note--status is-ok';
+    ui.shMsg.textContent = '分享中…';
+    const keys = [...me.picked];
+    const r = await cloud.sharePrompt(me.item, keys);
+    me.busy = false;
+    if (sharing !== me) return;
+    if (!r || !r.ok) {
+      ui.shMsg.className = 'gpn-note gpn-note--status is-bad';
+      ui.shMsg.textContent = r?.error || '分享失敗，請稍後再試';
+      paintShareGo();
+      return;
+    }
+    const names = me.peers.filter((x) => keys.includes(x.key)).map((x) => (x.key === 'owner' ? '主人' : x.label));
+    closeShare();
+    sfx('save');
+    toast(`已分享給 ${names.length > 3 ? `${names.slice(0, 3).join('、')} 等 ${names.length} 位` : names.join('、')}`, false, 3600);
+  }
+
+  function closeShare() {
+    sharing = null;
+    if (ui.shareLayer) hideLayer(ui.shareLayer);
+  }
+
+  /* ---- 信箱 ---- */
+
+  function buildInboxLayer() {
+    ui.ibCount = el('span', { class: 'gpn-inbox-count' });
+    ui.ibList = el('div', { class: 'gpn-inbox-list' });
+    ui.inboxLayer = el('div', { class: 'gpn-edit-layer' },
+      el('div', { class: 'gpn-dialog gpn-inbox-dialog', onmousedown: stop },
+        el('h2', { class: 'gpn-inbox-title' }, el('span', { text: '收到的分享' }), ui.ibCount),
+        el('div', { class: 'gpn-dialog-body' }, ui.ibList),
+        el('div', { class: 'gpn-actions' },
+          el('button', {
+            class: 'gpn-btn gpn-btn--cancel gpn-inbox-account', type: 'button',
+            onclick: () => { closeInbox(); openSettings(data.activeId, 'account'); },
+          }, '帳號與同步'),
+          el('button', { class: 'gpn-btn gpn-btn--save gpn-inbox-close', type: 'button', onclick: closeInbox }, '關閉'))));
+  }
+
+  function openInbox() {
+    if (!ui.inboxLayer) return;
+    ui.ibList._key = '';
+    paintInbox();
+    showLayer(ui.inboxLayer);
+    cloud.refreshInbox?.();
+  }
+
+  function closeInbox() {
+    if (ui.inboxLayer) hideLayer(ui.inboxLayer);
+  }
+
+  /** 畫信箱：沒看過的在前面，各自新的在前面。內容沒變就不重畫（按到一半的「確定刪除」才不會被洗掉） */
+  function paintInbox() {
+    if (!ui.ibList) return;
+    const box = inboxOf();
+    const key = JSON.stringify(box.map((x) => [x.id, x.kept])) + ago(box[0]?.at || 0);
+    if (ui.ibList._key === key) return;
+    ui.ibList._key = key;
+    const unread = box.filter((x) => !x.kept).length;
+    ui.ibCount.textContent = !box.length ? '' : unread ? `${unread} 則未讀` : `${box.length} 則暫留`;
+    if (!box.length) {
+      ui.ibList.replaceChildren(el('div', { class: 'gpn-inbox-empty' },
+        el('span', { class: 'gpn-inbox-empty-icon', html: ICON_MAIL }),
+        el('div', { class: 'gpn-inbox-empty-title', text: '信箱是空的' }),
+        el('div', { class: 'gpn-note', text: '主人和分身之間可以互相分享提示詞：在提示詞右邊的 ⋯ 按「分享」。' })));
+      return;
+    }
+    const list = [...box].sort((a, b) => (a.kept - b.kept) || (b.at - a.at));
+    ui.ibList.replaceChildren(...list.map(inboxCard));
+  }
+
+  function inboxCard(x) {
+    let armed = false, timer = 0;
+    const del = el('button', {
+      class: 'gpn-inbox-del', type: 'button', title: '不要了：從信箱刪掉', 'aria-label': '不要了：從信箱刪掉', html: ICON_CLOSE,
+      onclick: () => {
+        if (!armed) {
+          armed = true;
+          del.classList.add('is-confirm');
+          del.textContent = '確定刪除？';
+          timer = setTimeout(() => { armed = false; del.classList.remove('is-confirm'); del.innerHTML = ICON_CLOSE; }, 4000);
+          return;
+        }
+        clearTimeout(timer);
+        sfx('del');
+        cloud.ackShares([x.id]);
+        toast('已從信箱刪掉');
+      },
+    });
+    return el('div', { class: 'gpn-inbox-card' + (x.kept ? ' is-kept' : ''), 'data-id': x.id },
+      el('div', { class: 'gpn-inbox-from' },
+        peerFace(x.from),
+        el('span', { class: 'gpn-inbox-who' }, el('b', { text: senderName(x.from) }), el('span', { text: ' 分享給你' })),
+        x.kept ? el('span', { class: 'gpn-inbox-tag', text: '暫留' }) : el('span', { class: 'gpn-inbox-new', text: '未讀' }),
+        el('span', { class: 'gpn-inbox-when', text: ago(x.at) }),
+        del),
+      el('div', { class: 'gpn-inbox-ptitle', text: x.item.title || '（沒有標題）' }),
+      el('div', { class: 'gpn-inbox-pbody', text: x.item.content }),
+      el('div', { class: 'gpn-inbox-btns' },
+        x.kept ? null : el('button', {
+          class: 'gpn-btn gpn-btn--cancel', type: 'button', title: '先留在信箱，之後再決定（不算未讀）',
+          onclick: () => { sfx('click'); cloud.keepShares([x.id]); toast('已暫留：之後點頭像打開信箱，還找得到'); },
+        }, '暫留'),
+        el('button', {
+          class: 'gpn-btn gpn-btn--save', type: 'button', title: '選要放進哪個書籤、資料夾',
+          onclick: () => openAdopt(x),
+        }, '採用')));
+  }
+
+  /** 採用：打開編輯視窗（先填好），選「放在哪裡」再按儲存（onSave 會把它從信箱拿掉） */
+  function openAdopt(x) {
+    let to = lastAdopt && listOf(lastAdopt.tabId, lastAdopt.folderId) ? lastAdopt : null;
+    if (!to) {
+      const t = data.tabs.find((tab) => tab.id === data.activeId) || data.tabs[0];
+      if (!t) { toast('還沒有書籤：先新增一個書籤，再來採用', true); return; }
+      const f = t.folders ? t.folders.find((ff) => ff.id === folderId) || t.folders[0] : null;
+      to = { tabId: t.id, folderId: f ? f.id : null };
+    }
+    openEditor(to.tabId, to.folderId, null);
+    editing.share = x.id;
+    editing.orig = { title: x.item.title, content: x.item.content };
+    ui.eHead.textContent = `採用「${senderName(x.from)}」分享的提示詞`;
+    ui.eWhereField.querySelector('.gpn-label > span').textContent = '　（選要放進哪個書籤、資料夾）';
+    ui.eTitle.value = x.item.title;
+    ui.eBody.value = x.item.content;
+    updateCount();
+    setTimeout(() => ui.eWhere.focus(), 60);
+  }
+
+  /**
+   * 新的分享來了（筆記本開著的時候）：跳一個提示、叮一聲。
+   * 提醒過哪些記在這台（prefs），重新整理、換一個分頁不會一直提醒同一則。
+   */
+  let inboxNoticed = null;
+  const INBOX_NOTICED_KEY = 'gpn_inbox_noticed_v1';
+  prefs.get(INBOX_NOTICED_KEY).then((v) => { inboxNoticed = new Set(Array.isArray(v) ? v : []); noticeInbox(); });
+
+  function noticeInbox() {
+    if (!inboxNoticed || !isOpen()) return;
+    const fresh = inboxOf().filter((x) => !x.kept && !inboxNoticed.has(x.id));
+    if (!fresh.length) return;
+    for (const x of fresh) inboxNoticed.add(x.id);
+    prefs.set(INBOX_NOTICED_KEY, [...inboxNoticed].slice(-200));
+    sfx('star');
+    const x = fresh[fresh.length - 1];
+    toast(fresh.length > 1 ? `收到 ${fresh.length} 則新的分享，點下面的信封看看`
+      : `「${senderName(x.from)}」分享了「${x.item.title || '提示詞'}」給你，點下面的信封看看`, false, 5200);
   }
 
   /* ---- 勾選要放進分身的書籤、資料夾、提示詞（另外一個視窗）----
@@ -4591,6 +4949,7 @@ function gpnCreatePanel(opts) {
     onOpenChange(true);
     // 每次打開都跟雲端對一下：別台剛改的東西，這裡馬上看得到
     cloud?.syncNow();
+    if (cloud) noticeInbox();
   }
 
   function close() {
@@ -4635,6 +4994,10 @@ function gpnCreatePanel(opts) {
       btn.focus();
     } else if (searchQ !== null && !anyLayerOpen()) {
       exitSearch();
+    } else if (ui.shareLayer && layerOpen(ui.shareLayer)) {
+      closeShare();
+    } else if (ui.inboxLayer && layerOpen(ui.inboxLayer) && !layerOpen(ui.editLayer)) {
+      closeInbox();
     } else if (ui.cPickLayer && layerOpen(ui.cPickLayer)) {
       if (ui.cAvatarPicker && ui.cAvatarPicker.node.querySelector('[aria-expanded="true"]')) ui.cAvatarPicker.close();
       else closePick();

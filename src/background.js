@@ -84,6 +84,11 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     destroyClone: () => gpnSync.destroyClone(msg.clone || {}),
     readClone: () => gpnSync.readClone(String(msg.fileId || '')),
     pushClone: () => gpnSync.pushClone(String(msg.fileId || ''), msg.doc),
+    listPeers: () => gpnSync.listPeers(),
+    sharePrompt: () => gpnSync.sharePrompt(msg.item || {}, Array.isArray(msg.to) ? msg.to : []),
+    ackShares: () => gpnSync.ackShares(Array.isArray(msg.ids) ? msg.ids : []),
+    keepShares: () => gpnSync.keepShares(Array.isArray(msg.ids) ? msg.ids : []),
+    refreshInbox: () => gpnSync.refreshInbox(),
   };
   const run = ops[msg.op];
   if (!run) return false;

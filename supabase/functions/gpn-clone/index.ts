@@ -37,6 +37,14 @@
  *     read   { id }          → 同上 + data（檔案內容，JSON 文字）
  *     write  { id, data }    → { fileId, version }
  *     avatar { id, avatar }  換頭像（頭像的代號）
+ *   分享（主人和分身之間互相傳提示詞，見 src/sync.js 的「分享」）
+ *     peers  { id }                  → { me, peers: [{ key, label, avatar, email? }] }  可以分享給誰
+ *     share  { id, to: [key], item }  寄出一則提示詞 { title, content }（一個收件人一個小檔案，放在建立的人的雲端硬碟）
+ *     inbox  { id }                  → { shares: [{ id, from, item, at, kept }] }  寄給我的
+ *     keep   { id, ids }              暫留：還留在信箱，但不算未讀
+ *     ack    { id, ids }              採用了、不要了：刪掉那幾個小檔案
+ *     keep、ack 只動得到寄給自己的
+ *   key：主人是 'owner'，分身是它的檔案代號（不是分身代號：分身代號是密碼，不能給別的分身看到）
  */
 
 const CORS = {
@@ -63,6 +71,11 @@ const DB = env('SUPABASE_URL').replace(/\/+$/, '') + '/rest/v1';
 const YEAR = 365 * 86400000;
 const MAX_BYTES = 5_000_000;                       // 一本筆記本再大也不會到這麼大，只是防呆
 const ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+const CLONE_Q = "appProperties has { key='gpnClone' and value='1' } and trashed = false";
+const SHARE_Q = (to: string) =>
+  `appProperties has { key='gpnShare' and value='1' } and appProperties has { key='to' and value='${to}' } and trashed = false`;
+const isKey = (k: string) => k === 'owner' || /^[\w-]{8,128}$/.test(k);
+const MAX_SHARE_BYTES = 300_000;
 
 const cleanId = (s: unknown) => String(s ?? '').toUpperCase().replace(/[^0-9A-Z]/g, '');
 const isId = (id: string) => id.length === 16 && [...id].every((c) => ALPHABET.includes(c));
@@ -202,12 +215,60 @@ async function loadClone(rawId: unknown) {
   const f = await fileMeta(token, c.file_id);
   if (f.trashed) throw new Fail(404, 'clone_not_found');   // 建立的人自己把檔案丟進垃圾桶了
   return {
-    token, fileId: String(c.file_id), version: String(f.version),
+    token, fileId: String(c.file_id), version: String(f.version), sub: String(c.owner.sub),
     info: {
       label: String(f.appProperties?.label || c.label || ''), avatar: String(f.appProperties?.avatar || ''),
       ownerEmail: String(c.owner.email || ''), expiresAt: Date.parse(c.expires_at),
     },
   };
+}
+
+/* ---------- 分享 ---------- */
+
+type Loaded = Awaited<ReturnType<typeof loadClone>>;
+
+/** 同一個建立的人的其他分身（停用的不算）＋主人，不含自己 */
+async function peersOf(c: Loaded) {
+  const rows: { file_id: string; label: string; expires_at: string }[] =
+    await db(`/gpn_clones?owner_sub=eq.${q(c.sub)}&select=file_id,label,expires_at`) || [];
+  const live = new Map(rows.filter((r) => Date.parse(r.expires_at) > Date.now() && r.file_id !== c.fileId)
+    .map((r) => [String(r.file_id), r]));
+  const list = await (await drive(c.token, '/drive/v3/files?' + new URLSearchParams({
+    q: CLONE_Q, spaces: 'drive', fields: 'files(id,appProperties)', pageSize: '100',
+  }))).json();
+  const peers = [{ key: 'owner', label: '主人', avatar: '', email: c.info.ownerEmail }];
+  for (const f of list.files || []) {
+    const r = live.get(String(f.id));
+    if (!r) continue;
+    peers.push({ key: String(f.id), label: String(f.appProperties?.label || r.label || '分身'), avatar: String(f.appProperties?.avatar || '') });
+  }
+  return peers;
+}
+
+/** 分享的那則提示詞：只留標題、內容 */
+function shareItem(raw: unknown) {
+  const it = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const item = { title: String(it.title ?? '').slice(0, 60), content: String(it.content ?? '') };
+  if (!item.title && !item.content) throw new Fail(400, 'bad_request');
+  if (item.content.length > MAX_SHARE_BYTES) throw new Fail(413, 'too_large');
+  return item;
+}
+
+/** 寄給這個分身的分享檔案（keep、ack 用）：不是寄給它的就跳過；已經不在的也跳過 */
+async function eachMine(c: Loaded, raw: unknown, fn: (id: string) => Promise<unknown>) {
+  const ids = (Array.isArray(raw) ? raw : []).map(String).filter((x) => /^[\w-]{8,128}$/.test(x)).slice(0, 50);
+  let done = 0;
+  for (const id of ids) {
+    try {
+      const f = await fileMeta(c.token, id);
+      if (f.appProperties?.gpnShare !== '1' || f.appProperties?.to !== c.fileId) continue;
+      await fn(id);
+      done++;
+    } catch (e) {
+      if (!(e instanceof Fail && e.code === 'clone_not_found')) throw e;
+    }
+  }
+  return done;
 }
 
 const ops: Record<string, (b: Record<string, unknown>) => Promise<unknown>> = {
@@ -293,6 +354,70 @@ const ops: Record<string, (b: Record<string, unknown>) => Promise<unknown>> = {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ appProperties: { avatar } }),
     });
     return { ok: true };
+  },
+
+  async peers(b) {
+    const c = await loadClone(b.id);
+    return { me: c.fileId, peers: await peersOf(c) };
+  },
+
+  async share(b) {
+    const item = shareItem(b.item);
+    const to = [...new Set((Array.isArray(b.to) ? b.to : []).map(String))].filter(isKey);
+    if (!to.length) throw new Fail(400, 'bad_request');
+    const c = await loadClone(b.id);
+    const ok = new Set((await peersOf(c)).map((p) => p.key));
+    if (to.some((k) => !ok.has(k))) throw new Fail(404, 'peer_gone');
+    const from = { key: c.fileId, label: c.info.label || '分身', avatar: c.info.avatar };
+    const body = JSON.stringify({ v: 1, from, item, at: Date.now() });
+    for (const k of to) {
+      const boundary = 'gpn_' + crypto.randomUUID();
+      const info = {
+        name: '罐頭P 分享.json', mimeType: 'application/json',
+        description: '罐頭P 的分享：收到的人在罐頭P 按「採用」或刪掉之後，這個檔案會自動刪掉。',
+        appProperties: { gpnShare: '1', to: k, from: c.fileId },
+      };
+      await drive(c.token, '/upload/drive/v3/files?uploadType=multipart&fields=id', {
+        method: 'POST', headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+        body: `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(info)}\r\n` +
+          `--${boundary}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${boundary}--`,
+      });
+    }
+    return { ok: true, sent: to.length };
+  },
+
+  async inbox(b) {
+    const c = await loadClone(b.id);
+    const r = await (await drive(c.token, '/drive/v3/files?' + new URLSearchParams({
+      q: SHARE_Q(c.fileId), spaces: 'drive', orderBy: 'createdTime', fields: 'files(id,appProperties)', pageSize: '50',
+    }))).json();
+    const shares = [];
+    for (const f of r.files || []) {
+      let j: Record<string, unknown> = {};
+      try {
+        j = JSON.parse(await (await drive(c.token, `/drive/v3/files/${q(f.id)}?alt=media`)).text());
+      } catch (e) {
+        if (e instanceof Fail && e.code === 'clone_not_found') continue;   // 剛被刪掉（別台採用了）
+        if (e instanceof Fail) throw e;                                     // 雲端硬碟暫時有問題：下次再看
+        /* 內容壞掉（不是 JSON）：item 是空的，畫面會直接刪掉 */
+      }
+      shares.push({ id: String(f.id), from: j.from || {}, item: j.item || null, at: Number(j.at) || 0, kept: f.appProperties?.kept === '1' });
+    }
+    return { shares };
+  },
+
+  async keep(b) {
+    const c = await loadClone(b.id);
+    const done = await eachMine(c, b.ids, (id) => drive(c.token, `/drive/v3/files/${q(id)}?fields=id`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ appProperties: { kept: '1' } }),
+    }));
+    return { ok: true, done };
+  },
+
+  async ack(b) {
+    const c = await loadClone(b.id);
+    const done = await eachMine(c, b.ids, (id) => drive(c.token, `/drive/v3/files/${q(id)}`, { method: 'DELETE' }));
+    return { ok: true, done };
   },
 
   async write(b) {

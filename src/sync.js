@@ -90,6 +90,7 @@ function gpnCreateSync(o) {
     clone: null,          // 用分身登入時：{ id, label, ownerEmail, expiresAt }
     owner: '',            // 建立分身的人進入了自己的分身：他自己的 Email（可以「回到我的帳號」）
     cloneHint: '',        // 上次用的分身停用了：它的代號（登入畫面幫忙填好）
+    inbox: [],            // 別人分享給我的（信箱）：[{ id, from: { key, label, avatar }, item: { title, content }, at, kept }]
   };
   let running = null;
   let switching = null;   // 正在換帳號（連結、中斷）
@@ -212,7 +213,7 @@ function gpnCreateSync(o) {
 
   async function expired() {
     await saveSession(null);
-    setState({ signedIn: false, email: '', picture: '', phase: 'idle', pending: false,
+    setState({ inbox: [], signedIn: false, email: '', picture: '', phase: 'idle', pending: false,
       message: '登入已經過期，請重新登入' });
     throw Object.assign(new Error('expired'), { auth: true });
   }
@@ -366,6 +367,8 @@ function gpnCreateSync(o) {
     if (/accessNotConfigured|SERVICE_DISABLED/i.test(s)) return '雲端硬碟功能還沒在後台開啟（管理員要到 Google Cloud 啟用 Google Drive API）';
     if (/clone_not_found/i.test(s)) return '找不到這個分身：代號打錯了，或已經被建立的人銷毀了';
     if (/clone_expired/i.test(s)) return '這個分身已經到期，暫時停用了。請建立的人延長期限，之後用同一組代號再登入';
+    if (/peer_gone/i.test(s)) return '有的對象已經不在了（分身被銷毀或停用），請重新選一次';
+    if (/too_large/i.test(s)) return '這則提示詞太長了，沒辦法分享';
     if (/bad_date/i.test(s)) return '日期不對：請選今天以後、十年以內的日期';
     if (/owner_token_invalid/i.test(s)) return '建立這個分身的人的 Google 登入失效了，請他打開罐頭P 重新登入一次，分身就能再同步';
     if (/server_not_configured/i.test(s)) return '雲端同步的伺服器還沒設定好（管理員要設定 Google 用戶端密鑰）';
@@ -451,10 +454,10 @@ function gpnCreateSync(o) {
     meta = { ...EMPTY_META, ...((await kv.get(GPN_SYNC_KEY)) || {}) };
     session = (await kv.get(GPN_SESSION_KEY)) || null;
     if (!session) {
-      setState({ signedIn: false, email: '', picture: '' });
+      setState({ inbox: [], signedIn: false, email: '', picture: '' });
       return {};
     }
-    if (!state.signedIn) setState({ signedIn: true, email: session.email || '', picture: session.picture || '' });
+    if (!state.signedIn) setState({ inbox: [], signedIn: true, email: session.email || '', picture: session.picture || '' });
 
     let local = gpnNormalize(await readLocal());
     const adopt = meta.adopt;              // 'cloud' | 'replace'（只在剛登入時有；舊版留下的可能是 'merge'）
@@ -529,6 +532,11 @@ function gpnCreateSync(o) {
     if (!tidied) {
       tidied = true;
       await tidyUp(file || { id: meta.fileId });
+    }
+
+    if (CLONE_URL && Date.now() - inboxAt > 30_000) {
+      inboxAt = Date.now();
+      try { await checkInbox(); } catch { /* 下一輪再看 */ }
     }
 
     meta.lastSyncAt = Date.now();
@@ -635,6 +643,7 @@ function gpnCreateSync(o) {
    */
   async function switchUser(fn) {
     while (running || switching) await (running || switching).catch(() => {});
+    inboxAt = 0;                       // 換了帳號：下一輪同步馬上看新帳號的信箱
     switching = lock('gpn-sync', fn);
     try { return await switching; } finally { switching = null; }
   }
@@ -701,7 +710,7 @@ function gpnCreateSync(o) {
     };
 
     await switchUser(() => becomeUser(s));
-    setState({ signedIn: true, email: s.email, picture: s.picture, fileId: '', clone: null, owner: '', message: '' });
+    setState({ inbox: [], signedIn: true, email: s.email, picture: s.picture, fileId: '', clone: null, owner: '', message: '' });
     const note = await syncNow();
     return { ok: true, ...note };
   }
@@ -740,7 +749,7 @@ function gpnCreateSync(o) {
         await kv.remove(GPN_BASE_KEY);
       }
     });
-    setState({ signedIn: false, email: '', picture: '', phase: 'idle', pending: false, message: '', clone: null, owner: '' });
+    setState({ inbox: [], signedIn: false, email: '', picture: '', phase: 'idle', pending: false, message: '', clone: null, owner: '' });
     return { ok: true };
   }
 
@@ -856,7 +865,7 @@ function gpnCreateSync(o) {
         if (hint) await kv.set(GPN_CLONE_HINT_KEY, hint);
         await saveSession(null);
         await kv.remove(GPN_OWNER_STASH_KEY);
-        setState({ signedIn: false, email: '', picture: '', phase: 'idle', pending: false,
+        setState({ inbox: [], signedIn: false, email: '', picture: '', phase: 'idle', pending: false,
           clone: null, owner: '', cloneHint: hint, message: explain(e) });
         e.auth = true;
       }
@@ -884,7 +893,7 @@ function gpnCreateSync(o) {
     const s = cloneSession(id, r);
     await switchUser(() => becomeUser(s));
     await kv.remove(GPN_CLONE_HINT_KEY);
-    setState({ signedIn: true, email: s.email, picture: '', fileId: '', clone: cloneView(s), owner: '', cloneHint: '', message: '' });
+    setState({ inbox: [], signedIn: true, email: s.email, picture: '', fileId: '', clone: cloneView(s), owner: '', cloneHint: '', message: '' });
     const note = await syncNow();
     return { ok: true, label: s.label, ...note };
   }
@@ -922,7 +931,7 @@ function gpnCreateSync(o) {
       await saveMeta();
       await kv.remove(GPN_BASE_KEY);
     });
-    setState({ signedIn: true, email: s.email, picture: '', fileId: '', clone: cloneView(s), owner: ownerEmail, message: '' });
+    setState({ inbox: [], signedIn: true, email: s.email, picture: '', fileId: '', clone: cloneView(s), owner: ownerEmail, message: '' });
     const note = await syncNow();
     return { ok: true, label: s.label, ...note };
   }
@@ -952,7 +961,7 @@ function gpnCreateSync(o) {
       await kv.remove(GPN_OWNER_STASH_KEY);
     });
     setState({
-      signedIn: true, email: session.email || '', picture: session.picture || '', fileId: meta.fileId || '',
+      inbox: [], signedIn: true, email: session.email || '', picture: session.picture || '', fileId: meta.fileId || '',
       clone: null, owner: '', message: '',
     });
     const note = await syncNow();
@@ -1127,6 +1136,191 @@ function gpnCreateSync(o) {
     }
   }
 
+  /* ========== 分享 ==========
+     主人和分身（們）之間互相傳提示詞：卡片的「⋯ → 分享」，勾選要給誰（可以很多個）。
+     每一份分享是建立的人雲端硬碟裡的一個小檔案（罐頭P 分享.json），一個收件人一個，裡面是一則提示詞；
+     appProperties 記著寄給誰（to）、誰寄的（from）、暫留了沒有（kept）。
+       主人是 'owner'，分身是它的檔案代號（fileId）——不用分身代號，分身代號是密碼，不能讓別的分身知道。
+     收件人每輪同步看一下信箱（最多 30 秒一次），放進 state.inbox：畫面上頭像變成一封信，數字是還沒看過的。
+       採用 → 提示詞放進他選的書籤、資料夾（畫面做），小檔案刪掉（ackShares）
+       暫留 → 留在信箱，不算未讀（keepShares，記在小檔案的 appProperties，換一台電腦也一樣）
+     用分身代號登入的人碰不到雲端硬碟，一樣由中繼代為處理（peers、share、inbox、keep、ack）。 */
+
+  const SHARE_Q = (to) =>
+    `appProperties has { key='gpnShare' and value='1' } and appProperties has { key='to' and value='${to}' } and trashed = false`;
+  const isShareKey = (k) => k === 'owner' || /^[\w-]{8,128}$/.test(k);
+  const isFileId = (k) => /^[\w-]{8,128}$/.test(k);
+  let inboxAt = 0;                 // 上次看信箱的時間
+  const gone = new Set();          // 採用、刪掉過的：雲端硬碟的搜尋有時慢幾秒才更新，先別再顯示
+  const keptHere = new Set();      // 這台按過暫留的（雲端硬碟還沒記好之前，也先當作暫留了）
+  let later = { ack: [], keep: [] };   // 斷線時沒做成的：下次看信箱時再做
+
+  /** 我在分享裡的代號（不經過中繼的時候）：主人是 owner；建立的人進入自己的分身時，是那個分身的檔案 */
+  const myShareKey = () => (isClone() ? session.fileId : 'owner');
+
+  const cleanItem = (it) => ({ title: String(it?.title ?? '').slice(0, 60), content: String(it?.content ?? '') });
+
+  function cleanShare(raw) {
+    const f = raw?.from || {};
+    const item = raw?.item && typeof raw.item === 'object' ? cleanItem(raw.item) : null;
+    return {
+      id: String(raw?.id || ''),
+      from: { key: String(f.key || ''), label: String(f.label || '').slice(0, 60) || '分身', avatar: avatarId(f.avatar) },
+      item: item && (item.title || item.content) ? item : null,
+      at: Number(raw?.at) || 0,
+      kept: !!raw?.kept || keptHere.has(String(raw?.id || '')),
+    };
+  }
+
+  /** 可以分享給誰：分身看得到主人和其他分身；主人看得到自己的分身。停用的分身不算 */
+  async function peersHere() {
+    if (viaRelay()) return ((await cloneCall('peers', { id: session.cloneId })).peers || []);
+    const now = Date.now();
+    const me = isClone() ? session.fileId : '';
+    const list = (await listCloneFiles())
+      .filter((c) => c.fileId !== me && !(c.expiresAt && c.expiresAt <= now))
+      .map((c) => ({ key: c.fileId, label: c.label || '分身', avatar: c.avatar || '' }));
+    return isClone() ? [{ key: 'owner', label: '主人', avatar: '', email: session.ownerEmail || '' }, ...list] : list;
+  }
+
+  async function listPeers() {
+    await ready;
+    if (!session) return { ok: false, error: '要先登入才能分享' };
+    if (!CLONE_URL) return { ok: false, error: '分享功能還沒開放' };
+    try {
+      const peers = (await peersHere()).map((x) => ({
+        key: String(x.key || ''), label: String(x.label || '分身'), avatar: avatarId(x.avatar), email: String(x.email || ''),
+      })).filter((x) => isShareKey(x.key));
+      return { ok: true, peers };
+    } catch (e) {
+      return { ok: false, error: explain(e) };
+    }
+  }
+
+  /** 把一則提示詞（{ title, content }）分享給 to（代號的陣列） */
+  async function sharePrompt(item, to) {
+    await ready;
+    if (!session) return { ok: false, error: '要先登入才能分享' };
+    if (!CLONE_URL) return { ok: false, error: '分享功能還沒開放' };
+    item = cleanItem(item);
+    to = [...new Set((Array.isArray(to) ? to : []).map(String))].filter(isShareKey);
+    if (!item.title && !item.content) return { ok: false, error: '沒有要分享的提示詞' };
+    if (!to.length) return { ok: false, error: '請勾選要分享給誰' };
+    try {
+      if (viaRelay()) {
+        await cloneCall('share', { id: session.cloneId, to, item });
+        return { ok: true, sent: to.length };
+      }
+      const ok = new Set((await peersHere()).map((x) => x.key));
+      if (to.some((k) => !ok.has(k))) return { ok: false, error: explain({ code: 'peer_gone' }) };
+      const from = isClone()
+        ? { key: session.fileId, label: session.label || '分身', avatar: session.avatar || '' }
+        : { key: 'owner', label: '主人', avatar: '' };
+      for (const k of to) {
+        await createDriveFile({
+          name: '罐頭P 分享.json',
+          description: '罐頭P 的分享：收到的人在罐頭P 按「採用」或刪掉之後，這個檔案會自動刪掉。',
+          appProperties: { gpnShare: '1', to: k, from: from.key },
+        }, { v: 1, from, item, at: Date.now() });
+      }
+      return { ok: true, sent: to.length };
+    } catch (e) {
+      return { ok: false, error: explain(e) };
+    }
+  }
+
+  /** 雲端硬碟上的分享小檔案：刪掉（ack）或記成暫留（keep） */
+  async function touchShares(op, ids) {
+    if (viaRelay()) { await cloneCall(op, { id: session.cloneId, ids }); return; }
+    for (const id of ids) {
+      try {
+        if (op === 'ack') await drive(`/drive/v3/files/${encodeURIComponent(id)}`, { method: 'DELETE', as: 'text' });
+        else {
+          await drive(`/drive/v3/files/${encodeURIComponent(id)}?fields=id`, {
+            method: 'PATCH', type: 'application/json', body: JSON.stringify({ appProperties: { kept: '1' } }),
+          });
+        }
+      } catch (e) {
+        if (e.status !== 404) throw e;
+      }
+    }
+  }
+
+  /** 看信箱：寄給我的分享放進 state.inbox（舊的在前面） */
+  async function checkInbox() {
+    if (!session) return;
+    for (const op of ['ack', 'keep']) {
+      if (!later[op].length) continue;
+      const ids = later[op];
+      later[op] = [];
+      try { await touchShares(op, ids); } catch { later[op].push(...ids); }
+    }
+    let raw;
+    if (viaRelay()) {
+      raw = (await cloneCall('inbox', { id: session.cloneId })).shares || [];
+    } else {
+      const r = await drive('/drive/v3/files?' + new URLSearchParams({
+        q: SHARE_Q(myShareKey()), spaces: 'drive', orderBy: 'createdTime', fields: 'files(id,appProperties)', pageSize: '50',
+      }));
+      raw = [];
+      for (const f of r.files || []) {
+        if (gone.has(f.id)) continue;
+        let j = {};
+        try {
+          j = JSON.parse(await drive(`/drive/v3/files/${encodeURIComponent(f.id)}?alt=media`, { as: 'text' }));
+        } catch (e) {
+          if (e.status === 404) continue;                // 剛被刪掉（別台採用了）
+          if (!(e instanceof SyntaxError)) throw e;      // 斷線：下次再看；內容壞掉的話當作空的
+        }
+        raw.push({ ...j, id: f.id, kept: f.appProperties?.kept === '1' });
+      }
+    }
+    const shares = raw.map(cleanShare).filter((x) => isFileId(x.id) && !gone.has(x.id));
+    // 壞掉、空的分享：直接刪掉，不要一直掛在信箱裡
+    for (const x of shares) if (!x.item) { gone.add(x.id); later.ack.push(x.id); }
+    const inbox = shares.filter((x) => x.item);
+    if (JSON.stringify(inbox) !== JSON.stringify(state.inbox || [])) setState({ inbox });
+  }
+
+  function idsOf(ids) {
+    return [...new Set((Array.isArray(ids) ? ids : []).map(String))].filter(isFileId);
+  }
+
+  /** 採用了、不要了（ids）：從信箱拿掉，雲端硬碟上的小檔案刪掉 */
+  async function ackShares(ids) {
+    await ready;
+    ids = idsOf(ids);
+    if (!session || !ids.length) return { ok: false, error: '找不到這份分享' };
+    for (const id of ids) gone.add(id);
+    setState({ inbox: (state.inbox || []).filter((x) => !gone.has(x.id)) });
+    try { await touchShares('ack', ids); } catch { later.ack.push(...ids); }   // 斷線了：信箱裡先不顯示，下次再刪
+    return { ok: true };
+  }
+
+  /** 暫留（ids）：還在信箱裡，但不算未讀 */
+  async function keepShares(ids) {
+    await ready;
+    ids = idsOf(ids);
+    if (!session || !ids.length) return { ok: false, error: '找不到這份分享' };
+    for (const id of ids) keptHere.add(id);
+    setState({ inbox: (state.inbox || []).map((x) => (ids.includes(x.id) ? { ...x, kept: true } : x)) });
+    try { await touchShares('keep', ids); } catch { later.keep.push(...ids); }
+    return { ok: true };
+  }
+
+  /** 馬上看一次信箱（打開信箱時用，不等 30 秒） */
+  async function refreshInbox() {
+    await ready;
+    if (!session || !CLONE_URL) return { ok: false };
+    try {
+      inboxAt = Date.now();
+      await checkInbox();
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: explain(e) };
+    }
+  }
+
   async function getState() {
     await ready;
     return { ...state };
@@ -1135,6 +1329,7 @@ function gpnCreateSync(o) {
   return {
     getState, syncNow, markDirty, flush, authUrl, finishAuth, signOut, putWallpaper, getWallpaper,
     cloneSignIn, enterClone, leaveClone, listClones, createClone, extendClone, destroyClone, readClone, pushClone, setCloneAvatar,
+    listPeers, sharePrompt, ackShares, keepShares, refreshInbox,
   };
 }
 

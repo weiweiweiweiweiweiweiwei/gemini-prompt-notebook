@@ -1,7 +1,8 @@
 /**
  * 外掛裡的面板、工具列小視窗用的「雲端」：自己不連線，全部請背景程式（background.js）做。
  * 提供給 panel.js 的介面和網頁版一樣：getState / onState / connect / signOut / syncNow / putWallpaper / getWallpaper，
- * 還有分身的 cloneSignIn / enterClone / leaveClone / listClones / createClone / extendClone / destroyClone / readClone / pushClone / setCloneAvatar
+ * 還有分身的 cloneSignIn / enterClone / leaveClone / listClones / createClone / extendClone / destroyClone / readClone / pushClone / setCloneAvatar，
+ * 分享的 listPeers / sharePrompt / ackShares / keepShares / refreshInbox
  */
 function gpnExtensionCloud() {
   'use strict';
@@ -64,5 +65,11 @@ function gpnExtensionCloud() {
     destroyClone: (c) => send('destroyClone', { clone: c }),
     readClone: (fileId) => send('readClone', { fileId }),
     pushClone: (fileId, doc) => send('pushClone', { fileId, doc }),
+    /* 分享（見 sync.js 的「分享」） */
+    listPeers: () => send('listPeers'),
+    sharePrompt: (item, to) => send('sharePrompt', { item, to }),
+    ackShares: (ids) => send('ackShares', { ids }),
+    keepShares: (ids) => send('keepShares', { ids }),
+    refreshInbox: () => send('refreshInbox'),
   };
 }
