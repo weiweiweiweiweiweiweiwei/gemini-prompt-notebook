@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.31.2';
+const GPN_APP_VERSION = '4.31.3';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -4127,7 +4127,7 @@ function gpnCreatePanel(opts) {
       let t = data.tabs.find((x) => x.id === GPN_MAIL_ID);
       if (!t) {
         t = { id: GPN_MAIL_ID, label: '信箱', color: 'rose', items: [] };
-        data.tabs.push(t);
+        data.tabs.unshift(t);              // 新建的信箱放在最左邊（之後可以長按拖到別的位置）
       }
       const list = t.folders ? t.folders[0] : t;
       const have = new Set((data.trash || []).map((r) => r.id));
