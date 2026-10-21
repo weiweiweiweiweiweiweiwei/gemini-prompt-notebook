@@ -33,6 +33,7 @@
  *     extend   { token, id, expiresAt }                     延長期限（改成哪一天，毫秒）
  *     disable  { token, id }                                停用：代號馬上失效（到期日改成現在），什麼都不刪，延長期限就能重新啟用
  *     revoke   { token, id }                                銷毀（代號不能再用）
+ *     rekey    { token, id, newId }                         換一組代號：舊的馬上失效，內容不變（交給別人用時）
  *   用分身的人（id = 分身代號）
  *     head   { id }          → { fileId, version, label, avatar, ownerEmail, expiresAt }
  *     read   { id }          → 同上 + data（檔案內容，JSON 文字）
@@ -341,6 +342,17 @@ const ops: Record<string, (b: Record<string, unknown>) => Promise<unknown>> = {
     });
     if (!rows?.length) throw new Fail(404, 'clone_not_found');
     return { ok: true, expiresAt: at };
+  },
+
+  async rekey(b) {
+    const me = await whoIs(String(b.token || ''));
+    const id = cleanId(b.id), nid = cleanId(b.newId);
+    if (!isId(id) || !isId(nid) || id === nid) throw new Fail(400, 'bad_request');
+    const rows = await db(`/gpn_clones?id_hash=eq.${q(await sha256(id))}&owner_sub=eq.${q(me.sub)}`, {
+      method: 'PATCH', body: JSON.stringify({ id_hash: await sha256(nid) }),
+    });
+    if (!rows?.length) throw new Fail(404, 'clone_not_found');
+    return { ok: true };
   },
 
   async revoke(b) {

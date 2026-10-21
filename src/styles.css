@@ -1778,6 +1778,11 @@ span.gpn-face-art > svg { display: block; width: 100%; height: 100%; }
 }
 .gpn-clone-card .gpn-brow { margin-top: 12px; }
 .gpn-clone-card .gpn-btn2 { min-width: 96px; height: 42px; }
+/* 卡片下面的兩顆圖示鈕：進入分身、再推一次（名稱在滑鼠提示） */
+.gpn-clone-card .gpn-clone-act { flex: none; min-width: 0; width: 64px; padding: 0; display: flex; align-items: center; justify-content: center; }
+.gpn-clone-act svg { width: 23px; height: 23px; display: block; }
+.gpn-clone-rekey { color: var(--text-mute); }
+.gpn-clone-rekey.is-armed { color: var(--error); font-weight: 700; }
 .gpn-clone-name { min-width: 0; font-size: 16.5px; font-weight: 600; overflow-wrap: anywhere; }
 .gpn-clone-top { display: flex; align-items: center; gap: 12px; }
 .gpn-clone-top + .gpn-avatar-pick { margin-top: 12px; }

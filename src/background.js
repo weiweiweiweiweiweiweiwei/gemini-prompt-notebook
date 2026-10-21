@@ -82,6 +82,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     setCloneAvatar: () => gpnSync.setCloneAvatar(msg.clone || null, String(msg.avatar || '')),
     extendClone: () => gpnSync.extendClone(msg.clone || {}, Number(msg.expiresAt) || 0),
     disableClone: () => gpnSync.disableClone(msg.clone || {}),
+    rekeyClone: () => gpnSync.rekeyClone(msg.clone || {}),
     destroyClone: () => gpnSync.destroyClone(msg.clone || {}),
     readClone: () => gpnSync.readClone(String(msg.fileId || '')),
     pushClone: () => gpnSync.pushClone(String(msg.fileId || ''), msg.doc),

@@ -1090,6 +1090,26 @@ function gpnCreateSync(o) {
     }
   }
 
+  /**
+   * 換一組代號（分身要交給別人用時）：中繼改認新的代號，舊的馬上失效，用舊代號的裝置下次連線就被登出；
+   * 分身的內容、名稱、頭像、到期日都不變。回傳新的代號
+   */
+  async function rekeyClone(c) {
+    await ready;
+    if (ownerOnly()) return { ok: false, error: ownerOnly() };
+    const id = gpnNewCloneId();
+    try {
+      await relayCall(CLONE_URL, { op: 'rekey', token: await accessToken(), id: c.id, newId: id });
+      const mark = () => drive(`/drive/v3/files/${encodeURIComponent(c.fileId)}?fields=id`, {
+        method: 'PATCH', type: 'application/json', body: JSON.stringify({ appProperties: { cloneId: id } }),
+      });
+      try { await mark(); } catch { await mark(); }      // 檔案上也記新的代號（清單從這裡讀）
+      return { ok: true, id };
+    } catch (e) {
+      return { ok: false, error: explain(e) };
+    }
+  }
+
   /** 銷毀分身：中繼不再接受這個代號，檔案丟進雲端硬碟的垃圾桶（30 天內還救得回來，但代號不能再用） */
   async function destroyClone(c) {
     await ready;
@@ -1363,7 +1383,7 @@ function gpnCreateSync(o) {
 
   return {
     getState, syncNow, markDirty, flush, authUrl, finishAuth, signOut, putWallpaper, getWallpaper,
-    cloneSignIn, enterClone, leaveClone, listClones, createClone, extendClone, disableClone, destroyClone, readClone, pushClone,
+    cloneSignIn, enterClone, leaveClone, listClones, createClone, extendClone, disableClone, rekeyClone, destroyClone, readClone, pushClone,
     setCloneAvatar, listPeers, sharePrompt, ackShares, keepShares, refreshInbox,
   };
 }

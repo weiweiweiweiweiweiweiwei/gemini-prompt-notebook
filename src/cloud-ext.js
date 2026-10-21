@@ -63,6 +63,7 @@ function gpnExtensionCloud() {
     setCloneAvatar: (c, avatar) => send('setCloneAvatar', { clone: c, avatar }),
     extendClone: (c, expiresAt) => send('extendClone', { clone: c, expiresAt }),
     disableClone: (c) => send('disableClone', { clone: c }),
+    rekeyClone: (c) => send('rekeyClone', { clone: c }),
     destroyClone: (c) => send('destroyClone', { clone: c }),
     readClone: (fileId) => send('readClone', { fileId }),
     pushClone: (fileId, doc) => send('pushClone', { fileId, doc }),

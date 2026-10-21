@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.31.3';
+const GPN_APP_VERSION = '4.32.0';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -104,6 +104,13 @@ function gpnCreatePanel(opts) {
     '<circle cx="12.8" cy="7.6" r="1.35" fill="currentColor"/>' +
     '<path d="M10.7 10.9h2.2l-1.45 5.3c-.16.62.34.86.76.5l.95-.78" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   /** 兩個人：設定裡的「分身」 */
+  /** 分身卡片下面的兩顆：進入分身（箭頭走進門）、再推一次（箭頭往上推進去） */
+  const ICON_ENTER =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M14 4h4.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H14M10 16.5 14.5 12 10 7.5M14.5 12H4"/></g></svg>';
+  const ICON_PUSH =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M4 14.5v4A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5v-4"/></g></svg>';
   const ICON_CLONE =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>';
 
@@ -3795,7 +3802,7 @@ function gpnCreatePanel(opts) {
     }
     const more = el('button', {
       class: 'gpn-clone-more' + (menuOpen ? ' is-on' : ''), type: 'button', html: ICON_MORE,
-      title: off ? '更多：再推一次、重新啟用、銷毀' : '更多：再推一次、延長期限、停用',
+      title: off ? '更多：重新啟用、銷毀' : '更多：延長期限、停用',
       'aria-label': `「${c.label}」的更多動作`, 'aria-haspopup': 'menu', 'aria-expanded': String(menuOpen),
       onclick: () => {
         disarmCloneDelete();
@@ -3818,7 +3825,12 @@ function gpnCreatePanel(opts) {
       petOpen ? avatarGrid(c.avatar, (id) => onCloneAvatar(c, id)) : null,
       el('div', { class: 'gpn-clone-id' },
         el('code', { text: gpnFormatCloneId(c.id), title: off ? '這組代號已經失效（重新啟用後又能用）' : null }),
-        el('button', { class: 'gpn-link gpn-clone-copy', type: 'button', onclick: () => copyInvite(c) }, '複製代號和網址')),
+        el('button', { class: 'gpn-link gpn-clone-copy', type: 'button', onclick: () => copyInvite(c) }, '複製代號和網址'),
+        el('button', {
+          class: 'gpn-link gpn-clone-copy gpn-clone-rekey' + (cDelArmed === 'rekey:' + c.id ? ' is-armed' : ''), type: 'button',
+          title: '換一組新的代號：舊的馬上不能用（用舊代號的裝置會被登出），分身裡的提示詞不變',
+          onclick: () => onRekeyClone(c),
+        }, cDelArmed === 'rekey:' + c.id ? '確定換？舊代號會失效，再按一次' : '換一組代號')),
       el('div', { class: 'gpn-note', text: `建立 ${ymd(c.createdAt)}　・　` +
         (off ? `${ymd(c.expiresAt)} 停用（代號失效，你自己還進得去）` : `到期 ${ymd(c.expiresAt)}`) +
         (c.modifiedAt ? `　・　最後修改 ${ago(c.modifiedAt)}` : '') }),
@@ -3827,7 +3839,14 @@ function gpnCreatePanel(opts) {
         el('button', { class: 'gpn-btn2', type: 'button', onclick: () => onExtendClone(c, dateInput.value) }, '確定'),
         el('button', { class: 'gpn-btn2', type: 'button', onclick: () => { cExtendOpen = ''; refreshClones(); } }, '取消')) : null,
       el('div', { class: 'gpn-brow' },
-        el('button', { class: 'gpn-btn2 gpn-clone-enter', type: 'button', onclick: () => onEnterClone(c) }, '進入分身')));
+        el('button', {
+          class: 'gpn-btn2 gpn-clone-act', type: 'button', html: ICON_ENTER,
+          title: '進入分身（用這個分身的身分使用、編輯）', 'aria-label': `進入分身「${c.label}」`, onclick: () => onEnterClone(c),
+        }),
+        el('button', {
+          class: 'gpn-btn2 gpn-clone-act', type: 'button', html: ICON_PUSH,
+          title: '再推一次（把你現在的提示詞推進這個分身）', 'aria-label': `再推一次到分身「${c.label}」`, onclick: () => openPick('push', c),
+        })));
   }
 
   /** 卡片右上角「更多」打開的小選單；停用、銷毀都要按兩次 */
@@ -3838,7 +3857,6 @@ function gpnCreatePanel(opts) {
     const key = (off ? 'destroy:' : 'disable:') + c.id;
     const armed = cDelArmed === key;
     return el('div', { class: 'gpn-clone-menu', role: 'menu', onkeydown: onCloneMenuKey },
-      item('再推一次', '把你現在的提示詞推進這個分身', () => { closeCloneMenu(); openPick('push', c); }),
       item(off ? '重新啟用' : '延長期限', off ? '選一個新的到期日，同一組代號就能再用' : '改到期日',
         () => { cMenuOpen = ''; cExtendOpen = c.id; refreshClones(); ui.cList.querySelector('.gpn-clone-date')?.focus(); }),
       el('div', { class: 'gpn-clone-msep', role: 'separator' }),
@@ -3874,6 +3892,27 @@ function gpnCreatePanel(opts) {
     cDelTimer = setTimeout(() => { disarmCloneDelete(); refreshClones(); }, 6000);
     refreshClones();
     ui.cList.querySelector('.gpn-clone-mi.is-armed')?.focus();
+  }
+
+  /** 換一組代號（按兩次）：舊的馬上失效，內容不變；換好直接顯示新的代號 */
+  async function onRekeyClone(c) {
+    if (cDelArmed !== 'rekey:' + c.id) {
+      cDelArmed = 'rekey:' + c.id;
+      clearTimeout(cDelTimer);
+      cDelTimer = setTimeout(() => { disarmCloneDelete(); refreshClones(); }, 6000);
+      refreshClones();
+      return;
+    }
+    disarmCloneDelete();
+    setCloneMsg('換代號中…', 'ok');
+    refreshClones();
+    const r = await cloud.rekeyClone(c);
+    if (!r || !r.ok) { setCloneMsg(r?.error || '沒辦法換代號，請稍後再試'); refreshClones(); return; }
+    setCloneMsg('');
+    c.id = r.id;
+    refreshClones();
+    sfx('save');
+    toast(`分身「${c.label}」換好新代號了：${gpnFormatCloneId(r.id)}。舊的代號不能再用，記得把新的給新同事`, false, 7000);
   }
 
   /** 停用：代號馬上失效，用這個分身的裝置下次連線就被登出；什麼都不刪，自己照樣進得去 */
