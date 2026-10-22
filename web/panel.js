@@ -14,7 +14,7 @@
 /**
  * 版本號，顯示在設定視窗左下角。改了功能就調高，看這個數字就知道網頁有沒有更新到最新版。
  */
-const GPN_APP_VERSION = '4.38.0';
+const GPN_APP_VERSION = '4.38.1';
 
 /**
  * @param {object}   opts
@@ -2604,7 +2604,7 @@ function gpnCreatePanel(opts) {
     ui.sDel = el('button', { class: 'gpn-btn2 gpn-btn2--danger gpn-bm-del', type: 'button', onclick: onTabDelete }, '刪除這個書籤');
     ui.sDanger = el('div', { class: 'gpn-bm-danger' }, ui.sDel);
 
-    ui.sSwitchTitle = el('b', { text: '使用資料夾' });
+    ui.sSwitchTitle = el('b');
     ui.sSwitchState = el('span');
     ui.sSwitch = el('button', {
       class: 'gpn-switch-row is-small', type: 'button', role: 'switch', 'aria-checked': 'false',
@@ -2634,10 +2634,12 @@ function gpnCreatePanel(opts) {
     }, '＋ 備註');
     ui.sNoteBox = el('div', { class: 'gpn-bm-field' }, el('div', { class: 'gpn-label', text: '備註' }), ui.sNote);
     ui.bmEditor = el('div', { class: 'gpn-bm-editor' },
-      el('div', { class: 'gpn-bm-line' },
-        el('div', { class: 'gpn-bm-field is-grow' }, el('div', { class: 'gpn-label', text: '名稱' }), ui.sName, ui.sNameHint),
-        el('div', { class: 'gpn-bm-field' }, el('div', { class: 'gpn-label', text: '顏色' }), ui.sColor.node)),
-      el('div', { class: 'gpn-bm-field' }, ui.sSwitch, ui.sConfirm),
+      el('div', { class: 'gpn-bm-field' }, el('div', { class: 'gpn-label', text: '名稱' }), ui.sName, ui.sNameHint),
+      // 顏色在左、資料夾在右，同一排；兩個按鈕一樣高、一樣的框
+      el('div', { class: 'gpn-bm-pair' },
+        el('div', { class: 'gpn-bm-field' }, el('div', { class: 'gpn-label', text: '顏色' }), ui.sColor.node),
+        el('div', { class: 'gpn-bm-field' }, el('div', { class: 'gpn-label', text: '資料夾' }), ui.sSwitch)),
+      ui.sConfirm,
       ui.sNoteAdd, ui.sNoteBox,
       ui.sDanger);
     ui.bmList = el('div', { class: 'gpn-orows', role: 'list' });
@@ -2894,7 +2896,9 @@ function gpnCreatePanel(opts) {
     ui.sColor.set(tab.color);
     const on = !!tab.folders;
     ui.sSwitch.setAttribute('aria-checked', String(on));
-    ui.sSwitchState.textContent = on ? `開啟中・${tab.folders.length} 個` : '關閉中';
+    ui.sSwitchTitle.textContent = on ? '使用中' : '不使用';
+    ui.sSwitchState.textContent = on ? `${tab.folders.length} 個` : '';
+    ui.sSwitch.setAttribute('aria-label', on ? `使用資料夾：開啟中，${tab.folders.length} 個` : '使用資料夾：關閉中');
     ui.sDanger.hidden = data.tabs.length <= 1;        // 最後一個書籤不給刪
   }
 

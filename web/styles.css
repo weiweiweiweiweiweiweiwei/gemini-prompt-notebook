@@ -2360,21 +2360,26 @@ section[data-section="markTab"] .gpn-note--roomy { margin: 4px 0 16px; }
 /* 設定 → 其他 › 書籤 › 工作：名稱、顏色同一行；資料夾的小開關；備註平常只有「＋ 備註」；刪除在最下面 */
 .gpn-bm-row .gpn-color-dot { width: 16px; height: 16px; }
 .gpn-bm-editor { display: flex; flex-direction: column; gap: 16px; max-width: 560px; }
-.gpn-bm-line { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+/* 顏色、資料夾一左一右，一律同一排 */
+.gpn-bm-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+.gpn-bm-pair > .gpn-bm-field { align-items: flex-start; }
 .gpn-bm-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.gpn-bm-field.is-grow { flex: 1 1 220px; }
 .gpn-bm-field .gpn-label { margin: 0; }
 .gpn-bm-note { min-height: 70px; resize: vertical; }
-.gpn-bm-note-add { align-self: flex-start; }
-.gpn-bm-danger { padding-top: 14px; border-top: 1px solid var(--glass-line); }
-.gpn-bm-del { min-width: 0; }
+/* 這一頁每個元件一樣高（44px）：名稱、顏色、資料夾、＋ 備註、刪除。
+   .gpn-btn2 平常是排在一橫排裡平分寬度的（flex: 1 1 0），放在這裡的直排會被壓扁，所以改成不伸縮 */
+.gpn-bm-editor .gpn-input { height: 44px; padding: 0 14px; font-size: 15.5px; }
+.gpn-bm-editor .gpn-btn2 { flex: none; align-self: flex-start; min-width: 0; height: 44px; padding: 0 18px; border-radius: 12px; }
+.gpn-bm-danger { padding-top: 16px; border-top: 1px solid var(--glass-line); }
 /* 小一號的開關（設定 → 書籤 的使用資料夾） */
-.gpn-switch-row.is-small { align-self: flex-start; width: auto; gap: 12px; padding: 8px 14px 8px 10px; border-radius: 12px; }
+/* 小一號的開關：和旁邊的顏色按鈕一樣高、一樣的框，裡面是開關＋狀態 */
+.gpn-switch-row.is-small { align-self: flex-start; width: auto; height: 44px; gap: 10px; padding: 0 16px 0 12px; border-radius: 12px; }
+.gpn-switch-row.is-small:hover { border-color: var(--outline-strong); }
 .gpn-switch-row.is-small .gpn-switch-text { flex-direction: row; align-items: baseline; gap: 8px; }
-.gpn-switch-row.is-small .gpn-switch-text b { font-size: 15px; }
+.gpn-switch-row.is-small .gpn-switch-text b { font-size: 15px; font-weight: 500; }
 .gpn-switch-row.is-small .gpn-switch-text span { font-size: 13.5px; }
-.gpn-switch-row.is-small .gpn-switch { width: 40px; height: 24px; border-radius: 12px; }
-.gpn-switch-row.is-small .gpn-switch::after { top: 3px; left: 3px; width: 18px; height: 18px; }
+.gpn-switch-row.is-small .gpn-switch { width: 38px; height: 22px; border-radius: 11px; }
+.gpn-switch-row.is-small .gpn-switch::after { top: 3px; left: 3px; width: 16px; height: 16px; }
 .gpn-switch-row.is-small[aria-checked="true"] .gpn-switch::after { transform: translateX(16px); }
 
 /* 設定 → 使用次數：前十名，名次、標題（底下是在哪裡、一條長度代表次數）、次數 */
