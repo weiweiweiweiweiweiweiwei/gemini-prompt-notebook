@@ -1185,6 +1185,8 @@ button { cursor: pointer; }
   transition: border-color .16s ease, box-shadow .16s ease;
 }
 .gpn-textarea { min-height: 180px; resize: vertical; line-height: 1.65; font-size: 15.5px; }
+/* 新增／修改提示詞的內容：「放在哪裡」藏起來後，空間都給它 */
+.gpn-textarea.gpn-e-body { min-height: 300px; }
 .gpn-input::placeholder, .gpn-textarea::placeholder { color: var(--text-mute); opacity: .8; }
 .gpn-input:focus, .gpn-textarea:focus {
   outline: none; border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary);

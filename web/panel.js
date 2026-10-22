@@ -14,7 +14,7 @@
 /**
  * 版本號，顯示在設定視窗左下角。改了功能就調高，看這個數字就知道網頁有沒有更新到最新版。
  */
-const GPN_APP_VERSION = '4.40.0';
+const GPN_APP_VERSION = '4.41.0';
 
 /**
  * @param {object}   opts
@@ -1602,6 +1602,14 @@ function gpnCreatePanel(opts) {
     const back = trashList().filter((r) => ids.includes(r.id));
     if (!back.length) return;
     const revived = [];
+    // 要用到的書籤、資料夾先放回去：data.gone 是最近刪的在前，照這個順序插回原本的位置，幾個一起放回來時順序才對
+    for (const g of [...(data.gone || [])]) {
+      if (g.kind === 'tab' && !data.tabs.some((t) => t.id === g.id) && back.some((r) => r.tabId === g.id)) reviveTab(g.id, revived);
+    }
+    for (const g of [...(data.gone || [])]) {
+      const tab = g.kind === 'folder' && data.tabs.find((t) => t.id === g.tabId);
+      if (tab?.folders && !tab.folders.some((f) => f.id === g.id) && back.some((r) => r.folderId === g.id)) reviveFolder(tab, g.id, revived);
+    }
     for (const r of [...back].reverse()) {
       const tab = data.tabs.find((t) => t.id === r.tabId) || reviveTab(r.tabId, revived) || data.tabs[0];
       const list = tab.folders
@@ -1626,7 +1634,7 @@ function gpnCreatePanel(opts) {
     const tab = { id: g.id, label: g.label, color: g.color, ...(g.note ? { note: g.note } : {}) };
     if (g.folders?.length) tab.folders = g.folders.map((f) => ({ id: f.id, label: f.label, items: [] }));
     else tab.items = [];
-    data.tabs.push(tab);
+    data.tabs.splice(g.pos >= 0 ? Math.min(g.pos, data.tabs.length) : data.tabs.length, 0, tab);   // 回到原本的位置
     data.gone = data.gone.filter((x) => x !== g);
     revived.push(`書籤「${g.label}」`);
     return tab;
@@ -1637,7 +1645,7 @@ function gpnCreatePanel(opts) {
     const g = (data.gone || []).find((x) => x.kind === 'folder' && x.id === id && x.tabId === tab.id);
     if (!g || tab.folders.length >= GPN_MAX_FOLDERS) return null;
     const folder = { id: g.id, label: g.label, items: [] };
-    tab.folders.push(folder);
+    tab.folders.splice(g.pos >= 0 ? Math.min(g.pos, tab.folders.length) : tab.folders.length, 0, folder);
     data.gone = data.gone.filter((x) => x !== g);
     revived.push(`資料夾「${g.label}」`);
     return folder;
@@ -2235,7 +2243,7 @@ function gpnCreatePanel(opts) {
     ui.eTitleHint = el('div', { class: 'gpn-hint', text: '請先輸入按鈕顯示標題' });
 
     ui.eBody = el('textarea', {
-      class: 'gpn-textarea', placeholder: '這裡貼上真正要送給 AI 的完整指令內容…',
+      class: 'gpn-textarea gpn-e-body', placeholder: '這裡貼上真正要送給 AI 的完整指令內容…',
       oninput: () => {
         ui.eBody.classList.remove('is-bad');
         ui.eBodyHint.classList.remove('is-on');
@@ -2258,8 +2266,8 @@ function gpnCreatePanel(opts) {
       el('div', { class: 'gpn-dialog', onmousedown: stop },
         ui.eHead,
         el('div', { class: 'gpn-dialog-body' },
-          field('按鈕顯示標題', '（卡片上看到的字）', ui.eTitle, ui.eTitleHint),
-          field('實際的 Prompt 內容', '（點標題時用的文字）', ui.eBody,
+          field('按鈕顯示標題', null, ui.eTitle, ui.eTitleHint),
+          field('實際的 Prompt 內容', null, ui.eBody,
             el('div', { class: 'gpn-under' }, ui.eBodyHint, ui.eCount)),
           ui.eWhereField = field('放在哪裡', '（改這裡就能搬到別的書籤或資料夾）',
             el('div', { class: 'gpn-select-wrap' }, ui.eWhere))
@@ -2270,6 +2278,9 @@ function gpnCreatePanel(opts) {
         )
       )
     );
+    // 4.41.0：「放在哪裡」先藏起來（要搬到別的地方用拖曳就好），確認不需要之後再把程式刪掉。
+    // 藏起來時選單照樣填好「現在的位置」，儲存時就不會搬家
+    ui.eWhereField.hidden = true;
   }
 
   /**
@@ -2468,7 +2479,7 @@ function gpnCreatePanel(opts) {
       el('div', { class: 'gpn-dialog gpn-dialog--sm', onmousedown: stop },
         ui.fHead,
         el('div', { class: 'gpn-dialog-body' },
-          field('資料夾名稱', '（最多 16 個字）', ui.fName, ui.fNameHint),
+          field('資料夾名稱', null, ui.fName, ui.fNameHint),
           ui.fNote
         ),
         el('div', { class: 'gpn-actions' },
@@ -2564,7 +2575,7 @@ function gpnCreatePanel(opts) {
     sfx('del');
     for (const it of folder.items) toTrash(it, tab.id, folder.id);
     if (folder.items.length) {
-      data.gone = [{ kind: 'folder', id: folder.id, tabId: tab.id, label: folder.label, at: Date.now() }, ...(data.gone || [])];
+      data.gone = [{ kind: 'folder', id: folder.id, tabId: tab.id, label: folder.label, pos: tab.folders.indexOf(folder), at: Date.now() }, ...(data.gone || [])];
     }
     tab.folders.splice(tab.folders.indexOf(folder), 1);
     if (folderId === folder.id) folderId = null;
@@ -3049,7 +3060,8 @@ function gpnCreatePanel(opts) {
     if (total) {
       data.gone = [{
         kind: 'tab', id: tab.id, label: tab.label, color: tab.color, note: tab.note || '',
-        folders: tab.folders ? tab.folders.map((f) => ({ id: f.id, label: f.label })) : null, at: Date.now(),
+        folders: tab.folders ? tab.folders.map((f) => ({ id: f.id, label: f.label })) : null,
+        pos: data.tabs.indexOf(tab), at: Date.now(),
       }, ...(data.gone || [])];
     }
     data.tabs.splice(data.tabs.indexOf(tab), 1);
@@ -3090,13 +3102,13 @@ function gpnCreatePanel(opts) {
       el('p', { class: 'gpn-lede', text:
         '和 Gmail 的星號一樣：連續點提示詞右邊的星號，會照「使用中」的順序換成不同的符號，換完一輪就取消。' +
         '每一種符號在書籤列都有自己的書籤（在「我的最愛」左邊），標了那個符號的提示詞會收在裡面。' }),
-      field('使用中', '（點一下就移到「沒使用」；長按可以左右拖曳排順序）', ui.mUse),
-      field('沒使用', '（點一下就加到「使用中」的最後面）', ui.mOff),
+      field('使用中', '（長按拖曳排順序）', ui.mUse),
+      field('沒使用', null, ui.mOff),
       el('div', { class: 'gpn-note', text:
         `黃色星星就是「我的最愛」，固定排第一個。黃色星星以外最多再用 ${GPN_MAX_MARKS} 種，書籤列才放得下。` +
         '順序就是連續點星號時換的順序，書籤列上的符號書籤也照這個順序；在這裡或書籤列上長按拖曳都能換。' }),
       el('div', { class: 'gpn-sep' }),
-      field('預先設定', '（和 Gmail 一樣）',
+      field('預先設定', null,
         el('div', { class: 'gpn-brow' },
           preset('1 顆星', []),
           preset('4 顆星', ['blue-star', 'green-check', 'red-bang']))));
@@ -3822,7 +3834,7 @@ function gpnCreatePanel(opts) {
         ui.cMineFace,
         el('div', { class: 'gpn-account-info' }, el('div', { class: 'gpn-note', text: '你現在用的是分身' }), ui.cMineName)),
       ui.cMineNote, ui.cMineBack,
-      ui.cMinePicker ? field('頭像', '（每台電腦都會跟著換）', ui.cMinePicker.node) : null);
+      ui.cMinePicker ? field('頭像', null, ui.cMinePicker.node) : null);
     if (ui.cMinePicker) ui.cMinePicker.node.parentElement.classList.add('gpn-clone-myavatar');
 
     buildPickLayer();

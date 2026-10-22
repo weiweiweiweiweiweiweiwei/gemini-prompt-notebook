@@ -122,8 +122,9 @@ function gpnCleanUses(raw, keep) {
 }
 
 /**
- * 刪掉的書籤、資料夾（4.40.0）：[{ kind: 'tab', id, label, color, note, folders: [{ id, label }] | null, at }
- *                                 | { kind: 'folder', id, tabId, label, at }]
+ * 刪掉的書籤、資料夾（4.40.0）：[{ kind: 'tab', id, label, color, note, folders: [{ id, label }] | null, pos, at }
+ *                                 | { kind: 'folder', id, tabId, label, pos, at }]
+ * pos：刪掉時排在第幾個（從 0 算），放回來時回到那個位置（4.41.0）；-1 是不知道（放最後面）
  * 裡面的提示詞丟進資源回收桶時，記得它們原本在哪裡；從回收桶還原時，書籤、資料夾跟著回來（panel.js 的 restoreTrash）。
  * 只留「回收桶裡還有東西要回去」的：都還原或永久刪除了，這筆就沒用了。
  */
@@ -134,10 +135,11 @@ function gpnCleanGone(raw, tabs, trash) {
   const wantFolder = new Set(trash.map((r) => r.folderId).filter(Boolean));
   const seen = new Set();
   const str = (v, n) => String(v ?? '').slice(0, n);
+  const pos = (v) => (Number.isFinite(Number(v)) && v !== null && v !== '' ? Math.max(0, Math.floor(Number(v))) : -1);
   return (Array.isArray(raw) ? raw : [])
     .filter((g) => g && typeof g === 'object' && typeof g.id === 'string' && g.id)
     .map((g) => (g.kind === 'folder'
-      ? { kind: 'folder', id: g.id, tabId: str(g.tabId, 80), label: str(g.label, 16) || '未命名', at: Number(g.at) || 0 }
+      ? { kind: 'folder', id: g.id, tabId: str(g.tabId, 80), label: str(g.label, 16) || '未命名', pos: pos(g.pos), at: Number(g.at) || 0 }
       : {
           kind: 'tab', id: g.id, label: str(g.label, GPN_MAX_LABEL) || '未命名',
           color: GPN_COLORS.includes(g.color) ? g.color : 'amber', note: str(g.note, GPN_MAX_NOTE),
@@ -145,6 +147,7 @@ function gpnCleanGone(raw, tabs, trash) {
             ? g.folders.filter((f) => f && typeof f.id === 'string' && f.id).slice(0, GPN_MAX_FOLDERS)
               .map((f) => ({ id: f.id, label: str(f.label, 16) || '未命名' }))
             : null,
+          pos: pos(g.pos),
           at: Number(g.at) || 0,
         }))
     .filter((g) => (g.kind === 'tab' ? !tabIds.has(g.id) && wantTab.has(g.id) : !folderIds.has(g.id) && wantFolder.has(g.id)))
