@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.35.0';
+const GPN_APP_VERSION = '4.36.0';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -115,6 +115,9 @@ function gpnCreatePanel(opts) {
   /** 九宮格：設定左邊的「其他」 */
   const ICON_APPS =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/></svg>';
+  /** 學士帽：設定 → 其他 → 新手教學 */
+  const ICON_SCHOOL =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3 1 9l11 6 9-4.91V17h2V9L12 3z"/></svg>';
   /** 長條圖：設定裡的「使用次數」 */
   const ICON_CHART =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z"/></svg>';
@@ -303,6 +306,7 @@ function gpnCreatePanel(opts) {
   let wipeArmed = false, wipeTimer = 0;
   // 分身（設定 → 分身）：clones 是建立過的分身；cPick 是正在勾選的 { mode: 'create' | 'push', clone, tabs, folders, items, open }
   const hasClones = () => !!cloud && typeof cloud.listClones === 'function' && !!GPN_CLOUD.cloneUrl;
+  let tut = null;                // 新手教學進行中（見「新手教學」）：這時的 data 是範例筆記本
   let clones = null, clonesBusy = false, cPick = null, cDelArmed = '', cDelTimer = 0, leaveArmed = false;
   // 分享（卡片「⋯ → 分享」）：sharing 是正在分享的 { item, peers, picked }；信箱見 cloudState.inbox
   let sharing = null;
@@ -365,6 +369,7 @@ function gpnCreatePanel(opts) {
   /** 存檔。信箱空了就順便拿掉（拿掉了要重畫書籤列） */
   const persist = () => {
     if (pruneMail()) queueMicrotask(() => render());
+    if (tut) return Promise.resolve();       // 新手教學的範例筆記本：只在畫面上，不存檔、不同步
     return GpnStore.save(data);
   };
   /** 自己的書籤（不含信箱）：書籤上限只算這些 */
@@ -2830,8 +2835,9 @@ function gpnCreatePanel(opts) {
 
   /** 「其他」那一頁：一排一排（圖示、名稱、一句說明、右邊箭頭），點了進到那一頁 */
   function buildOtherSection() {
-    const row = (key, icon, title, sub, extra = null) => el(extra ? 'a' : 'button', {
-      class: 'gpn-orow', type: extra ? null : 'button', 'data-go': key,
+    // extra：不是設定頁的（全部提示詞是連結；新手教學是按了就開始）
+    const row = (key, icon, title, sub, extra = null) => el(extra?.href ? 'a' : 'button', {
+      class: 'gpn-orow', type: extra?.href ? null : 'button', 'data-go': key,
       onclick: extra ? null : () => showSection(key, true),
       ...(extra || {}),
     },
@@ -2839,7 +2845,7 @@ function gpnCreatePanel(opts) {
       el('span', { class: 'gpn-orow-main' },
         el('span', { class: 'gpn-orow-title', text: title }),
         el('span', { class: 'gpn-orow-sub', text: sub })),
-      el('span', { class: 'gpn-orow-go' + (extra ? ' is-out' : ''), html: extra ? ICON_OPEN : '' }));
+      el('span', { class: 'gpn-orow-go' + (extra?.href ? ' is-out' : ''), html: extra?.href ? ICON_OPEN : '' }));
     return el('section', { class: 'gpn-section', 'data-section': 'other' },
       el('div', { class: 'gpn-orows' },
         row('tab', ICON_TAB, '書籤', '所有書籤的名稱、顏色、資料夾、備註'),
@@ -2847,7 +2853,8 @@ function gpnCreatePanel(opts) {
         standalone ? row('look', ICON_IMAGE, '背景', '深淺主題、背景圖') : null,
         row('backup', ICON_SYNC, '備份', '下載成備份檔、從備份檔匯入'),
         row('stats', ICON_CHART, '使用次數', '最常使用的前十名提示詞'),
-        allPageUrl ? row('all', ICON_LIST, '全部提示詞', '所有提示詞的完整內容列在同一頁（在新分頁打開）', {
+        row('guide', ICON_SCHOOL, '新手教學', '用一本範例筆記本，一頁一頁看每個按鈕在做什麼', { onclick: startTut }),
+        allPageUrl ? row('all', ICON_LIST, '全部提示詞', '所有內容顯示在同一頁，讓「問問 Gemini」看得到全部提示詞（在新分頁打開）', {
           href: allPageUrl, target: '_blank', rel: 'noopener',
           title: '所有書籤的提示詞，完整內容用純文字列在同一頁（方便「問問 Gemini」讀）；在新分頁打開',
         }) : null));
@@ -3804,13 +3811,13 @@ function gpnCreatePanel(opts) {
         '會拿到一組 16 碼的分身代號。同事在登入畫面輸入代號，就能使用、新增、修改、刪除，就跟一般帳號一樣。' }),
       el('p', { text:
         '分身的提示詞存在你的 Google 雲端硬碟（一個分身一個檔案），你隨時可以「進入分身」幫忙編輯。' +
-        '分身和你的筆記本各自獨立，你之後改了自己的，可以按「再推一次」送過去。' }),
+        '分身和你的筆記本各自獨立，你之後改了自己的，可以按「推送資料」送過去。' }),
       el('p', { text:
         '建立滿一年會自動停用；也可以隨時在卡片右上角的 ⋮ 按「停用」：代號馬上失效，用這個分身的裝置都會被登出，' +
         '但資料都還在，你自己照樣可以進入分身。停用之後可以「重新啟用」（選新的到期日，同一組代號又能用），或「銷毀」。' }),
       el('p', { text:
         '你和分身、分身和分身之間可以互相分享提示詞：在提示詞右邊的 ⋯ 按「分享」，勾選要給誰。' +
-        '收到的人頭像會變成一封信，打開按「採用」（選要放進哪個書籤、資料夾）或「暫留」。' }));
+        '收到的人頭像會變成一封信，點它最左邊會多一個「信箱」書籤，把提示詞拖到自己的書籤收好；信箱空了，書籤就自己消失。' }));
     ui.cInfoBtn = el('button', {
       class: 'gpn-info-btn', type: 'button', html: ICON_INFO, title: '分身是什麼',
       'aria-label': '分身是什麼', 'aria-expanded': 'false', onclick: () => toggleCloneInfo(),
@@ -3861,7 +3868,7 @@ function gpnCreatePanel(opts) {
     cRenameOpen = '';
     ui.cDone.hidden = true;
     refreshClones();
-    if (cloudState.signedIn && !cloudState.clone) loadClones();
+    if (cloudState.signedIn && !cloudState.clone && !tut) loadClones();
   }
 
   async function loadClones() {
@@ -3961,6 +3968,7 @@ function gpnCreatePanel(opts) {
 
   /** 建立的人幫某個分身換頭像：畫面先換，存不進去再換回來 */
   async function onCloneAvatar(c, id) {
+    if (tutBlocked()) return;
     const old = c.avatar;
     c.avatar = id;
     cAvatarOpen = '';
@@ -4077,6 +4085,7 @@ function gpnCreatePanel(opts) {
   }
 
   async function onRenameClone(c, raw) {
+    if (tutBlocked()) { refreshClones(); return; }
     const label = gpnCloneLabel(raw);
     if (!String(raw || '').trim() || label === c.label) { refreshClones(); return; }
     const old = c.label;
@@ -4094,6 +4103,7 @@ function gpnCreatePanel(opts) {
 
   /** 拷貝：一模一樣的分身放在原本那張的正下方，頭像隨機換一個不同的 */
   async function onCopyClone(c) {
+    if (tutBlocked()) return;
     if (clonesBusy) return;
     cMenuOpen = '';
     disarmCloneDelete();
@@ -4168,6 +4178,7 @@ function gpnCreatePanel(opts) {
 
   /** 換一組代號（按兩次）：舊的馬上失效，內容不變；換好直接顯示新的代號 */
   async function onRekeyClone(c) {
+    if (tutBlocked()) return;
     if (cDelArmed !== 'rekey:' + c.id) {
       cDelArmed = 'rekey:' + c.id;
       clearTimeout(cDelTimer);
@@ -4190,6 +4201,7 @@ function gpnCreatePanel(opts) {
 
   /** 停用：代號馬上失效，用這個分身的裝置下次連線就被登出；什麼都不刪，自己照樣進得去 */
   async function onDisableClone(c) {
+    if (tutBlocked()) return;
     if (cDelArmed !== 'disable:' + c.id) { armClone('disable:' + c.id); return; }
     disarmCloneDelete();
     cMenuOpen = '';
@@ -4206,6 +4218,7 @@ function gpnCreatePanel(opts) {
 
   /** 延長期限到選的那一天（那天結束才到期） */
   async function onExtendClone(c, day) {
+    if (tutBlocked()) return;
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day || '');
     if (!m) { toast('請選一個日期', true); return; }
     const at = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 23, 59, 59).getTime();
@@ -4228,6 +4241,7 @@ function gpnCreatePanel(opts) {
   }
 
   async function onEnterClone(c) {
+    if (tutBlocked()) return;
     setCloneMsg('切換中…', 'ok');
     const r = await cloud.enterClone(c);
     if (!r || !r.ok) { setCloneMsg(r?.error || '沒辦法進入分身，請稍後再試'); return; }
@@ -4269,6 +4283,7 @@ function gpnCreatePanel(opts) {
   }
 
   async function onDestroyClone(c) {
+    if (tutBlocked()) return;
     if (cDelArmed !== 'destroy:' + c.id) { armClone('destroy:' + c.id); return; }
     disarmCloneDelete();
     cMenuOpen = '';
@@ -4327,6 +4342,7 @@ function gpnCreatePanel(opts) {
   }
 
   async function openShare(item) {
+    if (tutBlocked()) return;
     if (!ui.shareLayer || !cloudState.signedIn) {
       toast('要先登入，才能和分身互相分享', true);
       return;
@@ -4572,6 +4588,7 @@ function gpnCreatePanel(opts) {
   }
 
   async function openPick(mode, clone = null) {
+    if (tutBlocked()) return;
     disarmCloneDelete();
     ui.cDone.hidden = true;
     // diff：分身裡也有、但標題或內容和我的不一樣的（推過去會換成我的，畫面上要標出來）
@@ -4955,6 +4972,7 @@ function gpnCreatePanel(opts) {
 
   /** 匯入會動到既有資料，所以一律二段式確認（和刪除同一套做法） */
   async function onImport() {
+    if (tutBlocked()) return;
     const parsed = refreshBackupPreview();
     if (!parsed) return;
 
@@ -5485,6 +5503,7 @@ function gpnCreatePanel(opts) {
 
   // 其他分頁或雲端改了資料時同步過來；正在編輯就先別動畫面，免得打到一半的字不見
   GpnStore.onExternalChange((fresh) => {
+    if (tut) { tut.real = fresh; return; }     // 教學中：畫面上是範例，自己的筆記本先收著最新的，結束時換回來
     data = fresh;
     syncLook();                 // 別台換了背景
     if (!isOpen()) return;
@@ -5590,6 +5609,420 @@ function gpnCreatePanel(opts) {
     for (const id of gone) delete uses[id];
     data.uses = uses;
     return true;
+  }
+
+  /* ==========================================================================
+     新手教學（4.36.0）：像在畫面上做筆記。畫面稍微變暗，白色的手繪箭頭指著按鈕，旁邊寫幾個字；
+     一頁講一類操作（2～8 個箭頭）。按「繼續」或鍵盤 → 到下一頁，「上一頁」或 ← 回去，「跳過教學」隨時結束。
+     不會點一下畫面就換頁：教學中畫面照樣可以點、拖曳，邊看邊試。
+     教學時換成一本範例筆記本（每則標題前面都有「(範例)」，一看就知道自己的提示詞沒有不見）：
+     在裡面做什麼都只在畫面上，不存檔、不同步；結束時換回自己的筆記本。
+     會動到真的東西的（分享、分身的各種按鈕、匯入備份）教學中不能按。
+     ========================================================================== */
+
+  /** 範例筆記本：書籤、資料夾、信箱、星號、自訂符號、最近使用、資源回收桶都有一點 */
+  function tutDemo(real) {
+    const it = (n, title, content) => ({ id: 'p_demo_' + n, title: '(範例)' + title, content });
+    const now = Date.now();
+    const recent = (n, title, mins, tabId, folderId = '') =>
+      ({ id: 'p_demo_' + n, title: '(範例)' + title, content: '', usedAt: now - mins * 60000, tabId, folderId });
+    return gpnNormalize({
+      version: GPN_VERSION, activeId: 't_demo_work',
+      tabs: [
+        { id: GPN_MAIL_ID, label: '信箱', color: 'rose', items: [
+          { ...it('m1', '會議記錄整理', '請把下面的會議記錄整理成：決議、待辦（負責人、期限）、下次要討論的事：'),
+            from: { name: '小美', avatar: 'cat', picture: '' } },
+          { ...it('m2', '公文潤飾', '請把下面這段公文改得精簡、正式，意思不要變：'),
+            from: { name: '阿明', avatar: 'bear', picture: '' } },
+        ] },
+        { id: 't_demo_work', label: '工作', color: 'blue', folders: [
+          { id: 'f_demo_letter', label: '寫信', items: [
+            it('1', '感謝信', '請幫我寫一封簡短、真誠的感謝信，對象是：'),
+            it('2', '請假信', '請幫我寫一封請假信，日期和原因如下：'),
+            it('3', '邀請信', '請幫我寫一封活動邀請信，活動資訊如下：'),
+          ] },
+          { id: 'f_demo_report', label: '報告', items: [
+            it('4', '濃縮成三個重點', '請把下面這段文字濃縮成三個重點，每點一句話：'),
+            it('5', '週報格式', '請把下面的工作內容整理成週報：本週完成、下週計畫、需要協助：'),
+          ] },
+        ] },
+        { id: 't_demo_life', label: '生活', color: 'green', items: [
+          it('6', '三天兩夜行程', '請幫我排一個三天兩夜的行程，地點是：'),
+          it('7', '冰箱剩菜食譜', '我冰箱有下面這些食材，請給我三道簡單的菜：'),
+        ] },
+        { id: 't_demo_learn', label: '學習', color: 'amber', items: [
+          it('8', '翻成英文', '請把下面這段翻成自然的英文：'),
+          it('9', '用白話解釋', '請用國中生聽得懂的話解釋：'),
+        ] },
+      ],
+      favs: ['p_demo_1', 'p_demo_8'],
+      marks: { 'red-bang': ['p_demo_5'] },
+      markTypes: ['red-bang'],
+      recent: [
+        recent('1', '感謝信', 3, 't_demo_work', 'f_demo_letter'),
+        recent('8', '翻成英文', 50, 't_demo_learn'),
+        recent('4', '濃縮成三個重點', 180, 't_demo_work', 'f_demo_report'),
+      ],
+      trash: [
+        { id: 'p_demo_t1', title: '(範例)舊的簡報大綱', content: '請幫我列一份簡報大綱，主題是：',
+          deletedAt: now - 2 * 3600000, tabId: 't_demo_work', folderId: 'f_demo_report', mark: '' },
+        { id: 'p_demo_t2', title: '(範例)生日祝福', content: '請幫我寫一段生日祝福，對象是：',
+          deletedAt: now - 26 * 3600000, tabId: 't_demo_life', folderId: '', mark: '' },
+      ],
+      uses: { p_demo_1: 12, p_demo_8: 7, p_demo_4: 5, p_demo_6: 2 },
+      look: real.look,
+    });
+  }
+
+  /** 範例分身（分身那一頁用） */
+  const tutClone = () => ({
+    fileId: 'demo', id: 'DEMO7QM3XPA9RVDH', label: '(範例)小美的分身', avatar: 'cat',
+    createdAt: Date.now() - 30 * 86400000, modifiedAt: Date.now() - 2 * 3600000, expiresAt: Date.now() + 335 * 86400000,
+  });
+
+  /** 教學中按了會動到真的東西的按鈕：擋下來，說明一下 */
+  function tutBlocked() {
+    if (!tut) return false;
+    toast('教學中這是範例，這個按鈕先不能用。教學結束後就可以用了', false, 3600);
+    return true;
+  }
+
+  function startTut() {
+    if (tut) return;
+    closeSettings();
+    closeCardMenu();
+    if (searchQ !== null) exitSearch(false);
+    tut = { real: data, i: -1, timer: 0, realClones: clones, folder: folderId };
+    data = tutDemo(data);
+    folderId = null;
+    // 手寫風的字：霞鶩文楷（Google Fonts）。字型要掛在整個網頁上，面板裡（Shadow DOM）才用得到
+    if (!document.getElementById('gpn-tut-font')) {
+      document.head.append(el('link', {
+        id: 'gpn-tut-font', rel: 'stylesheet',
+        href: 'https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&display=swap',
+      }));
+    }
+    render();
+    revealActiveFolder();
+    buildTutLayer();
+    tutGo(0);
+  }
+
+  /** 結束（看完或跳過）：換回自己的筆記本 */
+  function endTut(done) {
+    if (!tut) return;
+    clearInterval(tut.timer);
+    window.removeEventListener('resize', tutPaint);
+    document.removeEventListener('keydown', onTutKey, true);
+    tut.layer.remove();
+    const real = tut;
+    tut = null;
+    closeCardMenu();
+    if (layerOpen(ui.editLayer)) hideLayer(ui.editLayer);
+    if (layerOpen(ui.settingsLayer)) closeSettings();
+    if (searchQ !== null) exitSearch(false);
+    trashSel = new Set();
+    clones = real.realClones;
+    data = real.real;
+    folderId = real.folder;
+    render();
+    revealActiveFolder();
+    toast(done ? '教學結束，已經換回你自己的筆記本。想再看一次：設定 → 其他 → 新手教學'
+      : '已跳過教學，換回你自己的筆記本了。想再看：設定 → 其他 → 新手教學', false, 5200);
+  }
+
+  /* ---- 每一頁 ----
+     bar：說明列放上面還是下面（不要擋到這一頁要指的東西）
+     marks：箭頭。at 指著誰；text 寫什麼；dx、dy 字放在離它中心多遠（畫面上的距離，正的是往右、往下）
+     draw：不指著畫面、自己畫一張圖（資料存在哪裡那一頁） */
+  function tutPages() {
+    const q = (sel) => root.querySelector(sel);
+    const tabEl = (id) => ui.tabEls?.get(id) || null;
+    const ownTab = (id) => tabEl(id)?.querySelector('.gpn-tab-main') || null;
+    const card = (n = 0) => ui.list.querySelectorAll('.gpn-card')[n] || null;
+    const inCard = (sel, n = 0) => card(n)?.querySelector(sel) || null;
+    const navOf = (key) => ui.sNavItems.find((b) => b.getAttribute('data-section') === key) || null;
+    const orow = (key) => q(`.gpn-orow[data-go="${key}"]`);
+    const go = (tabId, fid = null) => () => {
+      if (searchQ !== null) exitSearch(false);
+      const changed = data.activeId !== tabId;
+      data.activeId = tabId;
+      folderId = fid;
+      render();
+      if (changed) revealActiveFolder();
+      if (ui.list.scrollTop) ui.list.scrollTop = 0;
+    };
+    const settings = (key) => () => {
+      if (!tabById(data.activeId) || activeTab().trash) go('t_demo_work', 'f_demo_letter')();
+      openSettings(data.activeId, key);
+    };
+    const online = !!cloud && !!cloudState.configured;
+    const owner = online && hasClones() && cloudState.signedIn && !cloudState.clone;
+    return [
+      { title: '書籤列', bar: 'bottom', enter: go('t_demo_work', 'f_demo_letter'),
+        note: '現在看到的是「範例筆記本」，每則前面都有 (範例)。你自己的提示詞都還在，教學結束就換回來。可以隨便點、拖曳試試看。',
+        marks: [
+          { at: () => ownTab('t_demo_life'), text: '書籤：點一下切換\n長按可以左右拖曳換位置', dx: 40, dy: -95 },
+          { at: () => ui.addTabBtn, text: '＋ 新增書籤（最多 ' + GPN_MAX_TABS + ' 個）', dx: 20, dy: 120 },
+          { at: () => ownTab(GPN_MAIL_ID), text: '信箱：有人分享提示詞給你\n才會出現（第 5 頁）', dx: -30, dy: 140 },
+          { at: () => ownTab(GPN_MARK_TAB + 'red-bang'), text: '自訂的星號書籤\n可以拖曳換順序', dx: -150, dy: -90 },
+          { at: () => ownTab(GPN_FAV_ID), text: '我的最愛', dx: -40, dy: 120 },
+          { at: () => ownTab(GPN_RECENT_ID), text: '最近使用\n我的最愛、最近使用固定在最右邊\n不能拖曳（不是壞掉喔）', dx: 30, dy: 175 },
+        ] },
+      { title: '資料夾和提示詞', bar: 'bottom', enter: go('t_demo_work', 'f_demo_letter'),
+        note: '提示詞都可以拖曳：按住左邊六個點，上下排順序；拖到資料夾或書籤上放開就搬過去。',
+        marks: [
+          { at: () => q('.gpn-folder'), text: '資料夾：點一下切換\n上下拖曳排順序', dx: -40, dy: 150 },
+          { at: () => ui.folderAdd, text: '新增資料夾', dx: 0, dy: 90 },
+          { at: () => inCard('.gpn-grip'), text: '按住這裡上下拖曳\n拖到資料夾、書籤上＝搬過去\n停在書籤上 1.5 秒＝切過去', dx: 60, dy: 230 },
+          { at: () => inCard('.gpn-title-text'), text: '點標題＝複製\n（會記在最近使用）', dx: 120, dy: 150 },
+          { at: () => inCard('.gpn-star'), text: '星號：收進我的最愛\n連續點會換符號', dx: -120, dy: 170 },
+          { at: () => inCard('.gpn-edit'), text: '鉛筆：修改內容\n也能搬到別的書籤', dx: -40, dy: 260 },
+          { at: () => inCard('.gpn-more'), text: '⋮ 更多（下一頁）', dx: 10, dy: 120 },
+        ] },
+      { title: '⋮ 更多', bar: 'bottom', enter: () => {
+          go('t_demo_work', 'f_demo_letter')();
+          // 清單捲動會把選單關掉（捲回最上面也算），等一下再打開
+          const page = tut.i;
+          setTimeout(() => {
+            const btn = inCard('.gpn-more');
+            const item = listOf('t_demo_work', 'f_demo_letter')?.items[0];
+            if (tut?.i === page && btn && item && ui.menu.hidden) toggleCardMenu(btn, item, 't_demo_work', 'f_demo_letter');
+          }, 120);
+        },
+        note: '每則最右邊的 ⋮。選單關掉了的話，點 ⋮ 再打開。',
+        marks: [
+          { at: () => q('.gpn-menu-tile[title^="開啟 Gemini"]'), text: '用 Gemini 開\n（新分頁，自動填好）', dx: -190, dy: -30 },
+          { at: () => q('.gpn-menu-tile[title^="開啟 ChatGPT"]'), text: '用 ChatGPT 開', dx: 150, dy: -60 },
+          { at: () => q('.gpn-menu-tile[title^="拷貝"]'), text: '拷貝：在下面多一則一樣的', dx: -210, dy: 40 },
+          { at: () => q('.gpn-menu-tile[title^="分享"]'), text: '分享給分身或主人\n會跑到對方的信箱', dx: 170, dy: 50 },
+          { at: () => q('.gpn-menu-tile--del'), text: '刪除：要按兩下\n先放進資源回收桶（第 6 頁）', dx: -60, dy: 130 },
+        ] },
+      { title: '最下面一排', bar: 'top', enter: go('t_demo_work', 'f_demo_letter'),
+        note: '下次打開時，會自動回到你最後一次點（複製）的那則；換一台電腦也一樣。',
+        marks: [
+          { at: () => (ui.avatar.hidden ? null : ui.avatar), text: '你的帳號\n有人分享給你時變成信封＋數字', dx: 60, dy: -150 },
+          { at: () => ui.addBtn, text: '新增提示詞：加在最上面', dx: -60, dy: -130 },
+          { at: () => ui.searchBtn, text: '搜尋：所有書籤一起找\n標題、內容都會找', dx: -150, dy: -170 },
+          { at: () => ui.gear, text: '設定', dx: 30, dy: -110 },
+        ] },
+      { title: '信箱怎麼運作', bar: 'bottom', enter: go(GPN_MAIL_ID),
+        note: '別人分享給你的提示詞都會先到信箱。整理完、信箱空了，這個書籤就會自己消失（拖兩則出去試試看）。',
+        marks: [
+          { at: () => (ui.avatar.hidden ? null : ui.avatar), text: '① 有人分享給你\n頭像變成信封＋數字', dx: 90, dy: -150 },
+          { at: () => ownTab(GPN_MAIL_ID), text: '② 點信封\n最左邊自動多一個「信箱」書籤', dx: 140, dy: 150 },
+          { at: () => inCard('.gpn-sender'), text: '誰寄來的', dx: 160, dy: 70 },
+          { at: () => inCard('.gpn-grip'), text: '③ 拖到自己的書籤、資料夾收好', dx: 80, dy: 200 },
+          { at: () => ownTab('t_demo_work'), text: '④ 信箱空了\n書籤會自己消失', dx: 60, dy: -90 },
+        ] },
+      { title: '資源回收桶', bar: 'top', enter: () => { go('t_demo_work', 'f_demo_letter')(); openTrash(); },
+        note: '刪掉的提示詞不會馬上消失，先放在這裡。在這裡再刪一次（永久刪除），才是真的刪掉。',
+        marks: [
+          { at: () => card(0), text: '刪掉的在這裡\n記得原本放在哪裡', dx: -60, dy: 150 },
+          { at: () => q('.gpn-trash-head'), text: '點一下選取\nShift 一整段、Ctrl 跳著選', dx: 140, dy: 120 },
+          { at: () => (ui.trashRestore.hidden ? null : ui.trashRestore), text: '還原：放回原本的地方', dx: 40, dy: -120 },
+          { at: () => (ui.trashPurge.hidden ? null : ui.trashPurge), text: '永久刪除＝第二次刪除\n刪了就救不回來', dx: -40, dy: -140 },
+          { at: () => (ui.trashEmpty.hidden ? null : ui.trashEmpty), text: '清空（一次全部永久刪除）', dx: -120, dy: 110 },
+          { at: () => q('.gpn-trash-back'), text: '回到設定', dx: 40, dy: 100 },
+        ] },
+      { title: '設定的左邊', bar: 'bottom', enter: settings('other'),
+        note: '按右下角的齒輪打開設定。左邊只放最常用的，其他的都收在「其他」。',
+        marks: [
+          { at: () => (online ? navOf('account') : null), text: '帳號：登入、同步狀態、登出', dx: -40, dy: -90 },
+          { at: () => navOf('clones'), text: '分身（第 10 頁）', dx: 10, dy: -80 },
+          { at: () => ui.sOtherNav, text: '其他：其餘的設定（下一頁）', dx: 30, dy: 100 },
+          { at: () => ui.sTrashNav, text: '資源回收桶', dx: 20, dy: -110 },
+          { at: () => q('.gpn-nav-version'), text: '版本號\n回報問題時看這裡', dx: 30, dy: 90 },
+        ] },
+      { title: '設定 → 其他', bar: 'bottom', enter: settings('other'),
+        note: '點一排就進到那一頁；最上面會顯示「其他 › 書籤」，點「其他」就回來。',
+        marks: [
+          { at: () => orow('tab'), text: '所有書籤的名稱、顏色、資料夾\n還有備註（點 i 看）', dx: 300, dy: -40 },
+          { at: () => orow('marks'), text: '要用哪幾種星號、符號', dx: 300, dy: 0 },
+          { at: () => orow('look'), text: '深淺主題、背景圖', dx: 280, dy: 0 },
+          { at: () => orow('backup'), text: '下載成備份檔\n或從備份檔匯入', dx: 280, dy: 10 },
+          { at: () => orow('stats'), text: '最常用的前十名', dx: 280, dy: 10 },
+          { at: () => orow('guide'), text: '就是這個教學', dx: 280, dy: 20 },
+          { at: () => orow('all'), text: '所有內容顯示在同一頁\n讓「問問 Gemini」看得到全部提示詞', dx: 260, dy: 50 },
+        ] },
+      { title: '你的資料存在哪裡', bar: 'bottom', enter: () => { closeSettings(); go('t_demo_work', 'f_demo_letter')(); },
+        note: '不管哪一種，提示詞都不是存在我們這裡，是存在 Google 雲端硬碟。',
+        draw: () => el('div', { class: 'gpn-tut-draw' },
+          el('div', { class: 'gpn-tut-col' },
+            el('div', { class: 'gpn-tut-box', text: '用自己的 Google 帳號登入' }),
+            el('div', { class: 'gpn-tut-down', text: '↓' }),
+            el('div', { class: 'gpn-tut-box is-drive', text: '存在你自己的\nGoogle 雲端硬碟' }),
+            el('div', { class: 'gpn-tut-small', text: '換一台電腦，登入同一個帳號\n看到的就是同一份' })),
+          el('div', { class: 'gpn-tut-col' },
+            el('div', { class: 'gpn-tut-box', text: '用 16 碼代號登入\n（你是「分身」）' }),
+            el('div', { class: 'gpn-tut-down', text: '↓' }),
+            el('div', { class: 'gpn-tut-box is-drive', text: '存在主人的\nGoogle 雲端硬碟' }),
+            el('div', { class: 'gpn-tut-small', text: '主人看得到、也改得到\n所有分身的提示詞' }))) },
+      { title: '分身', bar: 'top', enter: () => {
+          settings(owner ? 'clones' : 'other')();
+          if (owner) { clones = [tutClone()]; cMenuOpen = ''; refreshClones(); }
+        },
+        leave: () => { clones = tut.realClones; refreshClones(); },
+        note: owner
+          ? '分身是給沒有 Google 帳號的同事用的小帳號：按「建立分身」勾選要給他的提示詞，就會得到一組代號。下面是一張範例分身。'
+          : '分身是給沒有 Google 帳號的同事用的小帳號：用自己的 Google 帳號登入後，在 設定 → 分身 按「建立分身」，勾選要給他的提示詞，就會得到一組 16 碼的代號。同事在登入畫面按「選擇其他登入方式」輸入代號就能用。',
+        marks: owner ? [
+          { at: () => q('.gpn-clone-card .gpn-clone-face'), text: '頭像：點了換', dx: -150, dy: 40 },
+          { at: () => q('.gpn-clone-card .gpn-clone-name'), text: '名稱：點了直接改', dx: 120, dy: -70 },
+          { at: () => q('.gpn-clone-card .gpn-clone-id code'), text: '16 碼代號＝分身的密碼', dx: -110, dy: 110 },
+          { at: () => q('.gpn-clone-card .gpn-clone-copy'), text: '複製代號和網址傳給同事\n同事在登入畫面按「選擇其他登入方式」輸入', dx: 140, dy: 120 },
+          { at: () => q('.gpn-clone-card > .gpn-note'), text: '一年後到期會停用\n（可以延長）', dx: -170, dy: 90 },
+          { at: () => q('.gpn-clone-card .gpn-brow .gpn-btn2'), text: '進入分身：用他的身分幫他整理\n弄完按「回到我的帳號」', dx: -120, dy: 130 },
+          { at: () => q('.gpn-clone-card .gpn-brow .gpn-btn2:last-child'), text: '推送資料：把你之後改的推給他\n他自己加的不會動', dx: 160, dy: 120 },
+          { at: () => q('.gpn-clone-card .gpn-clone-more'), text: '拷貝、延長期限、換一組代號（換人用）\n停用（停用後才能銷毀）', dx: -140, dy: -90 },
+        ] : [] },
+      { title: '教學結束', bar: 'bottom', enter: go('t_demo_work', 'f_demo_letter'),
+        note: '按「完成」就換回你自己的筆記本。想再看一次：設定 → 其他 → 新手教學。', marks: [] },
+    ];
+  }
+
+  function buildTutLayer() {
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('class', 'gpn-tut-svg');
+    // 線條有一點點抖：像手畫的
+    svg.innerHTML = '<defs><filter id="gpn-tut-rough" x="-5%" y="-5%" width="110%" height="110%">' +
+      '<feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="7"/>' +
+      '<feDisplacementMap in="SourceGraphic" scale="2.6"/></filter></defs>';
+    tut.svg = svg;
+    tut.notes = el('div', { class: 'gpn-tut-notes' });
+    tut.count = el('span', { class: 'gpn-tut-count' });
+    tut.title = el('b', { class: 'gpn-tut-title' });
+    tut.note = el('div', { class: 'gpn-tut-note' });
+    tut.prev = el('button', { class: 'gpn-tut-btn', type: 'button', onclick: () => tutGo(tut.i - 1) }, '‹ 上一頁');
+    tut.next = el('button', { class: 'gpn-tut-btn is-next', type: 'button', onclick: () => tutGo(tut.i + 1) }, '繼續 ›');
+    tut.bar = el('div', { class: 'gpn-tut-bar' },
+      el('div', { class: 'gpn-tut-text' }, el('div', {}, tut.count, tut.title), tut.note),
+      // 跳過放在說明列裡：放右上角會蓋到書籤列最右邊的我的最愛、最近使用
+      el('div', { class: 'gpn-tut-btns' },
+        el('button', { class: 'gpn-tut-skip', type: 'button', onclick: () => endTut(false) }, '跳過教學'),
+        tut.prev, tut.next));
+    tut.layer = el('div', { class: 'gpn-tut' }, el('div', { class: 'gpn-tut-dim' }), svg, tut.notes, tut.bar);
+    root.append(tut.layer);
+    tut.pages = tutPages();
+    window.addEventListener('resize', tutPaint);
+    document.addEventListener('keydown', onTutKey, true);
+    tut.timer = setInterval(tutPaint, 200);
+  }
+
+  /** 鍵盤 → 下一頁、← 上一頁（在輸入框裡打字時不算） */
+  function onTutKey(e) {
+    if (!tut || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(root.activeElement?.tagName || '')) return;
+    if (e.key === 'ArrowRight') tutGo(tut.i + 1);
+    else if (e.key === 'ArrowLeft') tutGo(tut.i - 1);
+    else return;
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  function tutGo(i) {
+    if (!tut || i < 0) return;
+    if (i >= tut.pages.length) { endTut(true); return; }
+    tut.pages[tut.i]?.leave?.();
+    closeCardMenu();
+    if (layerOpen(ui.editLayer)) hideLayer(ui.editLayer);
+    if (layerOpen(ui.settingsLayer)) closeSettings();
+    tut.i = i;
+    const pg = tut.pages[i];
+    pg.enter?.();
+    tut.count.textContent = `${i + 1} / ${tut.pages.length}　`;
+    tut.title.textContent = pg.title;
+    tut.note.textContent = pg.note || '';
+    tut.prev.disabled = i === 0;
+    tut.next.textContent = i === tut.pages.length - 1 ? '完成' : '繼續 ›';
+    // 這一頁的箭頭、字：一個一個畫出來
+    for (const n of tut.svg.querySelectorAll('path')) n.remove();
+    tut.notes.replaceChildren();
+    tut.marks = (pg.marks || []).map((m, j) => {
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('pathLength', '1');
+      path.setAttribute('filter', 'url(#gpn-tut-rough)');
+      path.style.animationDelay = `${j * 0.16}s`;
+      tut.svg.append(path);
+      const label = el('div', { class: 'gpn-tut-label', text: m.text });
+      label.style.animationDelay = `${j * 0.16 + 0.15}s`;
+      tut.notes.append(label);
+      return { ...m, path, label, bend: j % 2 ? 1 : -1 };
+    });
+    if (pg.draw) tut.notes.append(pg.draw());
+    tut.next.focus({ preventScroll: true });
+    tutPaint();
+  }
+
+  /** 每 0.2 秒照著現在的版面重畫箭頭（他可能拖了東西、捲了清單） */
+  function tutPaint() {
+    if (!tut) return;
+    if (!isOpen()) { endTut(false); return; }
+    // 網頁版整個放大了（zoom）：量到的是畫面上的位置，fixed 的位置要除回去
+    const k = root.host?.currentCSSZoom || parseFloat(getComputedStyle(root.host || document.body).zoom) || 1;
+    const W = window.innerWidth / k, H = window.innerHeight / k;
+    tut.svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const box = (n) => { const b = n.getBoundingClientRect(); return { l: b.left / k, t: b.top / k, r: b.right / k, b: b.bottom / k }; };
+    const hit = (p, q, m = 6) => p.l < q.r + m && q.l < p.r + m && p.t < q.b + m && q.t < p.b + m;
+    // 先量好每個箭頭要指的東西；字不要蓋到它們、說明列、跳過鈕，也不要互相疊在一起
+    for (const m of tut.marks || []) {
+      const t = m.at();
+      const b = t && t.isConnected ? t.getBoundingClientRect() : null;
+      m.r = b && b.width > 1 && b.height > 1 ? { l: b.left / k, t: b.top / k, r: b.right / k, b: b.bottom / k } : null;
+    }
+    // 說明列放上面還是下面：哪一邊蓋到的目標比較少就放哪一邊（一樣多就照這一頁寫的）
+    const pg = tut.pages[tut.i];
+    const bh = tut.bar.offsetHeight + 16;
+    const covered = (top) => (tut.marks || []).filter((m) => m.r && (top ? m.r.t < bh : m.r.b > H - bh)).length;
+    const wantTop = pg.bar === 'top';
+    const top = covered(wantTop) > covered(!wantTop) ? !wantTop : wantTop;
+    tut.bar.classList.toggle('is-top', top);
+    const taken = [box(tut.bar), ...(tut.marks || []).filter((m) => m.r).map((m) => m.r)];
+    for (const m of tut.marks || []) {
+      const r = m.r;
+      m.path.style.display = m.label.style.display = r ? '' : 'none';
+      if (!r) continue;
+      const cx = (r.l + r.r) / 2, cy = (r.t + r.b) / 2;
+      const lw = m.label.offsetWidth, lh = m.label.offsetHeight;
+      const at = (x, y) => {
+        const l = Math.min(Math.max(8, x - lw / 2), W - lw - 8), t = Math.min(Math.max(8, y - lh / 2), H - lh - 8);
+        return { l, t, r: l + lw, b: t + lh };
+      };
+      // 先試這一頁寫好的位置，不行就繞著目標一圈一圈往外找空位（下、上、右、左、斜的）
+      const tries = [at(cx + m.dx, cy + m.dy)];
+      for (const gap of [36, 80, 140, 210]) {
+        for (const [ux, uy] of [[0, 1], [0, -1], [1, 0], [-1, 0], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]]) {
+          tries.push(at(cx + ux * ((r.r - r.l) / 2 + lw / 2 + gap), cy + uy * ((r.b - r.t) / 2 + lh / 2 + gap)));
+        }
+      }
+      // 都有東西擋著（畫面太小）：選擋到最少的那個
+      const cost = (p) => taken.filter((q) => hit(p, q)).length;
+      const spot = tries.find((p) => !cost(p)) || tries.reduce((x, y) => (cost(y) < cost(x) ? y : x));
+      taken.push(spot);
+      const lx = spot.l, ly = spot.t;
+      m.label.style.left = lx + 'px';
+      m.label.style.top = ly + 'px';
+      const lcx = lx + lw / 2, lcy = ly + lh / 2;
+      // 箭頭：從字的邊緣，彎彎的畫到目標的邊上
+      const clamp = (v, a, z) => Math.min(Math.max(v, a), z);
+      let ex = clamp(lcx, r.l, r.r), ey = clamp(lcy, r.t, r.b);
+      let sx = clamp(ex, lx, lx + lw), sy = clamp(ey, ly, ly + lh);
+      const len = Math.hypot(ex - sx, ey - sy);
+      if (len < 14) { m.path.style.display = 'none'; continue; }
+      const ux = (ex - sx) / len, uy = (ey - sy) / len;
+      sx += ux * 6; sy += uy * 6;            // 離字一點
+      ex -= ux * 5; ey -= uy * 5;            // 停在目標旁邊一點
+      const bend = Math.min(60, len * 0.28) * m.bend;
+      const qx = (sx + ex) / 2 - uy * bend, qy = (sy + ey) / 2 + ux * bend;
+      // 箭頭的兩撇：照最後一段的方向
+      const tx = ex - qx, ty = ey - qy, tl = Math.hypot(tx, ty) || 1;
+      const ax = tx / tl, ay = ty / tl, hl = 13;
+      const rot = (a) => [ex - hl * (ax * Math.cos(a) - ay * Math.sin(a)), ey - hl * (ay * Math.cos(a) + ax * Math.sin(a))];
+      const [h1x, h1y] = rot(0.5), [h2x, h2y] = rot(-0.5);
+      const f = (v) => v.toFixed(1);
+      m.path.setAttribute('d', `M${f(sx)} ${f(sy)} Q${f(qx)} ${f(qy)} ${f(ex)} ${f(ey)} M${f(h1x)} ${f(h1y)} L${f(ex)} ${f(ey)} L${f(h2x)} ${f(h2y)}`);
+    }
   }
 
   // toast：網頁版從登入、驗證信回來時，用它顯示結果
