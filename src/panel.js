@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.33.0';
+const GPN_APP_VERSION = '4.34.0';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -112,6 +112,9 @@ function gpnCreatePanel(opts) {
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>';
 
 
+  /** 九宮格：設定左邊的「其他」 */
+  const ICON_APPS =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/></svg>';
   /** 長條圖：設定裡的「使用次數」 */
   const ICON_CHART =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z"/></svg>';
@@ -500,7 +503,7 @@ function gpnCreatePanel(opts) {
     ui.gearIcon = el('span', { class: 'gpn-gear-icon', html: ICON_GEAR });
     ui.gear = el('button', {
       class: 'gpn-tool gpn-gear', type: 'button', title: '設定', 'aria-label': '設定',
-      onclick: () => openSettings(data.activeId, ui.gear.getAttribute('data-alert') ? 'account' : 'tab'),
+      onclick: () => openSettings(data.activeId, ui.gear.getAttribute('data-alert') ? 'account' : 'other'),
     }, ui.gearIcon, el('span', { class: 'gpn-gear-dot', 'aria-hidden': 'true' }));
 
     /* ---- 齒輪左邊：登入中的 Google 帳號頭像 ----
@@ -2614,36 +2617,29 @@ function gpnCreatePanel(opts) {
       class: 'gpn-nav-item', type: 'button', role: 'tab', 'data-section': key,
       onclick: () => showSection(key),
     }, el('span', { class: 'gpn-nav-icon', html: icon }), el('span', { class: 'gpn-nav-text', text }));
+    // 左邊只放最常用的幾個（以前每一頁都列在左邊，多到要上下捲），其他的都收進「其他」那一頁：
+    // 一排一排像 Windows 的設定，點進去最上面有「其他 › 備份」這種路徑，點「其他」就回去
     ui.sNavItems = [
       // 從「我的最愛」、符號書籤打開設定時，最上面多一組「這個符號」
       navItem('markTab', ICON_STAR, '這個符號'),
-      navItem('tab', ICON_TAB, '書籤'),
-      navItem('marks', ICON_STAR, '星號'),
-      navItem('stats', ICON_CHART, '使用次數'),
       // 沒有雲端功能的地方（例如測試）就不出現這一項
       cloud ? navItem('account', ICON_ACCOUNT, '帳號') : null,
       hasClones() ? navItem('clones', ICON_CLONE, '分身') : null,
-      navItem('backup', ICON_SYNC, '備份'),
-      // 背景圖只鋪在「面板就是整個畫面」的地方（網頁版、工具列小視窗）；AI 網站裡的面板背後是網站本身
-      standalone ? navItem('look', ICON_IMAGE, '背景') : null,
-      navItem('guide', ICON_SCHOOL, '新手教學'),
     ].filter(Boolean);
     const [navMarkTab, ...navAll] = ui.sNavItems;
-    // 最下面兩個不是設定頁，是「去別的地方」：全部提示詞（只有網頁版）、資源回收桶
-    const navGo = (icon, text, onclick, extra = {}) => el(extra.href ? 'a' : 'button', {
-      class: 'gpn-nav-item gpn-nav-item--go', type: extra.href ? null : 'button', onclick, ...extra,
+    // 資源回收桶不是設定頁，是「去別的地方」
+    const navGo = (icon, text, onclick) => el('button', {
+      class: 'gpn-nav-item gpn-nav-item--go', type: 'button', onclick,
     }, el('span', { class: 'gpn-nav-icon', html: icon }), el('span', { class: 'gpn-nav-text', text }));
     ui.sTrashNav = navGo(ICON_DELETE, '資源回收桶', openTrash);
+    ui.sOtherNav = navItem('other', ICON_APPS, '其他');
+    ui.sNavItems.push(ui.sOtherNav);
     const nav = el('nav', { class: 'gpn-settings-nav', role: 'tablist', 'aria-orientation': 'vertical' },
       el('h2', { text: '設定' }),
       ui.sNavGroup, navMarkTab,
       ui.sNavAll = el('div', { class: 'gpn-nav-group', text: '一般' }), ...navAll,
-      el('div', { class: 'gpn-nav-group', text: '其他' }),
-      allPageUrl ? navGo(ICON_LIST, '全部提示詞', null, {
-        href: allPageUrl, target: '_blank', rel: 'noopener',
-        title: '所有書籤的提示詞，完整內容用純文字列在同一頁（方便「問問 Gemini」讀）；在新分頁打開',
-      }) : null,
       ui.sTrashNav,
+      ui.sOtherNav,
       // 外掛和網頁版長得不一樣時，先看這裡的數字是不是一樣
       el('div', {
         class: 'gpn-nav-version',
@@ -2731,13 +2727,23 @@ function gpnCreatePanel(opts) {
     const secStats = buildStatsSection();
     const secGuide = buildGuideSection();
 
-    ui.sSections = [secTab, secMarkTab, secMarks, secStats, secAccount, secClones, secBackup, secLook, secGuide].filter(Boolean);
+    /* ---- 其他：其餘的設定一排一排列出來，點了進去 ---- */
+    const secOther = buildOtherSection();
+
+    ui.sSections = [secOther, secTab, secMarkTab, secMarks, secStats, secAccount, secClones, secBackup, secLook, secGuide].filter(Boolean);
+    // 頁面的名稱改由最上面的路徑（其他 › 備份）顯示，各頁自己的大標題就不重複了
+    for (const sec of ui.sSections) {
+      const h = sec.querySelector(':scope > h3, :scope > .gpn-section-head > h3');
+      if (h && h.textContent === SECTION_TITLES[sec.getAttribute('data-section')]) h.hidden = true;
+    }
+    ui.sCrumb = el('nav', { class: 'gpn-crumb', 'aria-label': '目前位置' });
     ui.sBody = el('div', { class: 'gpn-settings-body' }, ...ui.sSections);
 
     ui.settings = el('div', { class: 'gpn-dialog gpn-settings', onmousedown: stop },
       el('div', { class: 'gpn-settings-grid' },
         nav,
         el('div', { class: 'gpn-settings-pane' },
+          ui.sCrumb,
           ui.sBody,
           el('div', { class: 'gpn-actions' },
             el('button', {
@@ -2747,16 +2753,16 @@ function gpnCreatePanel(opts) {
     ui.settingsLayer = el('div', { class: 'gpn-edit-layer' }, ui.settings);
   }
 
-  function openSettings(tabId, section = 'tab') {
+  function openSettings(tabId, section = 'other') {
     const tab = tabById(tabId);
     if (!tab) return;
     // 「最近使用」「我的最愛」、符號書籤沒有名稱、顏色、資料夾可以改，直接打開全部書籤共用的那幾頁
     // （我的最愛、符號書籤打開「星號」）
     const hasAccount = !!cloud && !!cloudState.configured;
-    if (tab.mark && section === 'tab') section = 'markTab';
-    if (!tab.mark && section === 'markTab') section = 'tab';
+    if (tab.mark && section === 'other') section = 'markTab';
+    if (!tab.mark && section === 'markTab') section = 'other';
     if (tab.mark) resetMarkTab(tab);
-    if ((section === 'account' || section === 'clones') && !hasAccount) section = 'tab';
+    if ((section === 'account' || section === 'clones') && !hasAccount) section = 'other';
     settingsTabId = tabId;
     bmInfoId = null;
     openBookmark(tab.fixed || tab.id === GPN_MAIL_ID ? null : tab.id, false);
@@ -2779,13 +2785,19 @@ function gpnCreatePanel(opts) {
     hideFolderConfirm();
   }
 
-  function showSection(key) {
+  /**
+   * 換到設定的某一頁。viaOther：從「其他」點進來的（左邊亮「其他」、最上面是「其他 › 這一頁」）；
+   * 只在「其他」裡的頁一律算從「其他」進來，帳號左邊、其他裡都有，看是從哪裡點的。
+   */
+  function showSection(key, viaOther = !NAV_SECTIONS.has(key)) {
+    const navKey = key === 'other' || viaOther ? 'other' : key;
     for (const b of ui.sNavItems) {
-      const on = b.getAttribute('data-section') === key;
+      const on = b.getAttribute('data-section') === navKey;
       b.classList.toggle('is-active', on);
       b.setAttribute('aria-selected', String(on));
     }
     for (const s of ui.sSections) s.hidden = s.getAttribute('data-section') !== key;
+    paintCrumb(key, viaOther && key !== 'other');
     ui.sBody.scrollTop = 0;
     hideFolderConfirm();
     disarmTabDelete();
@@ -2794,6 +2806,53 @@ function gpnCreatePanel(opts) {
     toggleCloneInfo(false);
     if (key === 'clones') openClones();
     if (key === 'stats') renderStats();
+  }
+
+  /** 設定左邊選單直接有的頁；其他的都在「其他」裡面 */
+  const NAV_SECTIONS = new Set(['other', 'markTab', 'account', 'clones']);
+  const SECTION_TITLES = {
+    other: '其他', tab: '書籤', marks: '星號', stats: '使用次數', account: '帳號', clones: '分身',
+    backup: '備份', look: '背景', guide: '新手教學',
+  };
+
+  /** 最上面的路徑（像 Windows 設定的「系統 › 顯示器」）：前面的一層可以點，點了回到「其他」 */
+  function paintCrumb(key, viaOther) {
+    const here = key === 'markTab' ? '這個符號' : SECTION_TITLES[key] || '';
+    ui.sCrumb.replaceChildren(...(viaOther
+      ? [
+          el('button', { class: 'gpn-crumb-up', type: 'button', title: '回到「其他」', onclick: () => showSection('other') }, '其他'),
+          el('span', { class: 'gpn-crumb-sep', 'aria-hidden': 'true', text: '›' }),
+          el('span', { class: 'gpn-crumb-here', 'aria-current': 'page', text: here }),
+        ]
+      : [el('span', { class: 'gpn-crumb-here', 'aria-current': 'page', text: here })]));
+  }
+
+  /** 「其他」那一頁：一排一排（圖示、名稱、一句說明、右邊箭頭），點了進到那一頁 */
+  function buildOtherSection() {
+    const row = (key, icon, title, sub, extra = null) => el(extra ? 'a' : 'button', {
+      class: 'gpn-orow', type: extra ? null : 'button', 'data-go': key,
+      onclick: extra ? null : () => showSection(key, true),
+      ...(extra || {}),
+    },
+      el('span', { class: 'gpn-orow-icon', html: icon }),
+      el('span', { class: 'gpn-orow-main' },
+        el('span', { class: 'gpn-orow-title', text: title }),
+        el('span', { class: 'gpn-orow-sub', text: sub })),
+      el('span', { class: 'gpn-orow-go' + (extra ? ' is-out' : ''), html: extra ? ICON_OPEN : '' }));
+    ui.oAccount = cloud ? row('account', ICON_ACCOUNT, '帳號', '登入的 Google 帳號、同步狀態、登出') : null;
+    return el('section', { class: 'gpn-section', 'data-section': 'other' },
+      el('div', { class: 'gpn-orows' },
+        row('tab', ICON_TAB, '書籤', '所有書籤的名稱、顏色、資料夾、備註'),
+        row('marks', ICON_STAR, '星號', '連續點星號時要換哪幾種符號'),
+        ui.oAccount,
+        standalone ? row('look', ICON_IMAGE, '背景', '深淺主題、背景圖') : null,
+        row('backup', ICON_SYNC, '備份', '下載成備份檔、從備份檔匯入'),
+        row('stats', ICON_CHART, '使用次數', '最常使用的前十名提示詞'),
+        row('guide', ICON_SCHOOL, '新手教學', '一步一步帶你操作一遍'),
+        allPageUrl ? row('all', ICON_LIST, '全部提示詞', '所有提示詞的完整內容列在同一頁（在新分頁打開）', {
+          href: allPageUrl, target: '_blank', rel: 'noopener',
+          title: '所有書籤的提示詞，完整內容用純文字列在同一頁（方便「問問 Gemini」讀）；在新分頁打開',
+        }) : null));
   }
 
   /** 設定視窗裡所有「跟著資料變」的文字，一次更新 */
@@ -2819,6 +2878,7 @@ function gpnCreatePanel(opts) {
       if (key === 'markTab') b.hidden = !tab.mark;
       if (key === 'account') b.hidden = !cloudState.configured;
     }
+    if (ui.oAccount) ui.oAccount.hidden = !cloudState.configured;
     renderBookmarks();
   }
 
@@ -5601,6 +5661,7 @@ function gpnCreatePanel(opts) {
       if (!layerOpen(ui.settingsLayer)) openSettings(data.activeId, key);
       else showSection(key);
     };
+    const orow = (key) => ui.sSections[0].querySelector(`.gpn-orow[data-go="${key}"]`);
     const trashed = () => trashList().find((r) => r.tabId === ids.tab) || null;
     const online = !!cloud && !!cloudState.configured;      // 雲端沒設定好的地方，設定裡沒有帳號、分身那兩頁
     const steps = [
@@ -5668,25 +5729,30 @@ function gpnCreatePanel(opts) {
         at: () => ui.searchBtn },
       { title: '設定', text: '右下角的齒輪是設定。\n\n👉 點齒輪打開。',
         at: () => ui.gear, wait: () => layerOpen(ui.settingsLayer) },
-      { title: '設定 → 書籤', text: '這裡一次列出所有書籤。點一個展開，就能改名稱、顏色、要不要用資料夾，還有「備註說明」：' +
+      { title: '設定的左邊', text: '左邊只放最常用的：帳號、分身、資源回收桶，最下面的「其他」收著其餘的設定。',
+        at: () => q('.gpn-settings-nav'), enter: settingsOn('other') },
+      { title: '其他', text: '「其他」裡面一排一排列著其餘的設定，點一排就進到那一頁。進去之後，最上面會顯示「其他 › 書籤」這樣的路徑，點「其他」就回到這裡。\n\n👉 點「書籤」。',
+        at: () => orow('tab'), enter: settingsOn('other'),
+        wait: () => !ui.sSections.find((x) => x.getAttribute('data-section') === 'tab').hidden },
+      { title: '其他 › 書籤', text: '這裡一次列出所有書籤。點一個展開，就能改名稱、顏色、要不要用資料夾，還有「備註說明」：' +
           '書籤名稱寫不下的，寫這個書籤是做什麼用的。旁邊的 i 打開就看得到備註；滑鼠停在上面的書籤上也會顯示。',
         at: () => ui.settings, enter: settingsOn('tab') },
-      { title: '設定 → 星號', text: '除了黃色星星，還可以啟用其他顏色、符號（例如紅色驚嘆號、綠色勾勾）。啟用的每一種都會在上面多一個書籤，' +
+      { title: '其他 › 星號', text: '除了黃色星星，還可以啟用其他顏色、符號（例如紅色驚嘆號、綠色勾勾）。啟用的每一種都會在上面多一個書籤，' +
           '連續點提示詞的星號就會照順序換。',
         at: () => ui.settings, enter: settingsOn('marks') },
-      { title: '設定 → 使用次數', text: '列出你最常用的前十名提示詞，每點一次就算一次，同一個帳號的電腦、網頁版會加在一起。點一則就跳到它那裡。',
+      { title: '其他 › 使用次數', text: '列出你最常用的前十名提示詞，每點一次就算一次，同一個帳號的電腦、網頁版會加在一起。點一則就跳到它那裡。',
         at: () => ui.settings, enter: settingsOn('stats') },
-      online ? { title: '設定 → 帳號', text: '用 Google 帳號登入後，提示詞存在你自己的 Google 雲端硬碟，換一台電腦登入同一個帳號，看到的就是同一份。',
+      online ? { title: '帳號', text: '用 Google 帳號登入後，提示詞存在你自己的 Google 雲端硬碟，換一台電腦登入同一個帳號，看到的就是同一份。',
         at: () => ui.settings, enter: settingsOn('account') } : null,
-      online && hasClones() ? { title: '設定 → 分身', text: '分身是給沒有 Google 帳號的同事用的「小帳號」：你勾選要給他的提示詞，就會得到一組 16 碼的代號，' +
+      online && hasClones() ? { title: '分身', text: '分身是給沒有 Google 帳號的同事用的「小帳號」：你勾選要給他的提示詞，就會得到一組 16 碼的代號，' +
           '同事在登入畫面輸入代號就能用。\n\n• 進入分身：你自己用分身的身分幫忙整理。\n• 推送資料：你之後改了自己的提示詞，可以再推給分身。\n' +
           '• 卡片右上角的「⋯」：拷貝一個一樣的分身、延長期限、換一組代號（交給別人用時）、停用。\n• 點分身的頭像、名稱可以直接改。\n' +
           '• 提示詞的「⋯ → 分享」可以在你和分身之間互傳，收到的會放進「信箱」書籤。',
         at: () => ui.settings, enter: settingsOn('clones') } : null,
-      { title: '設定 → 備份', text: '可以把全部提示詞下載成一個備份檔，或從備份檔匯入（合併進來，不會蓋掉現有的）。',
+      { title: '其他 › 備份', text: '可以把全部提示詞下載成一個備份檔，或從備份檔匯入（合併進來，不會蓋掉現有的）。「其他」裡還有背景、新手教學、全部提示詞。',
         at: () => ui.settings, enter: settingsOn('backup') },
       { key: 'trashnav', title: '資源回收桶', text: '剛剛刪掉的那則在這裡。\n\n👉 點左邊的「資源回收桶」。',
-        at: () => ui.sTrashNav, enter: settingsOn('backup'),
+        at: () => ui.sTrashNav, enter: settingsOn('other'),
         wait: () => !!activeTab().trash },
       { title: '還原', text: '刪掉的提示詞會留在資源回收桶，可以還原，也可以永久刪除（清空）。\n\n👉 點一下剛剛刪掉的那則選取它，再按下面的「還原」。',
         at: () => q('.gpn-paper'),

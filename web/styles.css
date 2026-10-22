@@ -2537,3 +2537,50 @@ section[data-section="markTab"] .gpn-note--roomy { margin: 4px 0 16px; }
 }
 .gpn-tour-skip:hover { background: rgba(50, 50, 50, .9); }
 .gpn-tour-skip:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+
+/* 設定最上面的路徑（像 Windows 設定的「系統 › 顯示器」）：前面那一層可以點，點了回去 */
+.gpn-crumb {
+  flex: none;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 22px 26px 4px;
+  font-size: 24px; font-weight: 600; line-height: 1.3;
+}
+.gpn-crumb-up {
+  padding: 2px 6px; margin-left: -6px;
+  border: 0; border-radius: 8px;
+  background: none; color: var(--text-mute); font: inherit;
+  cursor: pointer;
+}
+.gpn-crumb-up:hover { color: var(--text); background: var(--hover); }
+.gpn-crumb-up:focus-visible { outline: 3px solid var(--primary); outline-offset: 0; }
+.gpn-crumb-sep { color: var(--text-mute); font-size: 20px; font-weight: 400; }
+.gpn-crumb-here { color: var(--text); }
+.gpn-crumb + .gpn-settings-body { padding-top: 14px; }
+/* 分身頁的 i：標題改由路徑顯示了，i 擺到路徑那一行的右邊 */
+.gpn-settings-pane { position: relative; }
+.gpn-section-head:has(> h3[hidden]) { position: absolute; top: 20px; right: 22px; z-index: 6; }
+
+/* 「其他」：一排一排，左邊圖示、中間名稱和一句說明、右邊箭頭 */
+.gpn-orows { display: flex; flex-direction: column; gap: 6px; }
+.gpn-orow {
+  display: flex; align-items: center; gap: 16px;
+  min-height: 66px; padding: 10px 18px;
+  border: 1px solid var(--outline); border-radius: 14px;
+  background: var(--surface-input); color: var(--text); font: inherit; text-align: left; text-decoration: none;
+  cursor: pointer;
+  transition: background-color .14s ease, border-color .14s ease;
+}
+.gpn-orow:hover { background: var(--hover); border-color: var(--outline-strong); }
+.gpn-orow:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.gpn-orow-icon { flex: none; display: flex; color: var(--text-mute); }
+.gpn-orow-icon svg { width: 22px; height: 22px; fill: currentColor; }
+.gpn-orow-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.gpn-orow-title { font-size: 15.5px; font-weight: 600; }
+.gpn-orow-sub { font-size: 13px; color: var(--text-mute); }
+.gpn-orow-go {
+  flex: none; width: 8px; height: 8px; margin-right: 4px;
+  border-top: 2px solid var(--text-mute); border-right: 2px solid var(--text-mute);
+  transform: rotate(45deg);
+}
+.gpn-orow-go.is-out { width: 18px; height: 18px; margin-right: 0; border: 0; transform: none; color: var(--text-mute); }
+.gpn-orow-go.is-out svg { width: 18px; height: 18px; fill: currentColor; display: block; }
