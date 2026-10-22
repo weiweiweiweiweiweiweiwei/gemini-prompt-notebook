@@ -1,17 +1,15 @@
 /**
  * 罐頭P · 網頁版
  *
- * 畫面就是外掛在 Gemini 裡點開的那個面板（panel.js 是同一份程式），
- * 只是不用點按鈕打開，直接放在網頁正中間。
+ * 筆記本（panel.js）直接放在網頁正中間。
  *
- * 和外掛唯一的功能差異：外掛可以「直接把提示詞填進 AI 的輸入框」，網頁版做不到——
- * 瀏覽器不允許一個網頁去操作另一個網站的內容（同源政策），這是安全機制，
- * 沒有任何繞過方法。所以這裡一律是「點一下複製，再自己貼上」。
+ * 點提示詞＝複製：瀏覽器不允許一個網頁去操作另一個網站的內容（同源政策），
+ * 填不進 AI 網站的輸入框，所以一律是「點一下複製，再自己貼上」。
  *
  * 資料一律先存在這個瀏覽器（localStorage，存好才算數）；連結 Google 雲端硬碟後，再由 sync.js 送上雲端。
  * 連結時會整頁換到 Google，按完「允許」回到這一頁，由最下面那段接手。
  *
- * 筆記本左下角外面的「全部提示詞」會換到 all.html：所有提示詞用純文字列在同一頁（見 all.js）。
+ * 設定 → 其他 →「全部提示詞」會開 all.html：所有提示詞用純文字列在同一頁（見 all.js）。
  */
 (() => {
   'use strict';
@@ -27,8 +25,7 @@
   host.style.setProperty('--gpn-zoom', String(GPN_WEB_ZOOM));
   const root = host.attachShadow({ mode: 'open' });
 
-  // 外掛是用 fetch 讀樣式表再塞進 Shadow DOM；但網頁版常常是直接雙擊 index.html
-  // 用 file:// 開的，那種情況 fetch 會被瀏覽器擋掉，<link> 則不會。
+  // 用 <link> 載樣式表：直接雙擊 index.html（file://）時 fetch 會被瀏覽器擋掉，<link> 不會
   const link = document.createElement('link');
   link.rel = 'stylesheet';
   link.href = 'styles.css';
@@ -38,7 +35,7 @@
   root.append(link);
   document.body.append(host);
 
-  // 外掛跟著 AI 網站的深淺色走；網頁版沒有網站可以跟，就跟著系統
+  // 深淺色跟著系統（設定 → 背景 可以改成固定深色或淺色）
   const media = matchMedia('(prefers-color-scheme: dark)');
   const applyTheme = () => host.setAttribute('data-theme', media.matches ? 'dark' : 'light');
   applyTheme();
@@ -99,8 +96,6 @@
 
   const panel = gpnCreatePanel({
     root,
-    standalone: true,
-    edition: '網頁版',
     allPageUrl: 'all.html',
     notice: GpnStore.available() ? '' :
       '這個瀏覽器不能儲存資料（可能是無痕視窗，或設定擋掉了網站儲存空間）。' +

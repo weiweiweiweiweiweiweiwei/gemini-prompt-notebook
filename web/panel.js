@@ -1,16 +1,12 @@
 /**
  * 面板本體：書籤 ＞（資料夾）＞ 提示詞
- * 網頁（web/app.js）把它放在畫面正中間。以前 Chrome 外掛也用同一份（4.37.0 拿掉了），
- * 所以裡面還留著幾段「外掛才有 chrome.storage」的判斷，網頁版不會走到。
+ * 網頁（web/app.js）把它放在畫面正中間，一直開著（沒有遮罩、點外面或按 Esc 都不會關）。
  *
  * 資料夾是每個書籤各自決定要不要用的（齒輪 → 書籤）：
  *   沒開 → 紙張裡只有卡片，和最早的版本一樣
  *   有開 → 左邊多一欄資料夾，點書籤一律先顯示第一個資料夾
  *
- * 各處的差別只由呼叫端決定：
- *   onUse       點提示詞時要做什麼
- *               AI 網站裡的面板：填進輸入框＋複製；其他地方：只能複製（同源政策）
- *   standalone  true＝面板就是整個畫面：一直開著、沒有遮罩、點外面或按 Esc 都不會關
+ * 點提示詞時要做什麼由呼叫端決定（onUse）：網頁只能複製（同源政策，填不進別的網站的輸入框）。
  *
  * 依賴 store.js（資料格式、GpnStore）和 share.js（匯出／匯入），載入順序要在它們之後。
  */
@@ -18,36 +14,23 @@
 /**
  * 版本號，顯示在設定視窗左下角。改了功能就調高，看這個數字就知道網頁有沒有更新到最新版。
  */
-const GPN_APP_VERSION = '4.37.0';
-
-/**
- * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
- * 網頁版沒有 chrome.storage：這台也裝了外掛的話交給外掛的 web-bridge.js 代放，沒有就只能複製後請他自己貼上。
- */
-const GPN_PENDING_FILL = 'gpn_pending_fill';
+const GPN_APP_VERSION = '4.38.0';
 
 /**
  * @param {object}   opts
  * @param {ShadowRoot} opts.root         面板要畫在哪裡（樣式表由呼叫端掛好）
- * @param {boolean}  [opts.standalone]   面板就是整個畫面（網頁版、工具列小視窗）
- * @param {string}   [opts.edition]      顯示在版本號旁邊，例如「外掛」「網頁版」
  * @param {Function} opts.onUse          async (item) => ({ badge?, toast?, bad? })
- * @param {Function} [opts.onOpenChange] (open) => void，外掛用來同步觸發按鈕的狀態
  * @param {string}   [opts.notice]       紙張最上方的紅色提醒（例如網頁版不能存檔）
  * @param {string}   [opts.allPageUrl]   「全部提示詞」純文字頁的網址；有給才會出現那顆按鈕（網頁版：all.html）
  * @param {object}   [opts.cloud]        雲端同步：getState / onState / connect / signOut / syncNow
  *                                       （canConnect === false：這個環境沒辦法連結，例如直接開檔案的網頁版）
- *                                       （網頁版是 sync.js 本身，外掛是 cloud-ext.js 轉給背景程式）
  */
 function gpnCreatePanel(opts) {
   'use strict';
 
   const {
     root,
-    standalone = false,
-    edition = '',
     onUse,
-    onOpenChange = () => {},
     notice = '',
     cloud = null,
     allPageUrl = '',
@@ -371,38 +354,29 @@ function gpnCreatePanel(opts) {
   const ownTabs = () => data.tabs.filter((t) => t.id !== GPN_MAIL_ID);
 
   /* ---- 這台電腦自己的偏好（筆記本寬度、背景圖）：不跟著雲端同步，也不放進備份 ----
-     外掛（AI 網站裡的面板、工具列小視窗）存在 chrome.storage，網頁版存在 localStorage。
-     key 和提示詞資料（GPN_KEY）不同，store.js 監聽資料變動時不會被它們觸發。 */
-  const prefs = (() => {
-    const ext = typeof chrome !== 'undefined' && !!chrome.storage?.local;
-    return {
-      async get(k) {
-        try {
-          if (ext) return (await chrome.storage.local.get(k))[k] ?? null;
-          const v = localStorage.getItem(k);
-          return v == null ? null : JSON.parse(v);
-        } catch { return null; }
-      },
-      /** 存不下（空間不夠、無痕模式）會回傳 false */
-      async set(k, v) {
-        try {
-          if (ext) await chrome.storage.local.set({ [k]: v });
-          else localStorage.setItem(k, JSON.stringify(v));
-          return true;
-        } catch { return false; }
-      },
-      async remove(k) {
-        try {
-          if (ext) await chrome.storage.local.remove(k);
-          else localStorage.removeItem(k);
-        } catch { /* 無痕模式 */ }
-      },
-    };
-  })();
+     存在 localStorage；key 和提示詞資料（GPN_KEY）不同，store.js 監聽資料變動時不會被它們觸發。 */
+  const prefs = {
+    async get(k) {
+      try {
+        const v = localStorage.getItem(k);
+        return v == null ? null : JSON.parse(v);
+      } catch { return null; }
+    },
+    /** 存不下（空間不夠、無痕模式）會回傳 false */
+    async set(k, v) {
+      try {
+        localStorage.setItem(k, JSON.stringify(v));
+        return true;
+      } catch { return false; }
+    },
+    async remove(k) {
+      try { localStorage.removeItem(k); } catch { /* 無痕模式 */ }
+    },
+  };
 
   /* ---- 音效 ----
      點書籤、換資料夾、用提示詞、加星號、儲存、刪除、拖曳…都有一個很短的聲音。
-     全部用 Web Audio 當場合成（幾個正弦波、三角波），不用音檔，外掛和網頁版都一樣。
+     全部用 Web Audio 當場合成（幾個正弦波、三角波），不用音檔。
      （4.22.0 起拿掉了「設定 → 音效」那一頁：音效一律開著。）
      瀏覽器規定要使用者先點過東西才能出聲，所以第一次播的時候才建 AudioContext。 */
   const soundOn = true;
@@ -458,7 +432,7 @@ function gpnCreatePanel(opts) {
 
   function sample(a, name) {
     if (!decoded[name]) {
-      // 不用 fetch：外掛在 AI 網站裡時，網站的安全設定可能擋掉 data: 網址
+      // 不用 fetch：直接開檔案（file://）時 fetch 讀不到 data: 網址以外的東西，這樣最保險
       const b64 = SAMPLES[name].split(',')[1];
       const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
       decoded[name] = a.decodeAudioData(bytes.buffer);
@@ -590,9 +564,8 @@ function gpnCreatePanel(opts) {
     // 「全部提示詞」（網頁版的 all.html）以前在筆記本左下角外面，4.20.0 起收進 設定 的左邊選單
 
     ui.overlay = el('div', {
-      class: 'gpn-overlay', role: 'dialog', 'aria-modal': standalone ? null : 'true',
+      class: 'gpn-overlay', role: 'dialog',
       'aria-label': '罐頭P',
-      onmousedown: (e) => { if (!standalone && e.target === ui.overlay) close(); },
     }, ui.book);
     // 雲端的狀態還沒拿到之前先別露出筆記本（不然沒登入的人會先閃一下內容），最多等 3 秒
     if (cloud) {
@@ -986,7 +959,7 @@ function gpnCreatePanel(opts) {
       : null;
     const titleBtn = el('button', {
       class: 'gpn-title', type: 'button',
-      title: standalone ? '點一下：複製這段提示詞' : '點一下：填入輸入框並複製',
+      title: '點一下：複製這段提示詞',
       onclick: () => usePrompt(item, card, tabId, fid),
     },
       sender,
@@ -1175,7 +1148,7 @@ function gpnCreatePanel(opts) {
       el('div', { class: 'gpn-card-time', text: clock(r.usedAt) }),
       el('button', {
         class: 'gpn-title', type: 'button',
-        title: standalone ? '點一下：複製這段提示詞' : '點一下：填入輸入框並複製',
+        title: '點一下：複製這段提示詞',
         onclick: () => usePrompt(item, card, '', '', true),
       },
         el('div', { class: 'gpn-title-text', text: cur.title || '(未命名)' }),
@@ -1295,26 +1268,6 @@ function gpnCreatePanel(opts) {
     gemini:  { label: 'Gemini',  url: 'https://gemini.google.com/app' },
     chatgpt: { label: 'ChatGPT', url: 'https://chatgpt.com/' },
   };
-  /** 外掛（AI 網站裡的面板、工具列小視窗）才有 chrome.storage，可以把提示詞交給新分頁自動填入 */
-  const canHandOff = typeof chrome !== 'undefined' && !!chrome.storage?.local;
-  /** 網頁版：這台電腦也裝了外掛的話，外掛的 web-bridge.js 會在 <html> 標上 data-gpn-ext，可以借它代填 */
-  const hasBridge = () => !canHandOff && document.documentElement.hasAttribute('data-gpn-ext');
-  const autoFills = () => canHandOff || hasBridge();
-
-  /** 網頁版把提示詞交給外掛（src/web-bridge.js）；外掛收好了才回 true，等太久當作沒有 */
-  function handOffToExtension(site, text) {
-    return new Promise((resolve) => {
-      const id = Math.random().toString(36).slice(2);
-      const done = (ok) => { window.removeEventListener('message', onReply); clearTimeout(timer); resolve(ok); };
-      const onReply = (e) => {
-        if (e.source === window && e.data?.type === 'gpn-pending-fill-ok' && e.data.id === id) done(!!e.data.ok);
-      };
-      const timer = setTimeout(() => done(false), 800);
-      window.addEventListener('message', onReply);
-      window.postMessage({ type: 'gpn-pending-fill', id, site, text }, location.origin);
-    });
-  }
-
   function buildCardMenu() {
     ui.menu = el('div', { class: 'gpn-menu', role: 'menu', hidden: '', onkeydown: onMenuKey });
     ui.book.append(ui.menu);
@@ -1335,7 +1288,7 @@ function gpnCreatePanel(opts) {
     sfx('click');
     const card = btn.closest('.gpn-card');
     const open = (site) => () => { closeCardMenu(); openInAI(site, item, card, tabId, fid); };
-    const fills = autoFills() ? '（在新分頁打開，自動填好）' : '（在新分頁打開）';
+    const fills = '（在新分頁打開，提示詞先複製好）';
 
     openMenuWith(btn, [
       menuTile(ICON_GEMINI, '開啟 Gemini' + fills, open('gemini')),
@@ -1435,9 +1388,8 @@ function gpnCreatePanel(opts) {
   }
 
   /**
-   * 用 AI 開啟：一律先複製（保險）、記進「最近使用」。
-   *   Gemini、ChatGPT：開新分頁。外掛會把提示詞交給新分頁的 content.js 自動填好（不會自動送出）；
-   *                    網頁版自己做不到（同源政策）：這台也裝了外掛就借外掛代填，沒有就請他自己貼上
+   * 用 AI 開啟：先複製、記進「最近使用」，再開新分頁到 Gemini、ChatGPT。
+   * 網頁填不進別的網站的輸入框（同源政策），所以請他在那裡貼上。
    */
   async function openInAI(site, item, card, tabId, fid) {
     const copied = await gpnShareCopy(item.content);
@@ -1445,23 +1397,13 @@ function gpnCreatePanel(opts) {
     recordUse(item, tabId, fid);
 
     const s = AI_SITES[site];
-    let fills = false;
-    if (canHandOff) {
-      try {
-        await chrome.storage.local.set({ [GPN_PENDING_FILL]: { site, text: item.content, at: Date.now() } });
-        fills = true;
-      } catch { /* 外掛剛更新過、這一頁還是舊的：退回自己貼上 */ }
-    } else if (hasBridge()) {
-      fills = await handOffToExtension(site, item.content);
-    }
     const w = window.open(s.url, '_blank');
     if (!w) {
       toast(`瀏覽器擋住了新分頁，請自己打開 ${s.label}` + (copied ? `，提示詞已複製，按 ${PASTE_KEY} 貼上` : ''), true, 7000);
       return;
     }
     try { w.opener = null; } catch { /* 跨網域時本來就碰不到 */ }
-    toast(fills ? `已在新分頁打開 ${s.label}，提示詞會自動填進輸入框（不會自動送出）`
-      : copied ? `已在新分頁打開 ${s.label}，提示詞已複製，在輸入框按 ${PASTE_KEY} 貼上`
+    toast(copied ? `已在新分頁打開 ${s.label}，提示詞已複製，在輸入框按 ${PASTE_KEY} 貼上`
       : `已在新分頁打開 ${s.label}`, false, 6000);
   }
 
@@ -2608,7 +2550,7 @@ function gpnCreatePanel(opts) {
 
   /* ==========================================================================
      八、設定（底部的齒輪）
-     左邊選單、右邊內容。全部都是整個外掛共用的設定：第一頁「書籤」一次列出所有書籤，
+     左邊選單、右邊內容。全部都是整個罐頭P 共用的設定：第一頁「書籤」一次列出所有書籤，
      點一個展開就能改名稱、顏色、資料夾、備註（以前是「這個書籤」自己一頁，和共用的設定混在一起不好懂）。
      從我的最愛、符號書籤打開時，最上面多一組「這個符號」。
      改名、換色、開關資料夾、備註都是「改了就存」，不必按儲存，也就不會有改了卻忘記存的狀況。
@@ -2645,10 +2587,10 @@ function gpnCreatePanel(opts) {
       ui.sNavAll = el('div', { class: 'gpn-nav-group', text: '一般' }), ...navAll,
       ui.sOtherNav,
       ui.sTrashNav,
-      // 外掛和網頁版長得不一樣時，先看這裡的數字是不是一樣
+      // 回報問題時看這裡的數字
       el('div', {
         class: 'gpn-nav-version',
-        text: `版本 ${GPN_APP_VERSION}` + (edition ? `　${edition}` : ''),
+        text: `版本 ${GPN_APP_VERSION}`,
       }));
 
     /* ---- 書籤：全部書籤列成一排一排；點一個再進去一層（其他 › 書籤 › 工作），那一頁改名稱、顏色、資料夾、備註、刪除 ---- */
@@ -2719,7 +2661,7 @@ function gpnCreatePanel(opts) {
     const secBackup = buildBackupSection();
 
     /* ---- 背景 ---- */
-    const secLook = standalone ? buildLookSection() : null;
+    const secLook = buildLookSection();
 
     /* ---- 使用次數 ---- */
     const secStats = buildStatsSection();
@@ -2734,7 +2676,13 @@ function gpnCreatePanel(opts) {
       if (h && h.textContent === SECTION_TITLES[sec.getAttribute('data-section')]) h.hidden = true;
     }
     ui.sCrumb = el('nav', { class: 'gpn-crumb', 'aria-label': '目前位置' });
-    ui.sBody = el('div', { class: 'gpn-settings-body' }, ...ui.sSections);
+    ui.sBody = el('div', { class: 'gpn-settings-body', onscroll: paintScrollFade }, ...ui.sSections);
+    // 內容變長變短（換頁、展開東西）時也要重新判斷上下要不要淡出
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(() => paintScrollFade());
+      ro.observe(ui.sBody);
+      for (const sec of ui.sSections) ro.observe(sec);
+    }
 
     ui.settings = el('div', { class: 'gpn-dialog gpn-settings', onmousedown: stop },
       el('div', { class: 'gpn-settings-grid' },
@@ -2798,6 +2746,7 @@ function gpnCreatePanel(opts) {
     if (key === 'tab' && bmTabId) openBookmark(null, false);
     paintCrumb(key, viaOther && key !== 'other');
     ui.sBody.scrollTop = 0;
+    paintScrollFade();
     hideFolderConfirm();
     disarmTabDelete();
     disarmWipe();
@@ -2806,6 +2755,14 @@ function gpnCreatePanel(opts) {
     if (key === 'clones') openClones();
     if (key === 'stats') renderStats();
     noteView();
+  }
+
+  /** 設定右邊的上下邊緣：上面還有東西（捲下來了）就淡上緣，下面還有就淡下緣 */
+  function paintScrollFade() {
+    const b = ui.sBody;
+    if (!b) return;
+    b.classList.toggle('is-fade-top', b.scrollTop > 2);
+    b.classList.toggle('is-fade-bottom', b.scrollTop + b.clientHeight < b.scrollHeight - 2);
   }
 
   /** 設定左邊選單直接有的頁；其他的都在「其他」裡面 */
@@ -2846,7 +2803,7 @@ function gpnCreatePanel(opts) {
       el('div', { class: 'gpn-orows' },
         row('tab', ICON_TAB, '書籤', '所有書籤的名稱、顏色、資料夾、備註'),
         row('marks', ICON_STAR, '星號', '連續點星號時要換哪幾種符號'),
-        standalone ? row('look', ICON_IMAGE, '背景', '深淺主題、背景圖') : null,
+        row('look', ICON_IMAGE, '背景', '深淺主題、背景圖'),
         row('backup', ICON_SYNC, '備份', '下載成備份檔、從備份檔匯入'),
         row('stats', ICON_CHART, '使用次數', '最常使用的前十名提示詞'),
         row('guide', ICON_SCHOOL, '新手教學', '用一本範例筆記本，一頁一頁看每個按鈕在做什麼', { onclick: startTut }),
@@ -3323,13 +3280,11 @@ function gpnCreatePanel(opts) {
   }
 
   /* ---- 雲端同步（Google 雲端硬碟）----
-     連結 Google 帳號，外掛、網頁版、每一台電腦的提示詞就會自動同步（見 sync.js）。
+     連結 Google 帳號，每一台電腦的提示詞就會自動同步（見 sync.js）。
      提示詞存在使用者「自己的」Google 雲端硬碟裡的一個檔案（GPN_DRIVE_FILE_NAME）。
      沒連結也能照常用，只是資料只存在這一台。
 
-     流程：按「用 Google 帳號連結雲端硬碟」→ 到 Google 選帳號、按「允許」→ 回來就開始同步
-       網頁版：整頁換到 Google，再回到網頁版
-       外掛：另開一個分頁，連結完那個分頁會自己關掉 */
+     流程：按「用 Google 帳號連結雲端硬碟」→ 整頁換到 Google 選帳號、按「允許」→ 回來就開始同步 */
 
   function buildAccountSection() {
     /* ---- 還沒連結 ---- */
@@ -3337,13 +3292,13 @@ function gpnCreatePanel(opts) {
       class: 'gpn-social-btn', type: 'button', 'data-provider': 'google', onclick: onConnect,
     }, el('span', { class: 'gpn-social-icon', html: ICON_GOOGLE }), el('span', { text: '用 Google 帳號連結雲端硬碟' }));
     ui.aNoConnect = el('div', { class: 'gpn-note gpn-note--status is-bad', text:
-      '直接雙擊檔案打開的網頁版沒辦法連結雲端硬碟。請改用網址打開網頁版，或用 Chrome 外掛。' });
+      '直接雙擊檔案打開的網頁版沒辦法連結雲端硬碟。請改用網址打開網頁版。' });
     ui.aMsg = el('div', { class: 'gpn-note gpn-note--status', role: 'status' });
 
     ui.aOut = el('div', {},
       el('p', { class: 'gpn-lede', text:
         '連結你的 Google 帳號，提示詞會存到你自己的 Google 雲端硬碟，' +
-        '外掛、網頁版、每一台電腦都會自動同步，換電腦也不怕不見。' }),
+        '每一台電腦都會自動同步，換電腦也不怕不見。' }),
       el('div', { class: 'gpn-social' }, ui.aConnect),
       ui.aNoConnect,
       ui.aMsg,
@@ -3408,7 +3363,7 @@ function gpnCreatePanel(opts) {
     }, el('span', { class: 'gpn-social-icon', html: ICON_GOOGLE }), el('span', { text: '用 Google 帳號登入' }));
     ui.gateMsg = el('div', { class: 'gpn-note gpn-note--status', role: 'status' });
     ui.gateNoConnect = el('div', { class: 'gpn-note gpn-note--status is-bad', hidden: '', text:
-      '直接雙擊檔案打開的網頁版沒辦法登入。請改用網址打開網頁版，或用 Chrome 外掛。' });
+      '直接雙擊檔案打開的網頁版沒辦法登入。請改用網址打開網頁版。' });
     // 分身代號：別人建立的分身，不用 Google 帳號也能登入（見 sync.js 的「分身」）
     ui.gateCloneInput = el('input', {
       class: 'gpn-input gpn-clone-input', type: 'text', maxlength: '24', placeholder: 'XXXX-XXXX-XXXX-XXXX',
@@ -3582,17 +3537,13 @@ function gpnCreatePanel(opts) {
     ui.aMsg.classList.toggle('is-ok', !!msg && kind === 'ok');
   }
 
-  /** 連結雲端硬碟：網頁版會整頁換到 Google；外掛會另開一個分頁，連結完自己關掉 */
+  /** 連結雲端硬碟：整頁換到 Google */
   async function onConnect() {
     ui.aConnect.disabled = true;
     setAccountMsg('');
     const r = await cloud.connect();
     ui.aConnect.disabled = false;
-    if (!r || !r.ok) { setAccountMsg(r?.error || '沒辦法開始連結，請稍後再試'); return; }
-    if (r.opened) {
-      setAccountMsg('已經開了一個新分頁：請在那裡選 Google 帳號、按「允許」。' +
-        '完成後那個分頁會自動關掉，回到這裡就好。', 'ok');
-    }
+    if (!r || !r.ok) setAccountMsg(r?.error || '沒辦法開始連結，請稍後再試');
   }
 
   async function onSyncNow() {
@@ -5052,7 +5003,7 @@ function gpnCreatePanel(opts) {
    */
   /**
    * 資源回收桶的背景：在回收桶裡不管原本選了什麼，一律換成回收桶的背景（紅色警示，提醒這裡是危險區域）；
-   * 離開時換回原本的。外掛在 AI 網站裡的面板也一樣（平常沒有背景，進回收桶才有）。
+   * 離開時換回原本的。
    */
   /**
    * 資源回收桶的警示（4.22.0）：背景沿用使用者自己選的，只是冒出 4 個大大小小的紅色警示三角形，
@@ -5088,7 +5039,6 @@ function gpnCreatePanel(opts) {
 
   async function syncLook() {
     applyTheme();
-    if (!standalone) return;
     const want = gpnCleanLook(data.look);
     if (want.bg === 'custom') {
       const [mine, url] = await Promise.all([prefs.get(GPN_WALLPAPER_ID_KEY), prefs.get(GPN_WALLPAPER_KEY)]);
@@ -5112,7 +5062,7 @@ function gpnCreatePanel(opts) {
 
   /** 4.16.0 以前背景只記在這台：第一次升級時搬進 data.look，之後就跟著帳號同步 */
   async function migrateLook() {
-    if (!standalone || (await prefs.get('gpn_look_migrated'))) return;
+    if (await prefs.get('gpn_look_migrated')) return;
     await prefs.set('gpn_look_migrated', true);
     const [bg, url] = await Promise.all([prefs.get(GPN_BG_KEY), prefs.get(GPN_WALLPAPER_KEY)]);
     const old = bg || (url ? 'custom' : 'default');
@@ -5129,7 +5079,7 @@ function gpnCreatePanel(opts) {
   }
 
   /* ---- 深淺主題（設定 → 背景 最上面）----
-     平常外掛跟著 AI 網站、網頁版和小視窗跟著系統（各自在 content.js、app.js、popup.js 設 data-theme）。
+     平常跟著系統（app.js 設 data-theme）。
      選了「淺色」「深色」就蓋過去：記下它們原本要的（natural），它們之後再改也照樣蓋回來；選回「跟著系統」就還給它。 */
   let naturalTheme = root.host?.getAttribute('data-theme') || '';
   let themeGuard = false;
@@ -5144,11 +5094,9 @@ function gpnCreatePanel(opts) {
   function applyTheme() {
     if (!root.host) return;
     const want = gpnCleanLook(data.look).theme;
-    // 網頁版、工具列小視窗：網頁本身的底色（預設光暈）也要跟著換（page.css、popup.html 看 data-gpn-theme）
-    if (standalone) {
-      if (want === 'auto') document.documentElement.removeAttribute('data-gpn-theme');
-      else document.documentElement.setAttribute('data-gpn-theme', want);
-    }
+    // 網頁本身的底色（預設光暈）也要跟著換（page.css 看 data-gpn-theme）
+    if (want === 'auto') document.documentElement.removeAttribute('data-gpn-theme');
+    else document.documentElement.setAttribute('data-gpn-theme', want);
     const t = want === 'auto' ? naturalTheme : want;
     if (!t || root.host.getAttribute('data-theme') === t) return;
     themeGuard = true;
@@ -5179,7 +5127,7 @@ function gpnCreatePanel(opts) {
       pick('auto', '跟著系統'), pick('light', '☀ 淺色'), pick('dark', '☾ 深色'));
     return el('section', { class: 'gpn-section', 'data-section': 'look' },
       el('h3', { text: '背景' }),
-      field('深淺主題', '（外掛在 AI 網站裡選「跟著系統」時，跟著那個網站）', ui.lTheme),
+      field('深淺主題', null, ui.lTheme),
       el('div', { class: 'gpn-sep' }),
       ui.lGrid,
       ui.lFile,
@@ -5359,7 +5307,6 @@ function gpnCreatePanel(opts) {
     ui.overlay.classList.add('is-open');
     revealActiveFolder();
     if (jumped) revealLastUse();
-    onOpenChange(true);
     // 每次打開都跟雲端對一下：別台剛改的東西，這裡馬上看得到
     cloud?.syncNow();
     if (cloud) noticeInbox();
@@ -5399,7 +5346,7 @@ function gpnCreatePanel(opts) {
   }
 
   function startHistory() {
-    if (historyOn || !standalone) return;
+    if (historyOn) return;
     historyOn = true;
     history.replaceState({ ...viewNow(), root: true }, '');
     history.pushState(viewNow(), '');
@@ -5488,17 +5435,6 @@ function gpnCreatePanel(opts) {
     for (const ms of [120, 400, 1000]) setTimeout(() => { if (!landed) go(); }, ms);
   }
 
-  function close() {
-    if (standalone) return;          // 網頁版、工具列小視窗：面板就是整個畫面，不能關
-    closeCardMenu();
-    closeEditor();
-    closeNewTab();
-    closeFolderEditor();
-    closeSettings();
-    ui.overlay.classList.remove('is-open');
-    onOpenChange(false);
-  }
-
   function onKeydown(e) {
     if (!isOpen()) return;
     // 資源回收桶：Ctrl＋A 全選、Delete 永久刪除選取的（按兩次）、Esc 取消選取
@@ -5548,8 +5484,6 @@ function gpnCreatePanel(opts) {
     } else if (layerOpen(ui.editLayer)) {
       if (editorDirty()) toast('還沒儲存喔，請按「儲存」或「取消」');
       else closeEditor();
-    } else if (!standalone) {
-      close();
     } else {
       return;
     }
@@ -5562,12 +5496,10 @@ function gpnCreatePanel(opts) {
   build();
   document.addEventListener('keydown', onKeydown, true);
   prefs.get(GPN_BOOK_W_KEY).then((w) => { if (w > 0) setBookWidth(w); });
-  if (standalone) {
-    prefs.get(GPN_WALLPAPER_KEY).then((custom) => {
-      hasCustomBg = !!custom;
-      renderBgTiles();
-    });
-  }
+  prefs.get(GPN_WALLPAPER_KEY).then((custom) => {
+    hasCustomBg = !!custom;
+    renderBgTiles();
+  });
 
   // 其他分頁或雲端改了資料時同步過來；正在編輯就先別動畫面，免得打到一半的字不見
   GpnStore.onExternalChange((fresh) => {
@@ -6098,7 +6030,7 @@ function gpnCreatePanel(opts) {
   // toast：網頁版從登入、驗證信回來時，用它顯示結果
   // openAccount：打開「雲端同步」那一頁（網頁版連結失敗回來時用）
   return {
-    open, close, isOpen, toast,
+    open, isOpen, toast,
     // 還沒登入時畫面就是登入畫面，不用另外打開設定
     openAccount: () => { if (cloud && cloudState.configured && cloudState.signedIn) openSettings(data.activeId, 'account'); },
   };

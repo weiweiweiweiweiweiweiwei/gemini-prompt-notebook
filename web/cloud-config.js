@@ -6,7 +6,7 @@
  *   千萬不要把「用戶端密鑰」（client secret）放在這裡——它放在 tokenUrl 那個中繼的後台設定裡。
  *
  * tokenUrl：換 token 用的中繼（supabase/functions/gpn-google-token，放在和 flowstudy 共用的 Supabase 專案）。
- *   Google 規定換 token 要附用戶端密鑰，網頁和外掛藏不住密鑰，所以由它代換。
+ *   Google 規定換 token 要附用戶端密鑰，網頁藏不住密鑰，所以由它代換。
  *   它只轉交 token，提示詞不會經過它（提示詞直接在瀏覽器和 Google 雲端硬碟之間傳）。
  *
  * cloneUrl：分身的中繼（supabase/functions/gpn-clone，和 tokenUrl 同一個 Supabase 專案）。

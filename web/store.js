@@ -94,7 +94,7 @@ function gpnCleanTrash(arr, itemIds) {
  * 背景（設定 → 背景）：跟著帳號同步，換電腦登入背景也一樣。
  *   bg         'default'、內建背景的 id（backgrounds.js）、或 'custom'（自己上傳的圖）
  *   wallpaper  上傳的圖的代號（圖很大，不放在這裡：存在雲端硬碟另一個檔案，見 sync.js 的 putWallpaper）
- *   theme      深淺主題：'auto'（跟著系統、外掛跟著 AI 網站）、'light'、'dark'
+ *   theme      深淺主題：'auto'（跟著系統）、'light'、'dark'
  */
 const GPN_THEMES = ['auto', 'light', 'dark'];
 function gpnCleanLook(l) {

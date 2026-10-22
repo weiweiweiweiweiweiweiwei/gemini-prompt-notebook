@@ -1,76 +1,7 @@
 /* ============================================================================
    罐頭P（常用提示詞筆記本）— 樣式表
-   用在四個地方：
-     1. Light DOM（manifest 的 content_scripts.css）→ 注入工具列的觸發按鈕
-     2. Shadow DOM（content.js 用 fetch + adoptedStyleSheets）→ 外掛的面板
-     3. Shadow DOM（web/app.js 用 <link>）→ 網頁版的面板（和外掛是同一個面板）
-     4. popup.html → 工具列小視窗
-   src/styles.css 和 web/styles.css 必須一字不差，tools/checksync.py 會檢查。
+   由 app.js 用 <link> 載進筆記本的 Shadow DOM。
    ========================================================================== */
-
-/* ============================================================================
-   一、觸發按鈕（注入 Gemini 輸入框工具列，和「+」同一排）
-   會複製 Gemini 原生 icon button 的 class，
-   尺寸／圓角／hover 全部由 Gemini 自己的 CSS 負責。
-   ========================================================================== */
-.gpn-trigger-wrap { display: inline-flex; align-items: center; flex: none; }
-/* 圖示大小由 content.js 依各站原生按鈕設定（Gemini 24px、ChatGPT/Claude 20px） */
-.gpn-trigger-btn > svg {
-  width: var(--gpn-icon, 24px); height: var(--gpn-icon, 24px);
-  display: block; margin: auto;
-  fill: currentColor;
-  transition: transform .18s cubic-bezier(.2, 0, 0, 1);
-}
-.gpn-trigger-btn:hover > svg { transform: scale(1.08); }
-.gpn-trigger-btn:active > svg { transform: scale(.94); }
-.gpn-trigger-btn.gpn-is-open > svg { fill: #a8c7fa; }
-
-/* 備援：只有在「完全抄不到原生 class」時（content.js 會加上 .gpn-bare）才套用。
-   絕不能用 :not(...) 之類的猜測條件，否則會蓋掉各站原生按鈕樣式。 */
-.gpn-trigger-btn.gpn-bare {
-  width: 32px; height: 32px; padding: 4px;
-  border: 0; border-radius: 9999px;
-  background: transparent; color: inherit; cursor: pointer;
-  display: inline-flex; align-items: center; justify-content: center;
-  transition: background-color .18s ease;
-}
-.gpn-trigger-btn.gpn-bare:hover { background: rgba(128, 128, 128, .18); }
-
-/* ============================================================================
-   一之二、右下角浮動圓鈕（FAB）
-   長駐在網頁右下角。開啟「問問 Gemini」側邊欄時網頁會被壓窄，
-   因為是 position:fixed + right，圓鈕會自動跟著視窗右緣往左移。
-   ========================================================================== */
-:host(.gpn-fab-host) {
-  inset: auto 24px 28px auto;      /* 右 24px、下 28px */
-  z-index: 2147483500;             /* 低於面板，開面板時會被遮罩蓋住 */
-  pointer-events: none;
-}
-/* is-hidden＝面板開著；is-off＝已成功注入輸入框工具列，不需要圓鈕 */
-:host(.gpn-fab-host.is-hidden), :host(.gpn-fab-host.is-off) { display: none; }
-
-.gpn-fab {
-  pointer-events: auto;
-  width: 56px;
-  height: 56px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  /* 毛玻璃底色，icon 維持原本的收藏旗幟 */
-  background: var(--glass);
-  backdrop-filter: var(--glass-filter);
-  -webkit-backdrop-filter: var(--glass-filter);
-  border: 1px solid var(--outline);
-  color: var(--text-mute);
-  box-shadow: var(--shadow-lg), inset 0 1px 0 var(--glass-hi);
-  transition: transform .18s cubic-bezier(.2, 0, 0, 1),
-              color .18s ease, border-color .18s ease;
-}
-.gpn-fab:hover { transform: scale(1.07); color: var(--primary); border-color: var(--primary); }
-.gpn-fab:active { transform: scale(.96); }
-.gpn-fab:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
-.gpn-fab svg { width: 26px; height: 26px; display: block; fill: currentColor; }
 
 /* ============================================================================
    二、面板（Shadow DOM）
@@ -155,7 +86,7 @@ button { cursor: pointer; }
 }
 
 /* ---------- Design tokens：深色 ----------
-   外掛跟著 AI 網站的深淺色；網頁版和工具列小視窗跟著系統。 */
+   跟著系統（app.js 設 data-theme），設定 → 背景 可以固定。 */
 :host([data-theme="dark"]) {
   color-scheme: dark;
   --surface:           #1e1f20;
@@ -303,7 +234,7 @@ button { cursor: pointer; }
 .gpn-tab {
   position: relative;
   z-index: 1;                  /* 低於紙張 → 被紙張蓋住 */
-  /* 寬度由 content.js 依書籤數量算出百分比，所有書籤「等寬」且不隨選取改變；
+  /* 寬度由 panel.js（layoutTabs）依書籤數量算出百分比，所有書籤「等寬」且不隨選取改變；
      選取狀態改用「高度」表現，按起來才不會一直左右位移。 */
   flex: none;
   min-width: 54px;
@@ -843,7 +774,7 @@ button { cursor: pointer; }
 .gpn-foot .gpn-add--danger:hover { background: color-mix(in srgb, var(--error) 12%, transparent); border-color: var(--error); color: var(--error); }
 .gpn-foot .gpn-add--danger.is-confirm { background: var(--error); color: var(--surface); }
 .gpn-foot .gpn-add[disabled] { opacity: .45; cursor: not-allowed; pointer-events: none; }
-/* 回收桶的背景在外掛的 AI 網站裡也要鋪滿（平常那裡沒有背景） */
+/* 背景圖鋪滿 */
 .gpn-overlay.has-wallpaper { background-size: cover; background-position: center; background-repeat: no-repeat; }
 
 /* 資源回收桶的警示：背景照舊，四周冒出幾個大大小小的紅色三角形（panel.js 的 TRASH_FX）。
@@ -1441,7 +1372,7 @@ button { cursor: pointer; }
 .gpn-nav-item:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
 .gpn-nav-icon svg { width: 19px; height: 19px; display: block; fill: currentColor; }
 .gpn-nav-text { flex: 1; min-width: 0; }
-/* 版本號：外掛和網頁版長得不一樣時，先比對這個數字 */
+/* 版本號：回報問題時看這個數字 */
 .gpn-nav-version {
   margin-top: auto;
   padding: 12px 10px 0;
@@ -2327,8 +2258,6 @@ section[data-section="markTab"] .gpn-note--roomy { margin: 4px 0 16px; }
 }
 .gpn-gutter:hover::after, .gpn-book.is-resizing .gpn-gutter::after { opacity: .75; }
 .gpn-book.is-resizing, .gpn-book.is-resizing * { cursor: ew-resize !important; user-select: none; }
-/* 工具列小視窗本來就是固定大小，不需要拖 */
-:host(.gpn-popup-host) .gpn-gutter { display: none; }
 
 /* 量「遮罩」的寬度用（下面幾個 @container gpn-overlay） */
 .gpn-overlay { container: gpn-overlay / inline-size; }
@@ -2360,17 +2289,6 @@ section[data-section="markTab"] .gpn-note--roomy { margin: 4px 0 16px; }
 .gpn-toast.is-bad { background: var(--error); color: #ffffff; }
 
 /* ============================================================================
-   五、工具列小視窗（點 Chrome 擴充功能圖示開啟）
-   裡面是同一個面板；Chrome 的小視窗最大只有 800 x 600，所以邊距縮小、讓面板吃滿。
-   ========================================================================== */
-:host(.gpn-popup-host) .gpn-overlay { padding: 12px; }
-:host(.gpn-popup-host) .gpn-book {
-  max-width: calc((100vw - 24px) / var(--gpn-zoom, 1));
-  max-height: calc((100vh - 24px) / var(--gpn-zoom, 1));
-  height: calc((100vh - 24px) / var(--gpn-zoom, 1));
-}
-
-/* ============================================================================
    六、毛玻璃的退場機制
    半透明會讓對比度隨背景浮動，是這種材質最大的可讀性風險。
    下面三種情況一律改回「完全不透明」，確保字永遠看得清楚。
@@ -2390,7 +2308,7 @@ section[data-section="markTab"] .gpn-note--roomy { margin: 4px 0 16px; }
     --glass: var(--surface); --glass-soft: var(--surface);
     --glass-card: var(--surface-card); --glass-filter: none;
   }
-  .gpn-overlay::before, .gpn-paper, .gpn-tab, .gpn-card, .gpn-dialog, .gpn-fab, .gpn-folders,
+  .gpn-overlay::before, .gpn-paper, .gpn-tab, .gpn-card, .gpn-dialog, .gpn-folders,
   .gpn-settings-nav {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
@@ -2600,3 +2518,13 @@ section[data-section="markTab"] .gpn-note--roomy { margin: 4px 0 16px; }
 .gpn-tut-box.is-drive { background: rgba(55, 55, 55, .9); }
 .gpn-tut-down { font-size: 30px; line-height: 1; }
 .gpn-tut-small { font-size: 16px; line-height: 1.5; text-align: center; white-space: pre-line; text-shadow: 0 1px 3px rgba(0, 0, 0, .85), 0 0 10px rgba(0, 0, 0, .6); }
+
+/* 設定右邊的內容捲得動時，上下邊緣淡出：清楚的慢慢變模糊，看得出「上面／下面還有」。
+   只有捲得動的那一邊才淡（panel.js 的 paintScrollFade 依捲動位置設 --fade-top、--fade-bottom） */
+.gpn-settings-body {
+  --fade-top: 0px; --fade-bottom: 0px;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent 100%);
+}
+.gpn-settings-body.is-fade-top { --fade-top: 36px; }
+.gpn-settings-body.is-fade-bottom { --fade-bottom: 44px; }
