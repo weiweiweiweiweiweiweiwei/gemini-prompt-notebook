@@ -1,5 +1,4 @@
 # 把網頁版（web/ 資料夾）發布到 GitHub Pages。
-# 只發布 web/，外掛的程式碼不會出現在網站上。
 # main 上的 web/ 有變動就會自動重新發布，也可以在 Actions 頁面手動按「Run workflow」。
 name: 發布網頁版
 
@@ -29,11 +28,6 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
-
-      # 網頁版和外掛共用的程式碼若分岔，網頁版會和外掛長得不一樣、匯出匯入也會壞，
-      # 這種版本寧可不要發布
-      - name: 檢查外掛和網頁版的共用程式碼一致
-        run: python3 tools/checksync.py
 
       - uses: actions/configure-pages@v6
 

@@ -18,8 +18,7 @@
  *   關著（false）時使用者看不到任何同步畫面；管理員想先自己試，在網頁版網址後面加 ?try-cloud=1
  *   （這個瀏覽器會記住；?try-cloud=0 取消）。
  *
- * site：網頁版的網址。外掛連結雲端硬碟時，Google 會先把人帶回這個網站的 ext-login.html，
- *   再由外掛接手（見 src/ext-login.js）。
+ * site：網頁版的網址（分身的邀請文字裡會附上這個網址）。
  *
  * Google Cloud 那邊要設定的東西，見 README「雲端同步（Google 雲端硬碟）的設定」。
  */

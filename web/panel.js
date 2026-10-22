@@ -1,10 +1,7 @@
 /**
  * 面板本體：書籤 ＞（資料夾）＞ 提示詞
- *
- * 三個地方用的是「同一份」面板，所以長相、操作一模一樣：
- *   外掛：AI 網站裡的面板（src/content.js）、工具列小視窗（src/popup.js）
- *   網頁版（web/app.js）
- * src/panel.js 和 web/panel.js 必須一字不差，tools/checksync.py 會檢查。
+ * 網頁（web/app.js）把它放在畫面正中間。以前 Chrome 外掛也用同一份（4.37.0 拿掉了），
+ * 所以裡面還留著幾段「外掛才有 chrome.storage」的判斷，網頁版不會走到。
  *
  * 資料夾是每個書籤各自決定要不要用的（齒輪 → 書籤）：
  *   沒開 → 紙張裡只有卡片，和最早的版本一樣
@@ -19,10 +16,9 @@
  */
 
 /**
- * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
- * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
+ * 版本號，顯示在設定視窗左下角。改了功能就調高，看這個數字就知道網頁有沒有更新到最新版。
  */
-const GPN_APP_VERSION = '4.36.0';
+const GPN_APP_VERSION = '4.37.0';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -294,8 +290,7 @@ function gpnCreatePanel(opts) {
   let editing = null;        // 提示詞編輯中 { tabId, folderId | null, id | null }
   let newTabColor = null;    // 新增書籤對話框選的顏色
   let settingsTabId = null;  // 設定視窗是從哪個書籤打開的（「這個符號」那一頁用）
-  let bmTabId = null;        // 設定 → 書籤 裡展開著哪一個（改名稱、顏色、資料夾、備註）
-  let bmInfoId = null;       // 設定 → 書籤 裡哪一個的備註（i）打開著
+  let bmTabId = null;        // 設定 → 書籤 裡點進去的那一個（其他 › 書籤 › 工作）；null 是書籤清單
   let folderEditing = null;  // 資料夾編輯中 { tabId, id | null }
   let tabDelArmed = false, tabDelTimer = 0;
   let folderDelArmed = false, folderDelTimer = 0;
@@ -757,6 +752,7 @@ function gpnCreatePanel(opts) {
     renderFolders();
     renderList();
     revealActiveFolder();
+    noteView();
   }
 
   function switchFolder(id) {
@@ -766,6 +762,7 @@ function gpnCreatePanel(opts) {
     renderFolders();
     renderList();
     ui.list.scrollTop = 0;
+    noteView();
   }
 
   /** 重建整條書籤列（資料結構有變時才呼叫，例如新增／刪除書籤） */
@@ -1903,6 +1900,7 @@ function gpnCreatePanel(opts) {
     updateTabStates(changed);
     if (changed) revealActiveFolder();
     revealItem(id);
+    noteView();
     toast(`已搬到「${whereLabel(to.tabId, to.folderId)}」`);
     return true;
   }
@@ -2653,7 +2651,7 @@ function gpnCreatePanel(opts) {
         text: `版本 ${GPN_APP_VERSION}` + (edition ? `　${edition}` : ''),
       }));
 
-    /* ---- 書籤：全部書籤列成一排一排，點一個展開：名稱 → 顏色 → 資料夾開關 → 備註 → 最下面是刪除書籤 ---- */
+    /* ---- 書籤：全部書籤列成一排一排；點一個再進去一層（其他 › 書籤 › 工作），那一頁改名稱、顏色、資料夾、備註、刪除 ---- */
     ui.sName = el('input', {
       class: 'gpn-input', type: 'text', maxlength: String(GPN_MAX_LABEL), placeholder: '例如：工作',
       oninput: onSettingsName,
@@ -2661,20 +2659,17 @@ function gpnCreatePanel(opts) {
     });
     ui.sNameHint = el('div', { class: 'gpn-hint', text: '名稱不能空白' });
     ui.sColor = buildColorPicker(onSettingsColor);
-    ui.sDelNote = el('div', { class: 'gpn-note' });
-    ui.sDel = el('button', { class: 'gpn-btn gpn-btn--del', type: 'button', onclick: onTabDelete }, '刪除這個書籤');
-    ui.sDanger = el('div', { class: 'gpn-danger' },
-      el('div', { class: 'gpn-label', text: '刪除書籤' }), ui.sDelNote, ui.sDel);
+    ui.sDel = el('button', { class: 'gpn-btn2 gpn-btn2--danger gpn-bm-del', type: 'button', onclick: onTabDelete }, '刪除這個書籤');
+    ui.sDanger = el('div', { class: 'gpn-bm-danger' }, ui.sDel);
 
     ui.sSwitchTitle = el('b', { text: '使用資料夾' });
     ui.sSwitchState = el('span');
     ui.sSwitch = el('button', {
-      class: 'gpn-switch-row', type: 'button', role: 'switch', 'aria-checked': 'false',
+      class: 'gpn-switch-row is-small', type: 'button', role: 'switch', 'aria-checked': 'false',
       onclick: onFolderSwitch,
     },
       el('span', { class: 'gpn-switch', 'aria-hidden': 'true' }),
       el('span', { class: 'gpn-switch-text' }, ui.sSwitchTitle, ui.sSwitchState));
-    ui.sFolderNote = el('div', { class: 'gpn-note' });
 
     // 關閉資料夾會把分類攤平，所以先講清楚會發生什麼事，再讓他決定
     ui.sConfirmText = el('div');
@@ -2685,31 +2680,27 @@ function gpnCreatePanel(opts) {
         el('button', { class: 'gpn-btn2', type: 'button', onclick: hideFolderConfirm }, '先不要')));
     ui.sConfirm.hidden = true;
 
+    // 備註：平常只有一顆「＋ 備註」，按了（或已經寫了）才出現輸入框
     ui.sNote = el('textarea', {
       class: 'gpn-textarea gpn-bm-note', rows: '3', maxlength: String(GPN_MAX_NOTE),
-      placeholder: '例如：寫信給客戶用的開頭、結尾；週報的格式…',
+      placeholder: '這個書籤裝的是做什麼用的', 'aria-label': '備註',
       oninput: onSettingsNote,
     });
+    ui.sNoteAdd = el('button', {
+      class: 'gpn-btn2 gpn-bm-note-add', type: 'button',
+      onclick: () => { ui.sNoteAdd.hidden = true; ui.sNoteBox.hidden = false; ui.sNote.focus(); },
+    }, '＋ 備註');
+    ui.sNoteBox = el('div', { class: 'gpn-bm-field' }, el('div', { class: 'gpn-label', text: '備註' }), ui.sNote);
     ui.bmEditor = el('div', { class: 'gpn-bm-editor' },
-      field('書籤名稱', null, ui.sName, ui.sNameHint),
-      field('書籤顏色', null, ui.sColor.node),
-      field('資料夾', null, ui.sSwitch, ui.sConfirm, ui.sFolderNote),
-      field('備註說明', '書籤名稱寫不下的，寫在這裡：這個書籤裝的提示詞是做什麼用的。點書籤旁邊的 i 就看得到', ui.sNote),
+      el('div', { class: 'gpn-bm-line' },
+        el('div', { class: 'gpn-bm-field is-grow' }, el('div', { class: 'gpn-label', text: '名稱' }), ui.sName, ui.sNameHint),
+        el('div', { class: 'gpn-bm-field' }, el('div', { class: 'gpn-label', text: '顏色' }), ui.sColor.node)),
+      el('div', { class: 'gpn-bm-field' }, ui.sSwitch, ui.sConfirm),
+      ui.sNoteAdd, ui.sNoteBox,
       ui.sDanger);
-    ui.bmList = el('div', { class: 'gpn-bm-list', role: 'list' });
+    ui.bmList = el('div', { class: 'gpn-orows', role: 'list' });
     const secTab = el('section', { class: 'gpn-section', 'data-section': 'tab' },
-      el('h3', { text: '書籤' }),
-      el('div', { class: 'gpn-note', text: '點一個書籤展開，就能改它的名稱、顏色、資料夾和備註；改了就存。' }),
-      ui.bmList);
-    // 點 i 以外的地方，打開著的備註就收起來
-    secTab.addEventListener('pointerdown', (e) => {
-      if (!bmInfoId) return;
-      const path = e.composedPath();
-      if (!path.some((n) => n.classList?.contains('gpn-bm-info') || n.classList?.contains('gpn-bm-pop'))) {
-        bmInfoId = null;
-        renderBookmarks();
-      }
-    });
+      el('h3', { text: '書籤' }), ui.bmList, ui.bmEditor);
 
     /* ---- 星號 ---- */
     const secMarks = buildMarksSection();
@@ -2770,8 +2761,7 @@ function gpnCreatePanel(opts) {
     if (tab.mark) resetMarkTab(tab);
     if ((section === 'account' || section === 'clones') && !hasAccount) section = 'other';
     settingsTabId = tabId;
-    bmInfoId = null;
-    openBookmark(tab.fixed || tab.id === GPN_MAIL_ID ? null : tab.id, false);
+    openBookmark(null, false);
     disarmTabDelete();
     resetBackup();
     resetAccount();
@@ -2779,16 +2769,18 @@ function gpnCreatePanel(opts) {
     showSection(section);
     showLayer(ui.settingsLayer);
     if (section === 'account') setTimeout(() => focusAccount(), 40);
+    noteView();
   }
 
   function closeSettings() {
     hideLayer(ui.settingsLayer);
     settingsTabId = null;
-    bmTabId = bmInfoId = null;
+    bmTabId = null;
     disarmTabDelete();
     disarmImport();
     disarmWipe();
     hideFolderConfirm();
+    noteView();
   }
 
   /**
@@ -2803,6 +2795,7 @@ function gpnCreatePanel(opts) {
       b.setAttribute('aria-selected', String(on));
     }
     for (const s of ui.sSections) s.hidden = s.getAttribute('data-section') !== key;
+    if (key === 'tab' && bmTabId) openBookmark(null, false);
     paintCrumb(key, viaOther && key !== 'other');
     ui.sBody.scrollTop = 0;
     hideFolderConfirm();
@@ -2812,6 +2805,7 @@ function gpnCreatePanel(opts) {
     toggleCloneInfo(false);
     if (key === 'clones') openClones();
     if (key === 'stats') renderStats();
+    noteView();
   }
 
   /** 設定左邊選單直接有的頁；其他的都在「其他」裡面 */
@@ -2824,13 +2818,15 @@ function gpnCreatePanel(opts) {
   /** 最上面的路徑（像 Windows 設定的「系統 › 顯示器」）：前面的一層可以點，點了回到「其他」 */
   function paintCrumb(key, viaOther) {
     const here = key === 'markTab' ? '這個符號' : SECTION_TITLES[key] || '';
-    ui.sCrumb.replaceChildren(...(viaOther
-      ? [
-          el('button', { class: 'gpn-crumb-up', type: 'button', title: '回到「其他」', onclick: () => showSection('other') }, '其他'),
-          el('span', { class: 'gpn-crumb-sep', 'aria-hidden': 'true', text: '›' }),
-          el('span', { class: 'gpn-crumb-here', 'aria-current': 'page', text: here }),
-        ]
-      : [el('span', { class: 'gpn-crumb-here', 'aria-current': 'page', text: here })]));
+    const up = (text, title, onclick) => [
+      el('button', { class: 'gpn-crumb-up', type: 'button', title, onclick }, text),
+      el('span', { class: 'gpn-crumb-sep', 'aria-hidden': 'true', text: '›' }),
+    ];
+    const bm = key === 'tab' ? tabById(bmTabId) : null;
+    ui.sCrumb.replaceChildren(
+      ...(viaOther ? up('其他', '回到「其他」', () => showSection('other')) : []),
+      ...(bm ? up(here, '回到書籤清單', () => openBookmark(null)) : []),
+      el('span', { class: 'gpn-crumb-here', 'aria-current': 'page', text: bm ? bm.label : here }));
   }
 
   /** 「其他」那一頁：一排一排（圖示、名稱、一句說明、右邊箭頭），點了進到那一頁 */
@@ -2886,51 +2882,41 @@ function gpnCreatePanel(opts) {
     renderBookmarks();
   }
 
-  /** 設定 → 書籤：自己的書籤（不含信箱）一排一個；展開著的那一個底下接著編輯區 */
+  /** 設定 → 書籤：沒點進去時是清單（自己的書籤，不含信箱，一排一個），點進去是那一個的設定 */
   function renderBookmarks() {
     const own = data.tabs.filter((t) => !t.fixed && t.id !== GPN_MAIL_ID);
     if (bmTabId && !own.some((t) => t.id === bmTabId)) bmTabId = null;
-    // 編輯區整塊搬到新的那一排；正在打字的話，搬完把游標放回去（雲端同步進來時也會重畫）
-    const focused = ui.bmList.getRootNode().activeElement;
-    const keep = focused && ui.bmEditor.contains(focused) ? focused : null;
-    ui.bmList.replaceChildren(...own.map((t) => {
-      const open = t.id === bmTabId;
-      const info = t.id === bmInfoId;
-      const n = gpnTabItemCount(t);
-      return el('div', { class: 'gpn-bm-row' + (open ? ' is-open' : ''), role: 'listitem', 'data-id': t.id },
-        el('div', { class: 'gpn-bm-head' },
-          el('button', {
-            class: 'gpn-bm-main', type: 'button', 'aria-expanded': String(open),
-            onclick: () => openBookmark(open ? null : t.id),
-          },
-            el('span', { class: 'gpn-color-dot', 'data-color': t.color }),
-            el('span', { class: 'gpn-bm-name', text: t.label }),
-            el('span', { class: 'gpn-bm-count', text: (t.folders ? `${t.folders.length} 個資料夾・` : '') + `${n} 則` }),
-            el('span', { class: 'gpn-bm-caret', 'aria-hidden': 'true' })),
-          el('button', {
-            class: 'gpn-info-btn gpn-bm-info' + (info ? ' is-on' : '') + (t.note ? '' : ' is-empty'), type: 'button', html: ICON_INFO,
-            title: t.note ? '看備註' : '還沒有備註', 'aria-label': `「${t.label}」的備註`, 'aria-expanded': String(info),
-            onclick: () => { bmInfoId = info ? null : t.id; renderBookmarks(); },
-          })),
-        info ? el('div', { class: 'gpn-info-pop gpn-bm-pop', role: 'note' },
-          t.note ? el('p', { class: 'gpn-bm-pop-text', text: t.note }) : el('p', { class: 'gpn-note', text: '這個書籤還沒有備註。' }),
-          el('button', {
-            class: 'gpn-link', type: 'button',
-            onclick: () => { bmInfoId = null; openBookmark(t.id); ui.sNote.focus(); },
-          }, t.note ? '修改備註' : '寫備註')) : null,
-        open ? ui.bmEditor : null);
-    }));
+    ui.bmList.hidden = !!bmTabId;
+    ui.bmEditor.hidden = !bmTabId;
     if (bmTabId) refreshBmEditor();
-    if (keep && keep.isConnected) keep.focus({ preventScroll: true });
+    else {
+      ui.bmList.replaceChildren(...own.map((t) => {
+        const n = gpnTabItemCount(t);
+        return el('button', {
+          class: 'gpn-orow gpn-bm-row', type: 'button', role: 'listitem', 'data-id': t.id, onclick: () => openBookmark(t.id),
+        },
+          el('span', { class: 'gpn-orow-icon' }, el('span', { class: 'gpn-color-dot', 'data-color': t.color })),
+          el('span', { class: 'gpn-orow-main' },
+            el('span', { class: 'gpn-orow-title', text: t.label }),
+            // 有備註就顯示備註，沒有就顯示裡面有多少
+            el('span', { class: 'gpn-orow-sub', text: t.note || ((t.folders ? `${t.folders.length} 個資料夾・` : '') + `${n} 則`) })),
+          el('span', { class: 'gpn-orow-go' }));
+      }));
+    }
+    if (!ui.sSections.find((s) => s.getAttribute('data-section') === 'tab').hidden) {
+      paintCrumb('tab', ui.sOtherNav.classList.contains('is-active'));
+    }
   }
 
-  /** 展開（或收起：id 是 null）設定 → 書籤 裡的一個書籤 */
+  /** 點進某一個書籤（id 是 null：回到書籤清單） */
   function openBookmark(id, paint = true) {
     bmTabId = id;
     const tab = tabById(id);
     if (tab) {
       ui.sName.value = tab.label;
       ui.sNote.value = tab.note || '';
+      ui.sNoteAdd.hidden = !!tab.note;
+      ui.sNoteBox.hidden = !tab.note;
     }
     ui.sName.classList.remove('is-bad');
     ui.sNameHint.classList.remove('is-on');
@@ -2939,37 +2925,26 @@ function gpnCreatePanel(opts) {
     disarmTabDelete();
     if (paint) {
       renderBookmarks();
-      ui.bmList.querySelector('.gpn-bm-row.is-open')?.scrollIntoView({ block: 'nearest' });
+      ui.sBody.scrollTop = 0;
+      noteView();
     }
   }
 
-  /** 展開著的那一個書籤：顏色、資料夾開關、刪除說明（名稱、備註是輸入框本身，不重填，免得打字打到一半被蓋掉） */
+  /** 點進去的那一個書籤：顏色、資料夾開關（名稱、備註是輸入框本身，不重填，免得打字打到一半被蓋掉） */
   function refreshBmEditor() {
     const tab = tabById(bmTabId);
     if (!tab) return;
-    const n = gpnTabItemCount(tab);
     ui.sColor.set(tab.color);
-
     const on = !!tab.folders;
     ui.sSwitch.setAttribute('aria-checked', String(on));
-    ui.sSwitchState.textContent = on ? `開啟中・${tab.folders.length} 個資料夾` : '關閉中';
-    ui.sFolderNote.textContent = on
-      ? '新增、改名資料夾在主畫面左邊那一欄'
-      : n ? `開啟後，現有的 ${n} 則會先放進「${GPN_DEFAULT_FOLDER}」` : '';
-
+    ui.sSwitchState.textContent = on ? `開啟中・${tab.folders.length} 個` : '關閉中';
     ui.sDanger.hidden = data.tabs.length <= 1;        // 最後一個書籤不給刪
-    ui.sDelNote.textContent = n ? `裡面的 ${n} 則提示詞會一起移到資源回收桶（需要時可以還原）` : '';
   }
 
-  /** 書籤那一排上的名稱、顏色跟著改（不重畫整排，正在打字的輸入框才不會跑掉） */
+  /** 改了名稱：路徑上的名字跟著改 */
   function paintBmRow(tab) {
-    const row = ui.bmList.querySelector(`.gpn-bm-row[data-id="${tab.id}"]`);
-    if (!row) return;
-    row.querySelector('.gpn-bm-name').textContent = tab.label;
-    row.querySelector('.gpn-color-dot').setAttribute('data-color', tab.color);
-    const i = row.querySelector('.gpn-bm-info');
-    i.classList.toggle('is-empty', !tab.note);
-    i.title = tab.note ? '看備註' : '還沒有備註';
+    const here = ui.sCrumb.querySelector('.gpn-crumb-here');
+    if (here && tab.id === bmTabId) here.textContent = tab.label;
   }
 
   function onSettingsName() {
@@ -5388,6 +5363,100 @@ function gpnCreatePanel(opts) {
     // 每次打開都跟雲端對一下：別台剛改的東西，這裡馬上看得到
     cloud?.syncNow();
     if (cloud) noticeInbox();
+    startHistory();
+  }
+
+  /* ==========================================================================
+     上一頁、下一頁（4.37.0）：滑鼠側邊的「上一頁」「下一頁」鍵、Alt＋←／→、瀏覽器的返回鍵，
+     都在罐頭P 裡面往回、往前，不會跳出網頁。
+     每換一個畫面（書籤、資料夾、設定的哪一頁、點進哪個書籤、資源回收桶）就在瀏覽器的歷史記錄裡記一筆，
+     按返回時照那一筆把畫面擺回去（擺回去的時候不再記）。最早那一筆前面墊了一筆（root），
+     退到那裡就再往前記一筆，所以一直按上一頁也不會離開罐頭P。新手教學中，上一頁、下一頁就是教學的上一頁、下一頁。
+     ========================================================================== */
+  let viewApplying = false, viewQueued = false, historyOn = false;
+
+  const shownSection = () => ui.sSections.find((s) => !s.hidden)?.getAttribute('data-section') || 'other';
+  function viewNow() {
+    const set = layerOpen(ui.settingsLayer) ? shownSection() : '';
+    return {
+      gpn: 1, tab: data.activeId, folder: folderId || '',
+      set, via: !!set && set !== 'other' && ui.sOtherNav.classList.contains('is-active'),
+      bm: set === 'tab' ? bmTabId || '' : '',
+    };
+  }
+  const sameView = (a, b) => ['tab', 'folder', 'set', 'via', 'bm'].every((k) => a?.[k] === b?.[k]) && a?.tut == null;
+
+  /** 畫面換了：記一筆（同一輪換好幾次的只記最後的樣子） */
+  function noteView() {
+    if (!historyOn || viewApplying || tut || viewQueued) return;
+    viewQueued = true;
+    queueMicrotask(() => {
+      viewQueued = false;
+      if (tut) return;
+      const now = viewNow();
+      if (!sameView(history.state, now)) history.pushState(now, '');
+    });
+  }
+
+  function startHistory() {
+    if (historyOn || !standalone) return;
+    historyOn = true;
+    history.replaceState({ ...viewNow(), root: true }, '');
+    history.pushState(viewNow(), '');
+    window.addEventListener('popstate', (e) => {
+      const v = e.state;
+      if (!v?.gpn) return;
+      if (tut) {
+        // 教學中：照那一筆的頁數換頁；退到教學開始之前就結束教學
+        if (v.tut != null) { viewApplying = true; tutGo(v.tut); viewApplying = false; }
+        else { endTut(false); applyView(v); }
+        return;
+      }
+      if (v.tut != null) { history.pushState(viewNow(), ''); return; }   // 往前跑到已經結束的教學：留在原地
+      applyView(v);
+      if (v.root) history.pushState(viewNow(), '');
+    });
+  }
+
+  /** 照記下來的那一筆把畫面擺回去 */
+  function applyView(v) {
+    // 正在新增、修改提示詞：打了字的先不動，免得白打
+    if (layerOpen(ui.editLayer)) {
+      if (editorDirty()) {
+        toast('還沒儲存喔，請按「儲存」或「取消」');
+        history.pushState(viewNow(), '');
+        return;
+      }
+      closeEditor();
+    }
+    viewApplying = true;
+    try {
+      closeCardMenu();
+      for (const [layer, shut] of [[ui.newTabLayer, closeNewTab], [ui.folderLayer, closeFolderEditor],
+        [ui.cPickLayer, closePick], [ui.shareLayer, closeShare]]) {
+        if (layer && layerOpen(layer)) shut();
+      }
+      if (searchQ !== null) exitSearch(false);
+      if (tabById(v.tab) && (v.tab !== data.activeId || (v.folder || null) !== folderId)) {
+        const changed = v.tab !== data.activeId;
+        trashSel = new Set();
+        data.activeId = v.tab;
+        folderId = v.folder || null;
+        if (changed) updateTabStates(true);
+        renderFolders();
+        renderList();
+        revealActiveFolder();
+      }
+      if (v.set) {
+        if (!layerOpen(ui.settingsLayer)) openSettings(data.activeId, v.set);
+        showSection(v.set, v.via);
+        if (v.bm && tabById(v.bm)) openBookmark(v.bm);
+      } else if (layerOpen(ui.settingsLayer)) {
+        closeSettings();
+      }
+    } finally {
+      viewApplying = false;
+    }
   }
 
   /*
@@ -5469,7 +5538,6 @@ function gpnCreatePanel(opts) {
     } else if (layerOpen(ui.settingsLayer)) {
       if (ui.cInfo && !ui.cInfo.hidden) toggleCloneInfo(false);
       else if (cRenameOpen) { cRenameOpen = ''; refreshClones(); }      // 改分身名稱改到一半：不改了
-      else if (bmInfoId) { bmInfoId = null; renderBookmarks(); }
       else if (cMenuOpen) closeCloneMenu(true);
       else if (!ui.sConfirm.hidden) hideFolderConfirm();
       else closeSettings();
@@ -5727,6 +5795,7 @@ function gpnCreatePanel(opts) {
     folderId = real.folder;
     render();
     revealActiveFolder();
+    noteView();
     toast(done ? '教學結束，已經換回你自己的筆記本。想再看一次：設定 → 其他 → 新手教學'
       : '已跳過教學，換回你自己的筆記本了。想再看：設定 → 其他 → 新手教學', false, 5200);
   }
@@ -5953,6 +6022,7 @@ function gpnCreatePanel(opts) {
     if (pg.draw) tut.notes.append(pg.draw());
     tut.next.focus({ preventScroll: true });
     tutPaint();
+    if (historyOn && !viewApplying) history.pushState({ gpn: 1, tut: i }, '');
   }
 
   /** 每 0.2 秒照著現在的版面重畫箭頭（他可能拖了東西、捲了清單） */

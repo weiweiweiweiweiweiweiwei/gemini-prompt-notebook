@@ -2439,46 +2439,25 @@ section[data-section="markTab"] .gpn-note--roomy { margin: 4px 0 16px; }
   100% { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0), 0 0 18px 4px rgba(255, 255, 255, 0); }
 }
 
-/* 設定 → 書籤：所有書籤一排一個，點一下展開編輯區；右邊的 i 打開備註 */
-.gpn-bm-list { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
-.gpn-bm-row {
-  position: relative;
-  border: 1px solid var(--outline);
-  border-radius: 16px;
-  background: var(--surface-input);
-}
-.gpn-bm-row.is-open { border-color: var(--outline-strong); }
-.gpn-bm-head { display: flex; align-items: center; gap: 4px; padding-right: 8px; }
-.gpn-bm-main {
-  flex: 1; min-width: 0;
-  display: flex; align-items: center; gap: 10px;
-  min-height: 52px; padding: 8px 8px 8px 16px;
-  border: 0; border-radius: 16px;
-  background: none; color: var(--text); font: inherit; text-align: left;
-  cursor: pointer;
-}
-.gpn-bm-main:hover { background: var(--hover); }
-.gpn-bm-main:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
-.gpn-bm-main .gpn-color-dot { flex: none; }
-.gpn-bm-name { flex: 1; min-width: 0; font-size: 15.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gpn-bm-count { flex: none; font-size: 13px; color: var(--text-mute); }
-.gpn-bm-caret {
-  flex: none;
-  width: 7px; height: 7px; margin: -3px 4px 0 6px;
-  border-right: 2px solid var(--text-mute);
-  border-bottom: 2px solid var(--text-mute);
-  transform: rotate(45deg);
-  transition: transform .16s ease, margin .16s ease;
-}
-.gpn-bm-row.is-open .gpn-bm-caret { transform: rotate(-135deg); margin-top: 3px; }
-.gpn-bm-info { margin-top: 0; }
-.gpn-bm-info.is-empty { opacity: .45; }
-.gpn-bm-info.is-empty:hover, .gpn-bm-info.is-empty.is-on { opacity: 1; }
-.gpn-bm-pop { top: 50px; right: 8px; }
-.gpn-bm-pop-text { white-space: pre-wrap; overflow-wrap: anywhere; }
-.gpn-bm-pop .gpn-link { margin-top: 10px; padding: 0; border: 0; background: none; font-size: 14px; }
-.gpn-bm-editor { padding: 4px 16px 16px; border-top: 1px solid var(--outline); }
-.gpn-bm-note { min-height: 76px; resize: vertical; }
+/* 設定 → 其他 › 書籤 › 工作：名稱、顏色同一行；資料夾的小開關；備註平常只有「＋ 備註」；刪除在最下面 */
+.gpn-bm-row .gpn-color-dot { width: 16px; height: 16px; }
+.gpn-bm-editor { display: flex; flex-direction: column; gap: 16px; max-width: 560px; }
+.gpn-bm-line { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.gpn-bm-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.gpn-bm-field.is-grow { flex: 1 1 220px; }
+.gpn-bm-field .gpn-label { margin: 0; }
+.gpn-bm-note { min-height: 70px; resize: vertical; }
+.gpn-bm-note-add { align-self: flex-start; }
+.gpn-bm-danger { padding-top: 14px; border-top: 1px solid var(--glass-line); }
+.gpn-bm-del { min-width: 0; }
+/* 小一號的開關（設定 → 書籤 的使用資料夾） */
+.gpn-switch-row.is-small { align-self: flex-start; width: auto; gap: 12px; padding: 8px 14px 8px 10px; border-radius: 12px; }
+.gpn-switch-row.is-small .gpn-switch-text { flex-direction: row; align-items: baseline; gap: 8px; }
+.gpn-switch-row.is-small .gpn-switch-text b { font-size: 15px; }
+.gpn-switch-row.is-small .gpn-switch-text span { font-size: 13.5px; }
+.gpn-switch-row.is-small .gpn-switch { width: 40px; height: 24px; border-radius: 12px; }
+.gpn-switch-row.is-small .gpn-switch::after { top: 3px; left: 3px; width: 18px; height: 18px; }
+.gpn-switch-row.is-small[aria-checked="true"] .gpn-switch::after { transform: translateX(16px); }
 
 /* 設定 → 使用次數：前十名，名次、標題（底下是在哪裡、一條長度代表次數）、次數 */
 .gpn-stats { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }

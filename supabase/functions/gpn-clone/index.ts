@@ -2,7 +2,7 @@
  * 罐頭P：分身的中繼（Supabase Edge Function）
  *
  * 分身是什麼：建立的人（用自己的 Google 帳號）勾選一些提示詞，複製一份成「分身」，得到一組 16 碼的代號。
- * 同事沒有 Google 帳號，輸入代號就能使用、編輯。見 src/sync.js 的「分身」。
+ * 同事沒有 Google 帳號，輸入代號就能使用、編輯。見 web/sync.js 的「分身」。
  *
  * 分身的提示詞存在建立的人「自己的」Google 雲端硬碟（一個分身一個檔案）。同事碰不到那個雲端硬碟，
  * 所以由這裡代為讀寫：建立分身時，建立的人把他的 refresh token 交給這裡加密保管；
@@ -39,7 +39,7 @@
  *     read   { id }          → 同上 + data（檔案內容，JSON 文字）
  *     write  { id, data }    → { fileId, version }
  *     avatar { id, avatar }  換頭像（頭像的代號）
- *   分享（主人和分身之間互相傳提示詞，見 src/sync.js 的「分享」）
+ *   分享（主人和分身之間互相傳提示詞，見 web/sync.js 的「分享」）
  *     peers  { id }                  → { me, peers: [{ key, label, avatar, picture?, email? }] }  可以分享給誰
  *     share  { id, to: [key], item }  寄出一則提示詞 { title, content }（一個收件人一個小檔案，放在建立的人的雲端硬碟）
  *     inbox  { id }                  → { shares: [{ id, from, item, at, kept }] }  寄給我的
@@ -376,7 +376,7 @@ const ops: Record<string, (b: Record<string, unknown>) => Promise<unknown>> = {
     return { fileId: c.fileId, version: c.version, ...c.info, data };
   },
 
-  /** 用分身的人換頭像（頭像的代號，見 src/avatars.js） */
+  /** 用分身的人換頭像（頭像的代號，見 web/avatars.js） */
   async avatar(b) {
     const avatar = String(b.avatar || '');
     if (!/^[a-z]{1,20}$/.test(avatar)) throw new Fail(400, 'bad_request');

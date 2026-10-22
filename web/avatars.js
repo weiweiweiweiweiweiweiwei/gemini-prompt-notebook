@@ -1,6 +1,5 @@
 /**
  * 分身的頭像（4.24.0）：全部用 SVG 畫，不用放圖片檔。
- * src/avatars.js 和 web/avatars.js 必須一字不差（tools/checksync.py 會檢查）。
  *
  * 分身沒有 Google 大頭貼，所以建立的時候挑一個（預設隨便抽一個），之後建立的人、用分身的人都可以換。
  * 選了哪一個（id，只能是小寫英文字母）記在分身檔案的 appProperties（avatar），見 sync.js 的「分身」。

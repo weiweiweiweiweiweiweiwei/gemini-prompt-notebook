@@ -1,6 +1,5 @@
 /**
- * 罐頭P 的音效檔（用 data: 網址內嵌，外掛、網頁版、直接開檔案都不用另外下載）。
- * src/sounds.js 和 web/sounds.js 必須一字不差（tools/checksync.py 會檢查）。
+ * 罐頭P 的音效檔（用 data: 網址內嵌，直接開檔案也不用另外下載）。
  *
  * GPN_SOUND_TAB：換書籤時的「卡嚓」。
  *   來源：Pixabay「button press」（dragon-studio），Pixabay Content License，可免費商用、不用標註。
