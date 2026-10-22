@@ -22,7 +22,7 @@
  * 版本號，顯示在設定視窗左下角。外掛和網頁版看到的數字一樣，才代表兩邊是同一版。
  * 要和 manifest.json 的 version 一致，tools/checksync.py 會檢查。
  */
-const GPN_APP_VERSION = '4.34.0';
+const GPN_APP_VERSION = '4.35.0';
 
 /**
  * 卡片「⋮ → 開啟 Gemini／ChatGPT」時，外掛先把提示詞放在這裡，新分頁裡的 content.js 讀到就填進輸入框。
@@ -118,9 +118,6 @@ function gpnCreatePanel(opts) {
   /** 長條圖：設定裡的「使用次數」 */
   const ICON_CHART =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z"/></svg>';
-  /** 學士帽：設定裡的「新手教學」 */
-  const ICON_SCHOOL =
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3 1 9l11 6 9-4.91V17h2V9L12 3z"/></svg>';
 
   /** 條列：「全部提示詞」頁 */
   const ICON_LIST =
@@ -2375,6 +2372,7 @@ function gpnCreatePanel(opts) {
     const dest = listOf(to.tabId, to.folderId) || src;
     if (!src || !dest) return;
     const moved = dest !== src;
+    let added = '';
 
     if (editing.id) {
       const idx = src.items.findIndex((it) => it.id === editing.id);
@@ -2386,7 +2384,9 @@ function gpnCreatePanel(opts) {
       }
       toast(moved ? `已搬到「${whereLabel(to.tabId, to.folderId)}」` : '已儲存修改');
     } else {
-      dest.items.push({ id: gpnNewId(), title, content });
+      // 新增的放最上面：剛加的那則一眼就看得到，不用捲到最下面找
+      added = gpnNewId();
+      dest.items.unshift({ id: added, title, content });
       toast(moved ? `已新增到「${whereLabel(to.tabId, to.folderId)}」` : '已新增提示詞');
     }
 
@@ -2394,6 +2394,7 @@ function gpnCreatePanel(opts) {
     await persist();
     closeEditor();
     render();
+    if (added) revealItem(added);
   }
 
   /** 編輯到一半按 Esc：有改過就不關，避免打好的字不見 */
@@ -2632,14 +2633,15 @@ function gpnCreatePanel(opts) {
       class: 'gpn-nav-item gpn-nav-item--go', type: 'button', onclick,
     }, el('span', { class: 'gpn-nav-icon', html: icon }), el('span', { class: 'gpn-nav-text', text }));
     ui.sTrashNav = navGo(ICON_DELETE, '資源回收桶', openTrash);
+    ui.sTrashNav.classList.add('gpn-nav-bottom');        // 排在最下面（版本號上面），和設定頁分開
     ui.sOtherNav = navItem('other', ICON_APPS, '其他');
     ui.sNavItems.push(ui.sOtherNav);
     const nav = el('nav', { class: 'gpn-settings-nav', role: 'tablist', 'aria-orientation': 'vertical' },
       el('h2', { text: '設定' }),
       ui.sNavGroup, navMarkTab,
       ui.sNavAll = el('div', { class: 'gpn-nav-group', text: '一般' }), ...navAll,
-      ui.sTrashNav,
       ui.sOtherNav,
+      ui.sTrashNav,
       // 外掛和網頁版長得不一樣時，先看這裡的數字是不是一樣
       el('div', {
         class: 'gpn-nav-version',
@@ -2723,14 +2725,13 @@ function gpnCreatePanel(opts) {
     /* ---- 背景 ---- */
     const secLook = standalone ? buildLookSection() : null;
 
-    /* ---- 使用次數、新手教學 ---- */
+    /* ---- 使用次數 ---- */
     const secStats = buildStatsSection();
-    const secGuide = buildGuideSection();
 
     /* ---- 其他：其餘的設定一排一排列出來，點了進去 ---- */
     const secOther = buildOtherSection();
 
-    ui.sSections = [secOther, secTab, secMarkTab, secMarks, secStats, secAccount, secClones, secBackup, secLook, secGuide].filter(Boolean);
+    ui.sSections = [secOther, secTab, secMarkTab, secMarks, secStats, secAccount, secClones, secBackup, secLook].filter(Boolean);
     // 頁面的名稱改由最上面的路徑（其他 › 備份）顯示，各頁自己的大標題就不重複了
     for (const sec of ui.sSections) {
       const h = sec.querySelector(':scope > h3, :scope > .gpn-section-head > h3');
@@ -2812,7 +2813,7 @@ function gpnCreatePanel(opts) {
   const NAV_SECTIONS = new Set(['other', 'markTab', 'account', 'clones']);
   const SECTION_TITLES = {
     other: '其他', tab: '書籤', marks: '星號', stats: '使用次數', account: '帳號', clones: '分身',
-    backup: '備份', look: '背景', guide: '新手教學',
+    backup: '備份', look: '背景',
   };
 
   /** 最上面的路徑（像 Windows 設定的「系統 › 顯示器」）：前面的一層可以點，點了回到「其他」 */
@@ -2839,16 +2840,13 @@ function gpnCreatePanel(opts) {
         el('span', { class: 'gpn-orow-title', text: title }),
         el('span', { class: 'gpn-orow-sub', text: sub })),
       el('span', { class: 'gpn-orow-go' + (extra ? ' is-out' : ''), html: extra ? ICON_OPEN : '' }));
-    ui.oAccount = cloud ? row('account', ICON_ACCOUNT, '帳號', '登入的 Google 帳號、同步狀態、登出') : null;
     return el('section', { class: 'gpn-section', 'data-section': 'other' },
       el('div', { class: 'gpn-orows' },
         row('tab', ICON_TAB, '書籤', '所有書籤的名稱、顏色、資料夾、備註'),
         row('marks', ICON_STAR, '星號', '連續點星號時要換哪幾種符號'),
-        ui.oAccount,
         standalone ? row('look', ICON_IMAGE, '背景', '深淺主題、背景圖') : null,
         row('backup', ICON_SYNC, '備份', '下載成備份檔、從備份檔匯入'),
         row('stats', ICON_CHART, '使用次數', '最常使用的前十名提示詞'),
-        row('guide', ICON_SCHOOL, '新手教學', '一步一步帶你操作一遍'),
         allPageUrl ? row('all', ICON_LIST, '全部提示詞', '所有提示詞的完整內容列在同一頁（在新分頁打開）', {
           href: allPageUrl, target: '_blank', rel: 'noopener',
           title: '所有書籤的提示詞，完整內容用純文字列在同一頁（方便「問問 Gemini」讀）；在新分頁打開',
@@ -2878,7 +2876,6 @@ function gpnCreatePanel(opts) {
       if (key === 'markTab') b.hidden = !tab.mark;
       if (key === 'account') b.hidden = !cloudState.configured;
     }
-    if (ui.oAccount) ui.oAccount.hidden = !cloudState.configured;
     renderBookmarks();
   }
 
@@ -5361,14 +5358,47 @@ function gpnCreatePanel(opts) {
   async function open() {
     data = await GpnStore.load();
     await migrateLook();
+    if (removeTourData()) persist();
+    landed = false;
+    const jumped = landOnLastUse();
     render();
     syncLook();
     ui.overlay.classList.add('is-open');
     revealActiveFolder();
+    if (jumped) revealLastUse();
     onOpenChange(true);
     // 每次打開都跟雲端對一下：別台剛改的東西，這裡馬上看得到
     cloud?.syncNow();
     if (cloud) noticeInbox();
+  }
+
+  /*
+   * 回到最後一次使用的地方：最近使用的第一則（最近使用跟著雲端同步、兩台合併取最新的），
+   * 打開時切到它現在所在的書籤、資料夾，捲到它那裡。這樣換一台電腦打開，也會接著上一台的位置。
+   * landedAt：已經跳過的那一次使用（同一個分頁裡關掉再打開面板，沒有新的使用就不再跳，留在自己看的地方）。
+   */
+  let landed = false, landedAt = 0;
+  function landOnLastUse() {
+    const r = (data.recent || [])[0];
+    if (!r || r.usedAt <= landedAt) return false;
+    const at = indexItems().get(r.id);
+    if (!at) return false;
+    landedAt = r.usedAt;
+    if (searchQ !== null) exitSearch(false);
+    data.activeId = at.tab.id;
+    folderId = at.folder ? at.folder.id : null;
+    return true;
+  }
+
+  /** 捲到最後用的那則。剛打開時樣式表可能還沒載入（清單還不會捲），所以過一下再捲幾次；他自己動了就停 */
+  function revealLastUse() {
+    const id = (data.recent || [])[0]?.id;
+    const go = () => {
+      const card = id && [...ui.list.querySelectorAll('.gpn-card')].find((n) => n.getAttribute('data-id') === id);
+      card?.scrollIntoView({ block: 'center' });
+    };
+    go();
+    for (const ms of [120, 400, 1000]) setTimeout(() => { if (!landed) go(); }, ms);
   }
 
   function close() {
@@ -5462,9 +5492,14 @@ function gpnCreatePanel(opts) {
       staleWhileLayer = true;
       if (layerOpen(ui.settingsLayer)) refreshSettings();   // 設定裡的數字（幾則、幾個資料夾）先更新
     } else {
+      // 剛打開、還沒動過畫面時，雲端帶來別台電腦更新的使用記錄：跳到那台最後用的那則
+      const jumped = !landed && landOnLastUse();
       render();
+      if (jumped) { revealActiveFolder(); revealLastUse(); }
     }
   });
+  // 打開之後自己點了任何地方，就不再自動跳（免得雲端同步完把正在看的畫面換掉）
+  root.addEventListener('pointerdown', () => { landed = true; }, true);
 
   if (cloud) {
     cloud.onState((s) => refreshCloud(s));
@@ -5532,69 +5567,9 @@ function gpnCreatePanel(opts) {
     revealItem(id);
   }
 
-  /* ==========================================================================
-     新手教學：一步一步帶著做（像很多網頁軟體第一次登入時的導覽）。
-     畫面變暗，只有要操作的地方是亮的；說明框告訴他要點哪裡，他真的做了才會進下一步
-     （只是說明的步驟按「下一步」）。右上角一直有「跳過教學」。
-     為了不動到他自己的提示詞，開始時建一個「新手練習」書籤（兩個資料夾、三則練習用的提示詞），
-     所有操作都在這個書籤裡做；結束或跳過時整個拿掉（我的最愛、最近使用、回收桶、使用次數裡的也一起清掉）。
-     不會自動出現，要用時到 設定 → 新手教學。
-     ========================================================================== */
-
-  function buildGuideSection() {
-    ui.gStartMsg = el('div', { class: 'gpn-note gpn-note--status', role: 'status' });
-    return el('section', { class: 'gpn-section', 'data-section': 'guide' },
-      el('h3', { text: '新手教學' }),
-      el('p', { class: 'gpn-guide-lead', text: '一步一步帶你操作一遍：使用提示詞、我的最愛、編輯、新增、拖曳排序和搬家、' +
-        '拷貝、刪除和資源回收桶、搜尋，還有設定裡的書籤備註、星號、使用次數、分身、備份。' }),
-      el('div', { class: 'gpn-note', text: '教學會先建一個「新手練習」書籤讓你練習，結束後自動刪掉，不會動到你自己的提示詞。' +
-        '每一步畫面上亮著的地方就是要點的地方，照著做就會到下一步；不想看了按右上角的「跳過教學」。大約 5 分鐘。' }),
-      el('div', { class: 'gpn-brow' },
-        el('button', { class: 'gpn-btn gpn-btn--save', type: 'button', onclick: startTour }, '開始教學')),
-      ui.gStartMsg);
-  }
-
-  let tour = null;
-  const TOUR_PREFIX = 't_tour_';
-
-  /** 練習書籤、練習提示詞的 id 都有記號，跳過、關掉分頁留下來的，下次開始教學時一起清掉 */
-  const isTourTab = (id) => String(id || '').startsWith(TOUR_PREFIX);
-
-  function startTour() {
-    if (tour) return;
-    removeTourData();
-    if (ownTabs().length >= GPN_MAX_TABS) {
-      ui.gStartMsg.textContent = `書籤已經有 ${GPN_MAX_TABS} 個了，教學需要多建一個練習用的書籤。請先刪掉一個書籤再開始。`;
-      ui.gStartMsg.classList.add('is-bad');
-      return;
-    }
-    ui.gStartMsg.textContent = '';
-    const k = Math.random().toString(36).slice(2, 7);
-    const ids = { tab: TOUR_PREFIX + k, fa: 'f_tour_a_' + k, fb: 'f_tour_b_' + k, p1: 'p_tour_1_' + k, p2: 'p_tour_2_' + k, p3: 'p_tour_3_' + k };
-    data.tabs.push({
-      id: ids.tab, label: '新手練習', color: 'green',
-      note: '新手教學用的練習書籤，教學結束會自動刪掉。',
-      folders: [
-        { id: ids.fa, label: '一般', items: [
-          { id: ids.p1, title: '練習：寫一封感謝信', content: '請幫我寫一封簡短、真誠的感謝信，對象是：' },
-          { id: ids.p2, title: '練習：濃縮成三個重點', content: '請把下面這段文字濃縮成三個重點，每點一句話：' },
-          { id: ids.p3, title: '練習：翻成英文', content: '請把下面這段翻成自然的英文：' },
-        ] },
-        { id: ids.fb, label: '練習用', items: [] },
-      ],
-    });
-    tour = { i: -1, ids, back: data.activeId, base: 0, order: '', timer: 0, steps: tourSteps(ids) };
-    closeSettings();
-    if (searchQ !== null) exitSearch(false);
-    data.activeId = ids.tab;
-    folderId = ids.fa;
-    persist();
-    renderTabs();
-    render();
-    revealActiveFolder();
-    buildTourLayer();
-    tourGo(0);
-  }
+  /* ---- 舊版新手教學（4.33.0、4.34.0）留下的「新手練習」書籤 ----
+     那一版開始教學時會建一個練習用的書籤，教學中途關掉分頁的話會留下來；打開時順手清掉。 */
+  const isTourTab = (id) => String(id || '').startsWith('t_tour_');
 
   /** 練習書籤和它的提示詞，從所有地方拿掉 */
   function removeTourData() {
@@ -5615,254 +5590,6 @@ function gpnCreatePanel(opts) {
     for (const id of gone) delete uses[id];
     data.uses = uses;
     return true;
-  }
-
-  /** 教學結束（做完或跳過）：關掉說明，拿掉練習書籤，回到開始前在看的書籤 */
-  function endTour(done) {
-    if (!tour) return;
-    clearInterval(tour.timer);
-    window.removeEventListener('resize', tourPaint);
-    const back = tour.back;
-    tour.layer.remove();
-    tour = null;
-    closeCardMenu();
-    if (layerOpen(ui.editLayer)) hideLayer(ui.editLayer);
-    if (layerOpen(ui.settingsLayer)) closeSettings();
-    if (searchQ !== null) exitSearch(false);
-    trashSel = new Set();
-    removeTourData();
-    data.activeId = tabById(back) && !isTourTab(back) ? back : data.tabs[0].id;
-    folderId = null;
-    persist();
-    renderTabs();
-    render();
-    revealActiveFolder();
-    toast(done ? '教學完成！練習用的書籤已經刪掉了。之後想再看，到 設定 → 新手教學' : '已跳過教學。之後想再看，到 設定 → 新手教學', false, 5200);
-  }
-
-  /* ---- 教學的每一步 ----
-     at：要亮起來、讓他操作的地方（找不到就整個畫面變暗、說明框放中間）
-     wait：做到了沒有（做到了自動到下一步）；沒有 wait 的是說明，按「下一步」
-     enter：進到這一步之前先準備好畫面 */
-  function tourSteps(ids) {
-    const q = (sel) => root.querySelector(sel);
-    const card = (id) => [...ui.list.querySelectorAll('.gpn-card')].find((n) => n.getAttribute('data-id') === id) || null;
-    const firstCard = () => ui.list.querySelector('.gpn-card');
-    const tabEl = (id) => ui.tabEls?.get(id) || null;
-    const nav = (key) => ui.sNavItems.find((b) => b.getAttribute('data-section') === key) || null;
-    const practice = () => tabById(ids.tab);
-    const count = () => (practice() ? gpnTabItemCount(practice()) : 0);
-    const listB = () => listOf(ids.tab, ids.fb);
-    const inPractice = () => {
-      if (data.activeId !== ids.tab || searchQ !== null) { data.activeId = ids.tab; if (searchQ !== null) exitSearch(false); persist(); updateTabStates(true); }
-    };
-    const toFolder = (fid) => () => { inPractice(); if (folderId !== fid) { folderId = fid; } renderFolders(); renderList(); };
-    const settingsOn = (key) => () => {
-      if (!layerOpen(ui.settingsLayer)) openSettings(data.activeId, key);
-      else showSection(key);
-    };
-    const orow = (key) => ui.sSections[0].querySelector(`.gpn-orow[data-go="${key}"]`);
-    const trashed = () => trashList().find((r) => r.tabId === ids.tab) || null;
-    const online = !!cloud && !!cloudState.configured;      // 雲端沒設定好的地方，設定裡沒有帳號、分身那兩頁
-    const steps = [
-      { title: '歡迎使用罐頭P', text: '接下來一步一步帶你操作一遍。為了不動到你自己的提示詞，已經幫你建好一個「新手練習」書籤，' +
-          '裡面有三則練習用的提示詞，教學結束會自動刪掉。\n\n畫面上亮著的地方，就是現在要操作的地方。隨時可以按右上角的「跳過教學」。',
-        at: () => null },
-      { title: '書籤', text: '最上面一排是書籤，用來分類提示詞（例如：工作、生活）。點一下切換；按住一個書籤左右拖曳可以換位置；' +
-          '「＋」新增書籤（最多 ' + GPN_MAX_TABS + ' 個）。綠色的「新手練習」就是現在這個練習用的書籤。',
-        at: () => ui.tabs, enter: toFolder(ids.fa) },
-      { title: '資料夾', text: '書籤裡面還可以再分資料夾。點資料夾切換；下面的「＋ 新增資料夾」可以多加。' +
-          '要不要用資料夾，每個書籤可以各自決定（設定 → 書籤 裡的開關）。',
-        at: () => q('.gpn-folders'), enter: toFolder(ids.fa) },
-      { title: '使用提示詞', text: '點提示詞的標題，就會把內容複製起來；在 Gemini、ChatGPT 的網頁裡用的話，會直接填進輸入框。\n\n👉 現在點一下「練習：寫一封感謝信」。',
-        at: () => card(ids.p1)?.querySelector('.gpn-title'), enter: toFolder(ids.fa),
-        wait: () => (data.recent || [])[0]?.id === ids.p1 },
-      { title: '我的最愛', text: '常用的提示詞，按右邊的星號收進「我的最愛」，之後在右上角的星星書籤就找得到（提示詞還是留在原本的地方）。\n\n👉 點這顆星號。',
-        at: () => card(ids.p1)?.querySelector('.gpn-star'), enter: toFolder(ids.fa),
-        wait: () => !!markOf(ids.p1) },
-      { title: '我的最愛、最近使用', text: '右上角的星星是「我的最愛」，收著所有標了星號的提示詞；旁邊的時鐘是「最近使用」，' +
-          '依時間列出你最近點過的 50 則。這兩個書籤不能刪，也不能在裡面新增。\n\n星號可以有很多種顏色、符號（設定 → 星號），連續點就會換。',
-        at: () => tabEl(GPN_FAV_ID) },
-      { title: '修改提示詞', text: '每則右邊的鉛筆可以修改標題和內容。\n\n👉 點這支鉛筆打開看看。',
-        at: () => card(ids.p1)?.querySelector('.gpn-edit'), enter: toFolder(ids.fa),
-        wait: () => layerOpen(ui.editLayer) },
-      { title: '修改視窗', text: '上面是按鈕上顯示的標題，下面是真正要送給 AI 的完整內容，還可以選要放在哪個書籤、資料夾。\n\n👉 改好按「儲存」，不想改就按「取消」關掉。',
-        at: () => ui.editLayer.querySelector('.gpn-dialog'),
-        wait: () => !layerOpen(ui.editLayer) },
-      { key: 'add', title: '新增提示詞', text: '👉 按下面的「＋ 新增提示詞」，自己加一則看看。',
-        at: () => ui.addBtn, enter: () => { toFolder(ids.fa)(); tour.base = count(); },
-        wait: () => layerOpen(ui.editLayer) },
-      { title: '填好內容', text: '👉 標題、內容隨便打幾個字（例如「我的第一則」），然後按「儲存」。',
-        at: () => ui.editLayer.querySelector('.gpn-dialog'),
-        wait: () => !layerOpen(ui.editLayer) && count() > tour.base,
-        stuck: () => (!layerOpen(ui.editLayer) && count() <= tour.base ? 'add' : '') },
-      { title: '拖曳排序', text: '每則左邊六個點的地方是把手。\n\n👉 按住把手，往上或往下拖，放開就換好順序了。',
-        at: () => q('.gpn-paper'), enter: () => {
-          toFolder(ids.fa)();
-          tour.order = (listOf(ids.tab, ids.fa)?.items || []).map((it) => it.id).join();
-        },
-        wait: () => {
-          const now = (listOf(ids.tab, ids.fa)?.items || []).map((it) => it.id).join();
-          return !!now && now !== tour.order && now.split(',').length === tour.order.split(',').length;
-        } },
-      { title: '搬到別的資料夾', text: '拖著提示詞到左邊（或上面）的資料夾放開，就搬過去了，畫面會跟著過去、那一則會亮一下。\n\n👉 把任何一則拖到「練習用」資料夾。',
-        at: () => q('.gpn-paper'), enter: toFolder(ids.fa),
-        wait: () => (listB()?.items.length || 0) > 0 },
-      { title: '搬到別的書籤', text: '一樣的方法也可以搬到別的書籤：\n• 拖到上面的書籤直接放開 → 馬上搬過去。\n' +
-          '• 拖著停在書籤上不動 1.5 秒 → 會切到那個書籤（書籤底下有一條線慢慢填滿），提示詞還拿在手上，可以接著放進那裡的資料夾或排好位置。',
-        at: () => ui.tabs },
-      { key: 'more1', title: '更多功能', text: '每則最右邊的「⋯」還有更多功能。\n\n👉 點「⋯」。',
-        at: () => firstCard()?.querySelector('.gpn-more'), enter: () => { closeCardMenu(); tour.base = count(); },
-        wait: () => !ui.menu.hidden },
-      { title: '⋯ 裡面有什麼', text: '上面兩個：在 Gemini、ChatGPT 的新分頁打開這則；左下：拷貝；右下：分享給分身（或建立分身的人）；最下面：刪除。\n\n👉 先按左下的「拷貝」。',
-        at: () => (ui.menu.hidden ? null : ui.menu),
-        wait: () => count() > tour.base,
-        stuck: () => (ui.menu.hidden && count() <= tour.base ? 'more1' : '') },
-      { key: 'more2', title: '拷貝好了', text: '拷貝出來的那則就在原本那則的正下方，標題後面加了「(複製)」，會亮一下讓你知道在哪裡。\n\n接著試試刪除：👉 再點一次「⋯」。',
-        at: () => firstCard()?.querySelector('.gpn-more'), enter: () => closeCardMenu(),
-        wait: () => !ui.menu.hidden },
-      { title: '刪除', text: '刪除要按兩次（第一下垃圾桶的蓋子會打開，免得按錯）。刪掉的不會馬上消失，會先放進「資源回收桶」，之後還救得回來。\n\n👉 按兩下最下面的垃圾桶。',
-        at: () => (ui.menu.hidden ? null : ui.menu.querySelector('.gpn-menu-tile--del')),
-        wait: () => !!trashed(),
-        stuck: () => (ui.menu.hidden && !trashed() ? 'more2' : '') },
-      { title: '搜尋', text: '底下的放大鏡可以搜尋所有書籤的提示詞（標題、內容都會找）。按 Esc 或右邊的 ✕ 離開搜尋。',
-        at: () => ui.searchBtn },
-      { title: '設定', text: '右下角的齒輪是設定。\n\n👉 點齒輪打開。',
-        at: () => ui.gear, wait: () => layerOpen(ui.settingsLayer) },
-      { title: '設定的左邊', text: '左邊只放最常用的：帳號、分身、資源回收桶，最下面的「其他」收著其餘的設定。',
-        at: () => q('.gpn-settings-nav'), enter: settingsOn('other') },
-      { title: '其他', text: '「其他」裡面一排一排列著其餘的設定，點一排就進到那一頁。進去之後，最上面會顯示「其他 › 書籤」這樣的路徑，點「其他」就回到這裡。\n\n👉 點「書籤」。',
-        at: () => orow('tab'), enter: settingsOn('other'),
-        wait: () => !ui.sSections.find((x) => x.getAttribute('data-section') === 'tab').hidden },
-      { title: '其他 › 書籤', text: '這裡一次列出所有書籤。點一個展開，就能改名稱、顏色、要不要用資料夾，還有「備註說明」：' +
-          '書籤名稱寫不下的，寫這個書籤是做什麼用的。旁邊的 i 打開就看得到備註；滑鼠停在上面的書籤上也會顯示。',
-        at: () => ui.settings, enter: settingsOn('tab') },
-      { title: '其他 › 星號', text: '除了黃色星星，還可以啟用其他顏色、符號（例如紅色驚嘆號、綠色勾勾）。啟用的每一種都會在上面多一個書籤，' +
-          '連續點提示詞的星號就會照順序換。',
-        at: () => ui.settings, enter: settingsOn('marks') },
-      { title: '其他 › 使用次數', text: '列出你最常用的前十名提示詞，每點一次就算一次，同一個帳號的電腦、網頁版會加在一起。點一則就跳到它那裡。',
-        at: () => ui.settings, enter: settingsOn('stats') },
-      online ? { title: '帳號', text: '用 Google 帳號登入後，提示詞存在你自己的 Google 雲端硬碟，換一台電腦登入同一個帳號，看到的就是同一份。',
-        at: () => ui.settings, enter: settingsOn('account') } : null,
-      online && hasClones() ? { title: '分身', text: '分身是給沒有 Google 帳號的同事用的「小帳號」：你勾選要給他的提示詞，就會得到一組 16 碼的代號，' +
-          '同事在登入畫面輸入代號就能用。\n\n• 進入分身：你自己用分身的身分幫忙整理。\n• 推送資料：你之後改了自己的提示詞，可以再推給分身。\n' +
-          '• 卡片右上角的「⋯」：拷貝一個一樣的分身、延長期限、換一組代號（交給別人用時）、停用。\n• 點分身的頭像、名稱可以直接改。\n' +
-          '• 提示詞的「⋯ → 分享」可以在你和分身之間互傳，收到的會放進「信箱」書籤。',
-        at: () => ui.settings, enter: settingsOn('clones') } : null,
-      { title: '其他 › 備份', text: '可以把全部提示詞下載成一個備份檔，或從備份檔匯入（合併進來，不會蓋掉現有的）。「其他」裡還有背景、新手教學、全部提示詞。',
-        at: () => ui.settings, enter: settingsOn('backup') },
-      { key: 'trashnav', title: '資源回收桶', text: '剛剛刪掉的那則在這裡。\n\n👉 點左邊的「資源回收桶」。',
-        at: () => ui.sTrashNav, enter: settingsOn('other'),
-        wait: () => !!activeTab().trash },
-      { title: '還原', text: '刪掉的提示詞會留在資源回收桶，可以還原，也可以永久刪除（清空）。\n\n👉 點一下剛剛刪掉的那則選取它，再按下面的「還原」。',
-        at: () => q('.gpn-paper'),
-        wait: () => !trashed(),
-        stuck: () => (!activeTab().trash && trashed() ? 'trashnav' : '') },
-      { title: '完成！', text: '還原的提示詞會回到原本的書籤、資料夾。\n\n教學到這裡結束。按「完成」之後，練習用的「新手練習」書籤會自動刪掉。' +
-          '之後想再看一次，到 設定 → 新手教學。',
-        at: () => null, last: true },
-    ];
-    return steps.filter(Boolean);
-  }
-
-  function buildTourLayer() {
-    const block = () => el('div', { class: 'gpn-tour-block' });
-    tour.blocks = [block(), block(), block(), block()];
-    tour.ring = el('div', { class: 'gpn-tour-ring' });
-    tour.count = el('div', { class: 'gpn-tour-count' });
-    tour.title = el('div', { class: 'gpn-tour-title' });
-    tour.text = el('div', { class: 'gpn-tour-text' });
-    tour.next = el('button', { class: 'gpn-btn gpn-btn--save gpn-tour-next', type: 'button', onclick: () => tourGo(tour.i + 1) }, '下一步');
-    tour.skipStep = el('button', { class: 'gpn-link gpn-tour-pass', type: 'button', hidden: '', onclick: () => tourGo(tour.i + 1) }, '找不到？略過這一步');
-    tour.bubble = el('div', { class: 'gpn-tour-bubble', role: 'dialog', 'aria-live': 'polite' },
-      tour.count, tour.title, tour.text, el('div', { class: 'gpn-tour-foot' }, tour.skipStep, tour.next));
-    tour.layer = el('div', { class: 'gpn-tour' }, ...tour.blocks, tour.ring, tour.bubble,
-      el('button', { class: 'gpn-tour-skip', type: 'button', onclick: () => endTour(false) }, '跳過教學 ✕'));
-    root.append(tour.layer);
-    window.addEventListener('resize', tourPaint);
-    tour.timer = setInterval(tourTick, 200);
-  }
-
-  function tourGo(i) {
-    if (!tour) return;
-    if (i >= tour.steps.length) { endTour(true); return; }
-    tour.i = i;
-    tour.missing = 0;
-    const st = tour.steps[i];
-    st.enter?.();
-    tour.count.textContent = `${i + 1} / ${tour.steps.length}`;
-    tour.title.textContent = st.title;
-    tour.text.textContent = st.text;
-    tour.next.hidden = !!st.wait;
-    tour.next.textContent = st.last ? '完成' : '下一步';
-    tour.skipStep.hidden = true;
-    st.at?.()?.scrollIntoView?.({ block: 'nearest' });
-    tourPaint();
-    if (!st.wait) tour.next.focus({ preventScroll: true });
-  }
-
-  /** 每 0.2 秒：做到了沒有、該回到前一步了沒有（例如關掉了選單）、亮的地方跟著版面移動 */
-  function tourTick() {
-    if (!tour) return;
-    if (!isOpen()) { endTour(false); return; }        // 面板被關掉了（外掛按 Esc、點外面）
-    const st = tour.steps[tour.i];
-    if (st.wait && st.wait()) { sfx('save'); tourGo(tour.i + 1); return; }
-    const back = st.stuck ? tour.steps.findIndex((x) => x.key && x.key === st.stuck()) : -1;
-    if (back >= 0 && back < tour.i) { tourGo(back); return; }
-    tourPaint();
-  }
-
-  /** 亮的地方（洞）四周用四塊半透明的黑擋住：看得到、點不到；說明框擺在洞的下面、上面、旁邊，放不下就放右下角 */
-  function tourPaint() {
-    if (!tour) return;
-    const st = tour.steps[tour.i];
-    const t = st.at?.();
-    // 網頁版整個放大了（zoom）：量到的是畫面上的位置，fixed 的位置要除回去（和拖曳的影子一樣）
-    const k = root.host?.currentCSSZoom || parseFloat(getComputedStyle(root.host || document.body).zoom) || 1;
-    const box = t && t.isConnected ? t.getBoundingClientRect() : null;
-    const r = box && box.width >= 2 && box.height >= 2
-      ? { left: box.left / k, top: box.top / k, right: box.right / k, bottom: box.bottom / k }
-      : null;
-    const W = window.innerWidth / k, H = window.innerHeight / k, pad = 6;
-    if (st.wait && !r) {
-      if (++tour.missing > 15) tour.skipStep.hidden = false;      // 找了 3 秒還是找不到，給他一條路
-    } else {
-      tour.missing = 0;
-    }
-    const [top, bottom, left, right] = tour.blocks;
-    const set = (n, x, y, w, h) => Object.assign(n.style, { left: x + 'px', top: y + 'px', width: Math.max(0, w) + 'px', height: Math.max(0, h) + 'px' });
-    if (!r) {
-      set(top, 0, 0, W, H);
-      for (const n of [bottom, left, right]) set(n, 0, 0, 0, 0);
-      tour.ring.hidden = true;
-    } else {
-      const x1 = Math.max(0, r.left - pad), y1 = Math.max(0, r.top - pad);
-      const x2 = Math.min(W, r.right + pad), y2 = Math.min(H, r.bottom + pad);
-      set(top, 0, 0, W, y1);
-      set(bottom, 0, y2, W, H - y2);
-      set(left, 0, y1, x1, y2 - y1);
-      set(right, x2, y1, W - x2, y2 - y1);
-      tour.ring.hidden = false;
-      set(tour.ring, x1, y1, x2 - x1, y2 - y1);
-    }
-    // 說明框
-    const b = tour.bubble;
-    const bw = Math.min(380, W - 24);
-    b.style.width = bw + 'px';
-    const bh = b.offsetHeight || 200;
-    let x, y;
-    if (!r) {
-      x = (W - bw) / 2; y = Math.max(12, (H - bh) / 2);
-    } else {
-      const cx = Math.min(Math.max(12, (r.left + r.right) / 2 - bw / 2), W - bw - 12);
-      if (r.bottom + pad + 14 + bh < H) { x = cx; y = r.bottom + pad + 14; }
-      else if (r.top - pad - 14 - bh > 0) { x = cx; y = r.top - pad - 14 - bh; }
-      else if (r.right + pad + 14 + bw < W) { x = r.right + pad + 14; y = Math.min(Math.max(12, r.top), H - bh - 12); }
-      else if (r.left - pad - 14 - bw > 0) { x = r.left - pad - 14 - bw; y = Math.min(Math.max(12, r.top), H - bh - 12); }
-      else { x = W - bw - 16; y = H - bh - 16; }
-    }
-    b.style.left = Math.round(x) + 'px';
-    b.style.top = Math.round(Math.max(12, y)) + 'px';
   }
 
   // toast：網頁版從登入、驗證信回來時，用它顯示結果

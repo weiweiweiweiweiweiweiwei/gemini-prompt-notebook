@@ -876,6 +876,9 @@ button { cursor: pointer; }
 
 /* 設定左邊選單最下面的「全部提示詞」是連結，不要底線 */
 .gpn-nav-item--go { text-decoration: none; }
+/* 資源回收桶排在左邊最下面（版本號上面） */
+.gpn-nav-bottom { margin-top: auto; }
+.gpn-nav-bottom + .gpn-nav-version { margin-top: 0; }
 
 /* 底下的「還原」：實心的主要按鈕 */
 .gpn-foot .gpn-add--restore { border-style: solid; border-color: var(--primary); background: var(--primary); color: var(--on-primary); }
@@ -2501,42 +2504,6 @@ section[data-section="markTab"] .gpn-note--roomy { margin: 4px 0 16px; }
 .gpn-stat-bar { display: block; height: 4px; width: var(--w); border-radius: 2px; background: color-mix(in srgb, var(--primary) 70%, transparent); }
 .gpn-stat-n { flex: none; font-size: 14px; font-weight: 600; color: var(--text-mute); }
 
-/* 設定 → 新手教學 */
-.gpn-guide-lead { margin: 0; font-size: 15px; line-height: 1.7; }
-.gpn-section[data-section="guide"] .gpn-brow { margin-top: 16px; }
-
-/* 新手教學：要操作的地方亮著，四周用四塊半透明黑擋住（看得到、點不到）；說明框、右上角「跳過教學」 */
-.gpn-tour { position: fixed; inset: 0; z-index: 2147483640; pointer-events: none; }
-.gpn-tour-block { position: fixed; background: rgba(0, 0, 0, .58); pointer-events: auto; }
-.gpn-tour-ring {
-  position: fixed; border-radius: 14px; pointer-events: none;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, .95), 0 0 22px 6px rgba(255, 255, 255, .35);
-  animation: gpn-tour-pulse 1.6s ease-in-out infinite;
-}
-@keyframes gpn-tour-pulse {
-  50% { box-shadow: 0 0 0 2px rgba(255, 255, 255, .95), 0 0 30px 10px rgba(255, 255, 255, .5); }
-}
-.gpn-tour-bubble {
-  position: fixed; pointer-events: auto;
-  padding: 16px 18px 14px;
-  border: 1px solid var(--outline-strong); border-radius: 18px;
-  background: var(--surface); color: var(--text);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, .45);
-}
-.gpn-tour-count { font-size: 12.5px; font-weight: 600; color: var(--primary); letter-spacing: .5px; }
-.gpn-tour-title { margin-top: 4px; font-size: 17px; font-weight: 700; }
-.gpn-tour-text { margin-top: 8px; font-size: 14.5px; line-height: 1.7; white-space: pre-line; }
-.gpn-tour-foot { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 14px; }
-.gpn-tour-foot .gpn-tour-next { flex: none; width: auto; min-width: 96px; height: 40px; padding: 0 20px; }
-.gpn-tour-pass { margin-right: auto; padding: 0; border: 0; background: none; font-size: 13.5px; }
-.gpn-tour-skip {
-  position: fixed; top: 14px; right: 16px; pointer-events: auto;
-  padding: 8px 16px; border: 1px solid rgba(255, 255, 255, .5); border-radius: 999px;
-  background: rgba(20, 20, 20, .75); color: #fff; font: inherit; font-size: 14px; font-weight: 600;
-  cursor: pointer;
-}
-.gpn-tour-skip:hover { background: rgba(50, 50, 50, .9); }
-.gpn-tour-skip:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 
 /* 設定最上面的路徑（像 Windows 設定的「系統 › 顯示器」）：前面那一層可以點，點了回去 */
 .gpn-crumb {
