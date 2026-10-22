@@ -231,6 +231,7 @@ function gpnMergeData(current, incoming) {
     const to = idMap.get(id) || id;
     out.uses[to] = Math.max(out.uses[to] || 0, n);
   }
+  out.gone = [...(out.gone || []), ...(incoming.gone || [])];
   // 回收桶：兩邊的都留著（同一則只留一筆；備份裡已經在筆記本的那則，normalize 會拿掉）
   out.trash = [...(out.trash || []), ...(incoming.trash || [])];
 

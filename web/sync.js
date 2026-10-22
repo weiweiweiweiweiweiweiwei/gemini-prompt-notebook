@@ -387,6 +387,7 @@ function gpnCreateSync(o) {
     if (d.look && ((d.look.bg && d.look.bg !== 'default') || (d.look.theme && d.look.theme !== 'auto'))) parts.push(d.look);
     if (d.trash?.length) parts.push(d.trash);
     if (Object.keys(d.uses || {}).length) parts.push(d.uses);
+    if (d.gone?.length) parts.push(d.gone);
     const s = JSON.stringify(parts);
     let h = 0x811c9dc5;
     for (let i = 0; i < s.length; i++) {
@@ -1450,6 +1451,7 @@ function gpnFlatten(d) {
     tabOrder: d.tabs.map((t) => t.id), tabs, folders, items, lists,
     favs: d.favs || [], marks: d.marks || {}, markTypes: d.markTypes || [], recent: d.recent || [], look: d.look, trash: d.trash || [],
     uses: d.uses || {},
+    gone: d.gone || [],
   };
 }
 
@@ -1645,5 +1647,6 @@ function gpnMerge3(base, local, cloud) {
     look,
     trash,
     uses,
+    gone: [...L.gone, ...C.gone],              // 兩邊刪掉的書籤、資料夾都記著（重複的、用不到的 normalize 會拿掉）
   });
 }

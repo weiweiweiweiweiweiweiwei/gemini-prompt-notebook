@@ -121,6 +121,37 @@ function gpnCleanUses(raw, keep) {
   return out;
 }
 
+/**
+ * 刪掉的書籤、資料夾（4.40.0）：[{ kind: 'tab', id, label, color, note, folders: [{ id, label }] | null, at }
+ *                                 | { kind: 'folder', id, tabId, label, at }]
+ * 裡面的提示詞丟進資源回收桶時，記得它們原本在哪裡；從回收桶還原時，書籤、資料夾跟著回來（panel.js 的 restoreTrash）。
+ * 只留「回收桶裡還有東西要回去」的：都還原或永久刪除了，這筆就沒用了。
+ */
+function gpnCleanGone(raw, tabs, trash) {
+  const tabIds = new Set(tabs.map((t) => t.id));
+  const folderIds = new Set(tabs.flatMap((t) => (t.folders || []).map((f) => f.id)));
+  const wantTab = new Set(trash.map((r) => r.tabId));
+  const wantFolder = new Set(trash.map((r) => r.folderId).filter(Boolean));
+  const seen = new Set();
+  const str = (v, n) => String(v ?? '').slice(0, n);
+  return (Array.isArray(raw) ? raw : [])
+    .filter((g) => g && typeof g === 'object' && typeof g.id === 'string' && g.id)
+    .map((g) => (g.kind === 'folder'
+      ? { kind: 'folder', id: g.id, tabId: str(g.tabId, 80), label: str(g.label, 16) || '未命名', at: Number(g.at) || 0 }
+      : {
+          kind: 'tab', id: g.id, label: str(g.label, GPN_MAX_LABEL) || '未命名',
+          color: GPN_COLORS.includes(g.color) ? g.color : 'amber', note: str(g.note, GPN_MAX_NOTE),
+          folders: Array.isArray(g.folders)
+            ? g.folders.filter((f) => f && typeof f.id === 'string' && f.id).slice(0, GPN_MAX_FOLDERS)
+              .map((f) => ({ id: f.id, label: str(f.label, 16) || '未命名' }))
+            : null,
+          at: Number(g.at) || 0,
+        }))
+    .filter((g) => (g.kind === 'tab' ? !tabIds.has(g.id) && wantTab.has(g.id) : !folderIds.has(g.id) && wantFolder.has(g.id)))
+    .filter((g) => !seen.has(g.kind + g.id) && seen.add(g.kind + g.id))
+    .slice(0, 100);
+}
+
 /** 整理最近使用記錄：新的在前、同一則只留最新那次、最多 GPN_RECENT_MAX 筆 */
 function gpnCleanRecent(arr) {
   const seen = new Set();
@@ -274,6 +305,7 @@ function gpnNormalize(raw) {
     look: gpnCleanLook(raw.look),
     trash,
     uses: gpnCleanUses(raw.uses, new Set([...itemIds, ...trash.map((r) => r.id)])),
+    gone: gpnCleanGone(raw.gone, tabs, trash),
   };
 }
 

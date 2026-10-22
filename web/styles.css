@@ -2448,7 +2448,11 @@ section[data-section="markTab"] .gpn-note--roomy { margin: 4px 0 16px; }
   border: 1px solid color-mix(in srgb, var(--error) 60%, transparent);
   border-radius: 12px;
 }
-.gpn-bm-editor .gpn-bm-del svg { width: 24px; height: 24px; }
+.gpn-bm-editor .gpn-bm-del svg { width: 21px; height: 21px; margin-top: 4px; overflow: visible; }  /* 往下放一點：蓋子掀開才不會頂到框 */
+.gpn-bm-editor .gpn-bm-del { background: transparent; color: var(--error); }
+.gpn-bm-editor .gpn-bm-del:hover { background: color-mix(in srgb, var(--error) 14%, transparent); border-color: var(--error); }
+.gpn-bm-editor .gpn-bm-del.is-confirm { background: color-mix(in srgb, var(--error) 22%, transparent); border-color: var(--error); }
+.gpn-bm-editor .gpn-bm-del:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 /* 這一頁每個元件一樣高（44px）：名稱、顏色、資料夾、＋ 備註、刪除。
    .gpn-btn2 平常是排在一橫排裡平分寬度的（flex: 1 1 0），放在這裡的直排會被壓扁，所以改成不伸縮 */
 .gpn-bm-editor .gpn-input { height: 44px; padding: 0 14px; font-size: 15.5px; }

@@ -14,7 +14,7 @@
 /**
  * 版本號，顯示在設定視窗左下角。改了功能就調高，看這個數字就知道網頁有沒有更新到最新版。
  */
-const GPN_APP_VERSION = '4.39.0';
+const GPN_APP_VERSION = '4.40.0';
 
 /**
  * @param {object}   opts
@@ -1519,10 +1519,12 @@ function gpnCreatePanel(opts) {
     } else {
       ui.list.append(el('div', { class: 'gpn-trash-head' },
         el('span', { text: '點一下選取；按住 Shift 選一整段、按住 Ctrl 跳著選、Ctrl＋A 全選' })));
+      const gone = (kind, id) => (data.gone || []).find((g) => g.kind === kind && g.id === id);
       const where = (r) => {
-        const t = data.tabs.find((x) => x.id === r.tabId);
-        const f = t?.folders?.find((x) => x.id === r.folderId);
-        return t ? t.label + (f ? ` › ${f.label}` : '') : '原本的書籤已刪除';
+        const t = data.tabs.find((x) => x.id === r.tabId) || gone('tab', r.tabId);
+        const f = t?.folders?.find((x) => x.id === r.folderId) || gone('folder', r.folderId);
+        if (!t) return '原本的書籤已刪除';
+        return t.label + (f ? ` › ${f.label}` : '') + (data.tabs.includes(t) && (!f || t.folders.includes(f)) ? '' : '（已刪除，還原時會放回來）');
       };
       for (const r of list) {
         const more = el('button', {
@@ -1599,9 +1601,12 @@ function gpnCreatePanel(opts) {
   function restoreTrash(ids) {
     const back = trashList().filter((r) => ids.includes(r.id));
     if (!back.length) return;
+    const revived = [];
     for (const r of [...back].reverse()) {
-      const tab = data.tabs.find((t) => t.id === r.tabId) || data.tabs[0];
-      const list = tab.folders ? tab.folders.find((f) => f.id === r.folderId) || tab.folders[0] : tab;
+      const tab = data.tabs.find((t) => t.id === r.tabId) || reviveTab(r.tabId, revived) || data.tabs[0];
+      const list = tab.folders
+        ? tab.folders.find((f) => f.id === r.folderId) || reviveFolder(tab, r.folderId, revived) || tab.folders[0]
+        : tab;
       list.items.push({ id: r.id, title: r.title, content: r.content });
       if (r.mark && (r.mark === GPN_MARK_FAV || GPN_MARKS.includes(r.mark))) setMark(r.id, r.mark);
     }
@@ -1610,7 +1615,32 @@ function gpnCreatePanel(opts) {
     sfx('save');
     persist();
     render();
-    toast(back.length === 1 ? `已還原「${back[0].title}」` : `已還原 ${back.length} 則`);
+    toast((back.length === 1 ? `已還原「${back[0].title}」` : `已還原 ${back.length} 則`) +
+      (revived.length ? `，${revived.join('、')}也放回來了` : ''), false, revived.length ? 5000 : 0);
+  }
+
+  /** 還原的提示詞原本的書籤被刪掉了：照記下來的樣子（名稱、顏色、備註、資料夾）放回去；書籤滿了就不放 */
+  function reviveTab(id, revived) {
+    const g = (data.gone || []).find((x) => x.kind === 'tab' && x.id === id);
+    if (!g || ownTabs().length >= GPN_MAX_TABS) return null;
+    const tab = { id: g.id, label: g.label, color: g.color, ...(g.note ? { note: g.note } : {}) };
+    if (g.folders?.length) tab.folders = g.folders.map((f) => ({ id: f.id, label: f.label, items: [] }));
+    else tab.items = [];
+    data.tabs.push(tab);
+    data.gone = data.gone.filter((x) => x !== g);
+    revived.push(`書籤「${g.label}」`);
+    return tab;
+  }
+
+  /** 還原的提示詞原本的資料夾被刪掉了：放回原本的書籤裡 */
+  function reviveFolder(tab, id, revived) {
+    const g = (data.gone || []).find((x) => x.kind === 'folder' && x.id === id && x.tabId === tab.id);
+    if (!g || tab.folders.length >= GPN_MAX_FOLDERS) return null;
+    const folder = { id: g.id, label: g.label, items: [] };
+    tab.folders.push(folder);
+    data.gone = data.gone.filter((x) => x !== g);
+    revived.push(`資料夾「${g.label}」`);
+    return folder;
   }
 
   /** 永久刪除（按兩次）：ids 是空的就是清空整個回收桶 */
@@ -2533,6 +2563,9 @@ function gpnCreatePanel(opts) {
 
     sfx('del');
     for (const it of folder.items) toTrash(it, tab.id, folder.id);
+    if (folder.items.length) {
+      data.gone = [{ kind: 'folder', id: folder.id, tabId: tab.id, label: folder.label, at: Date.now() }, ...(data.gone || [])];
+    }
     tab.folders.splice(tab.folders.indexOf(folder), 1);
     if (folderId === folder.id) folderId = null;
 
@@ -3003,8 +3036,22 @@ function gpnCreatePanel(opts) {
       return;
     }
 
+    // 按了兩次，真的刪之前再問一次（瀏覽器的確認視窗）：刪書籤影響很大
+    const total = gpnTabItemCount(tab);
+    const sure = window.confirm(`確定要刪除書籤「${tab.label}」嗎？\n\n` +
+      (total ? `裡面的 ${total} 則提示詞會移到資源回收桶。之後從資源回收桶還原，這個書籤（和它的資料夾）會一起回來。`
+        : '這個書籤是空的。'));
+    disarmTabDelete();
+    if (!sure) return;
+
     sfx('del');
     for (const l of gpnListsOf(tab)) for (const it of l.items) toTrash(it, tab.id, l === tab ? '' : l.id);
+    if (total) {
+      data.gone = [{
+        kind: 'tab', id: tab.id, label: tab.label, color: tab.color, note: tab.note || '',
+        folders: tab.folders ? tab.folders.map((f) => ({ id: f.id, label: f.label })) : null, at: Date.now(),
+      }, ...(data.gone || [])];
+    }
     data.tabs.splice(data.tabs.indexOf(tab), 1);
     if (!tabById(data.activeId)) { data.activeId = data.tabs[0].id; folderId = null; }
 
