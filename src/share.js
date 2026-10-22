@@ -181,7 +181,7 @@ function gpnMergeData(current, incoming) {
         tab = out.tabs[out.tabs.length - 1];
       } else {
         // 沿用備份裡的 id：下次再匯入同一份時，才能靠 id 認出是同一個書籤
-        tab = { id: inTab.id, label: inTab.label, color: inTab.color, items: [] };
+        tab = { id: inTab.id, label: inTab.label, color: inTab.color, note: inTab.note, items: [] };
         out.tabs.push(tab);
         newTabs++;
       }
@@ -231,6 +231,12 @@ function gpnMergeData(current, incoming) {
     out.marks[m] = [...(out.marks[m] || []), ...ids.map((id) => idMap.get(id))];
   }
   out.markTypes = [...(out.markTypes || []), ...(incoming.markTypes || [])];
+  // 使用次數：同一則取兩邊比較多的那個（沒有上次同步的紀錄，分不出各自多用了幾次，取大的才不會重複算）
+  out.uses = { ...(out.uses || {}) };
+  for (const [id, n] of Object.entries(incoming.uses || {})) {
+    const to = idMap.get(id) || id;
+    out.uses[to] = Math.max(out.uses[to] || 0, n);
+  }
   // 回收桶：兩邊的都留著（同一則只留一筆；備份裡已經在筆記本的那則，normalize 會拿掉）
   out.trash = [...(out.trash || []), ...(incoming.trash || [])];
 
@@ -309,7 +315,7 @@ function gpnCloneSubset(d, pick) {
   const copy = (it) => ({ id: it.id, title: it.title, content: it.content });
   const tabs = [];
   for (const t of d.tabs) {
-    const head = { id: t.id, label: t.label, color: t.color };
+    const head = { id: t.id, label: t.label, color: t.color, note: t.note };
     if (t.folders) {
       const folders = t.folders
         .map((f) => ({ id: f.id, label: f.label, items: f.items.filter((i) => pick.items.has(i.id)).map(copy) }))

@@ -1778,12 +1778,21 @@ span.gpn-face-art > svg { display: block; width: 100%; height: 100%; }
 }
 .gpn-clone-card .gpn-brow { margin-top: 12px; }
 .gpn-clone-card .gpn-btn2 { min-width: 96px; height: 42px; }
-/* 卡片下面的兩顆圖示鈕：進入分身、再推一次（名稱在滑鼠提示） */
-.gpn-clone-card .gpn-clone-act { flex: none; min-width: 0; width: 64px; padding: 0; display: flex; align-items: center; justify-content: center; }
-.gpn-clone-act svg { width: 23px; height: 23px; display: block; }
-.gpn-clone-rekey { color: var(--text-mute); }
-.gpn-clone-rekey.is-armed { color: var(--error); font-weight: 700; }
-.gpn-clone-name { min-width: 0; font-size: 16.5px; font-weight: 600; overflow-wrap: anywhere; }
+/* 名稱：滑過去出現鉛筆，點了變成輸入框就地改 */
+.gpn-clone-name {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-width: 0; padding: 2px 6px; margin-left: -6px;
+  border: 0; border-radius: 8px;
+  background: none; color: inherit; font: inherit;
+  font-size: 16.5px; font-weight: 600; text-align: left; overflow-wrap: anywhere;
+  cursor: text;
+}
+.gpn-clone-name:hover { background: var(--hover); }
+.gpn-clone-name:focus-visible { outline: 3px solid var(--primary); outline-offset: 0; }
+.gpn-clone-name-pen { flex: none; display: flex; opacity: 0; color: var(--text-mute); transition: opacity .14s ease; }
+.gpn-clone-name-pen svg { width: 16px; height: 16px; fill: currentColor; }
+.gpn-clone-name:hover .gpn-clone-name-pen, .gpn-clone-name:focus-visible .gpn-clone-name-pen { opacity: 1; }
+.gpn-clone-rename { flex: 1; min-width: 0; height: 36px; font-size: 16px; font-weight: 600; }
 .gpn-clone-top { display: flex; align-items: center; gap: 12px; }
 .gpn-clone-top + .gpn-avatar-pick { margin-top: 12px; }
 .gpn-clone-face {
@@ -1797,6 +1806,24 @@ span.gpn-face-art > svg { display: block; width: 100%; height: 100%; }
   cursor: pointer;
 }
 .gpn-clone-face:hover { filter: brightness(1.05); }
+/* 頭像：滑過去右下角出現一支鉛筆（點了換頭像）；頭像本身照樣裁成圓的，鉛筆可以超出去 */
+.gpn-clone-top .gpn-clone-face { position: relative; overflow: visible; }
+.gpn-clone-top .gpn-clone-face > .gpn-face-art,
+.gpn-clone-top .gpn-clone-face > .gpn-clone-noface { border-radius: 50%; overflow: hidden; }
+.gpn-clone-face-pen {
+  position: absolute; right: -4px; bottom: -4px;
+  display: flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--primary); color: var(--on-primary, #fff);
+  box-shadow: 0 1px 4px rgba(0,0,0,.35);
+  opacity: 0; transform: scale(.8);
+  transition: opacity .14s ease, transform .14s ease;
+}
+.gpn-clone-face-pen svg { width: 13px; height: 13px; fill: currentColor; }
+.gpn-clone-face:hover .gpn-clone-face-pen, .gpn-clone-face:focus-visible .gpn-clone-face-pen,
+.gpn-clone-face[aria-expanded="true"] .gpn-clone-face-pen { opacity: 1; transform: none; }
+.gpn-clone-face:disabled .gpn-clone-face-pen { display: none; }
 .gpn-clone-face:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
 .gpn-clone-noface {
   display: flex; align-items: center; justify-content: center;
@@ -2134,7 +2161,7 @@ section[data-section="markTab"] .gpn-note--roomy { margin: 4px 0 16px; }
 .gpn-sender .gpn-peer-owner { font-size: 11px; }
 .gpn-sender-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; color: var(--text-mute); }
 
-/* 拖著提示詞停在別的書籤上：底下一條線 1.8 秒慢慢填滿，滿了就切過去（panel.js 的 GPN_DRAG_OPEN_MS） */
+/* 拖著提示詞停在別的書籤上：底下一條線 1.5 秒慢慢填滿，滿了就切過去（panel.js 的 GPN_DRAG_OPEN_MS） */
 .gpn-tab.is-hold { filter: brightness(1.15); box-shadow: inset 0 0 0 2px var(--primary); }
 .gpn-tab.is-hold::after {
   content: '';
@@ -2144,7 +2171,7 @@ section[data-section="markTab"] .gpn-note--roomy { margin: 4px 0 16px; }
   border-radius: 2px;
   background: var(--primary);
   transform-origin: left center;
-  animation: gpn-tab-hold 1.8s linear forwards;
+  animation: gpn-tab-hold 1.5s linear forwards;
 }
 @keyframes gpn-tab-hold { from { transform: scaleX(0); opacity: .6 } to { transform: scaleX(1); opacity: 1 } }
 .gpn-list.is-drop { outline: 2px dashed var(--primary); outline-offset: -4px; border-radius: 14px; }
@@ -2401,3 +2428,112 @@ section[data-section="markTab"] .gpn-note--roomy { margin: 4px 0 16px; }
   .gpn-tab, .gpn-card, .gpn-folder, .gpn-switch, .gpn-switch::after,
   .gpn-empty-arrow, .gpn-cloud-arrow, .gpn-gear-icon > svg, .gpn-social-btn, .gpn-menu { animation: none !important; transition: none !important; }
 }
+
+/* 剛搬過來、拷貝出來的提示詞：外圍一圈白光，亮 1.8 秒再慢慢暗掉（panel.js 的 revealItem） */
+.gpn-card.is-arrived, .gpn-clone-card.is-arrived { animation: gpn-arrive 2.8s ease-out; }
+@keyframes gpn-arrive {
+  0%, 64% { box-shadow: 0 0 0 2px rgba(255, 255, 255, .9), 0 0 18px 4px rgba(255, 255, 255, .55); }
+  100% { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0), 0 0 18px 4px rgba(255, 255, 255, 0); }
+}
+
+/* 設定 → 書籤：所有書籤一排一個，點一下展開編輯區；右邊的 i 打開備註 */
+.gpn-bm-list { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+.gpn-bm-row {
+  position: relative;
+  border: 1px solid var(--outline);
+  border-radius: 16px;
+  background: var(--surface-input);
+}
+.gpn-bm-row.is-open { border-color: var(--outline-strong); }
+.gpn-bm-head { display: flex; align-items: center; gap: 4px; padding-right: 8px; }
+.gpn-bm-main {
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; gap: 10px;
+  min-height: 52px; padding: 8px 8px 8px 16px;
+  border: 0; border-radius: 16px;
+  background: none; color: var(--text); font: inherit; text-align: left;
+  cursor: pointer;
+}
+.gpn-bm-main:hover { background: var(--hover); }
+.gpn-bm-main:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
+.gpn-bm-main .gpn-color-dot { flex: none; }
+.gpn-bm-name { flex: 1; min-width: 0; font-size: 15.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gpn-bm-count { flex: none; font-size: 13px; color: var(--text-mute); }
+.gpn-bm-caret {
+  flex: none;
+  width: 7px; height: 7px; margin: -3px 4px 0 6px;
+  border-right: 2px solid var(--text-mute);
+  border-bottom: 2px solid var(--text-mute);
+  transform: rotate(45deg);
+  transition: transform .16s ease, margin .16s ease;
+}
+.gpn-bm-row.is-open .gpn-bm-caret { transform: rotate(-135deg); margin-top: 3px; }
+.gpn-bm-info { margin-top: 0; }
+.gpn-bm-info.is-empty { opacity: .45; }
+.gpn-bm-info.is-empty:hover, .gpn-bm-info.is-empty.is-on { opacity: 1; }
+.gpn-bm-pop { top: 50px; right: 8px; }
+.gpn-bm-pop-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.gpn-bm-pop .gpn-link { margin-top: 10px; padding: 0; border: 0; background: none; font-size: 14px; }
+.gpn-bm-editor { padding: 4px 16px 16px; border-top: 1px solid var(--outline); }
+.gpn-bm-note { min-height: 76px; resize: vertical; }
+
+/* 設定 → 使用次數：前十名，名次、標題（底下是在哪裡、一條長度代表次數）、次數 */
+.gpn-stats { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.gpn-stat-row {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; min-height: 58px; padding: 8px 14px;
+  border: 1px solid var(--outline); border-radius: 14px;
+  background: var(--surface-input); color: var(--text); font: inherit; text-align: left;
+  cursor: pointer;
+}
+.gpn-stat-row:hover { background: var(--hover); border-color: var(--outline-strong); }
+.gpn-stat-row:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.gpn-stat-rank {
+  flex: none; width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700; color: var(--text-mute);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+.gpn-stat-rank.is-top { background: var(--primary); color: var(--on-primary); }
+.gpn-stat-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.gpn-stat-title { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gpn-stat-where { font-size: 12.5px; color: var(--text-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gpn-stat-bar { display: block; height: 4px; width: var(--w); border-radius: 2px; background: color-mix(in srgb, var(--primary) 70%, transparent); }
+.gpn-stat-n { flex: none; font-size: 14px; font-weight: 600; color: var(--text-mute); }
+
+/* 設定 → 新手教學 */
+.gpn-guide-lead { margin: 0; font-size: 15px; line-height: 1.7; }
+.gpn-section[data-section="guide"] .gpn-brow { margin-top: 16px; }
+
+/* 新手教學：要操作的地方亮著，四周用四塊半透明黑擋住（看得到、點不到）；說明框、右上角「跳過教學」 */
+.gpn-tour { position: fixed; inset: 0; z-index: 2147483640; pointer-events: none; }
+.gpn-tour-block { position: fixed; background: rgba(0, 0, 0, .58); pointer-events: auto; }
+.gpn-tour-ring {
+  position: fixed; border-radius: 14px; pointer-events: none;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, .95), 0 0 22px 6px rgba(255, 255, 255, .35);
+  animation: gpn-tour-pulse 1.6s ease-in-out infinite;
+}
+@keyframes gpn-tour-pulse {
+  50% { box-shadow: 0 0 0 2px rgba(255, 255, 255, .95), 0 0 30px 10px rgba(255, 255, 255, .5); }
+}
+.gpn-tour-bubble {
+  position: fixed; pointer-events: auto;
+  padding: 16px 18px 14px;
+  border: 1px solid var(--outline-strong); border-radius: 18px;
+  background: var(--surface); color: var(--text);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .45);
+}
+.gpn-tour-count { font-size: 12.5px; font-weight: 600; color: var(--primary); letter-spacing: .5px; }
+.gpn-tour-title { margin-top: 4px; font-size: 17px; font-weight: 700; }
+.gpn-tour-text { margin-top: 8px; font-size: 14.5px; line-height: 1.7; white-space: pre-line; }
+.gpn-tour-foot { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 14px; }
+.gpn-tour-foot .gpn-tour-next { flex: none; width: auto; min-width: 96px; height: 40px; padding: 0 20px; }
+.gpn-tour-pass { margin-right: auto; padding: 0; border: 0; background: none; font-size: 13.5px; }
+.gpn-tour-skip {
+  position: fixed; top: 14px; right: 16px; pointer-events: auto;
+  padding: 8px 16px; border: 1px solid rgba(255, 255, 255, .5); border-radius: 999px;
+  background: rgba(20, 20, 20, .75); color: #fff; font: inherit; font-size: 14px; font-weight: 600;
+  cursor: pointer;
+}
+.gpn-tour-skip:hover { background: rgba(50, 50, 50, .9); }
+.gpn-tour-skip:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }

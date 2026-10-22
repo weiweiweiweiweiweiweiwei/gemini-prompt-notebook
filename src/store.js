@@ -51,6 +51,7 @@ const GPN_VERSION = 4;
 const GPN_MAX_TABS = 8;                  // 太多書籤會擠不下，設一個上限
 const GPN_MAX_FOLDERS = 12;              // 每個書籤最多幾個資料夾
 const GPN_MAX_LABEL = 100;               // 書籤名稱的上限只是防呆（不限字數，太長的畫面上用「…」）
+const GPN_MAX_NOTE = 300;                // 書籤備註說明的上限
 const GPN_DEFAULT_FOLDER = '一般';        // 書籤剛開啟資料夾時，原本的提示詞放在這裡
 const GPN_RECENT_ID = 't_recent';        // 「最近使用」書籤的 id（固定、不能刪）
 const GPN_RECENT_MAX = 50;               // 最近使用最多記幾筆
@@ -142,6 +143,20 @@ function gpnCleanLook(l) {
   return { bg, wallpaper, theme };
 }
 
+/**
+ * 使用次數：{ 提示詞 id: 用了幾次 }（設定 → 使用次數 的前十名）。
+ * 只留還在的提示詞（含資源回收桶裡的，還原後次數還在）。兩台都用過時，sync.js 的三方合併把兩邊各自多用的加起來。
+ */
+function gpnCleanUses(raw, keep) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [id, n] of Object.entries(raw)) {
+    const v = Math.floor(Number(n));
+    if (keep.has(id) && v > 0) out[id] = Math.min(v, 1e9);
+  }
+  return out;
+}
+
 /** 整理最近使用記錄：新的在前、同一則只留最新那次、最多 GPN_RECENT_MAX 筆 */
 function gpnCleanRecent(arr) {
   const seen = new Set();
@@ -197,6 +212,9 @@ function gpnCleanTab(t, version) {
     label: String(t.label ?? '未命名').slice(0, GPN_MAX_LABEL) || '未命名',
     color: GPN_COLORS.includes(t.color) ? t.color : 'amber',
   };
+  // 備註說明：書籤名稱太短講不清楚時，寫這個書籤裝的是做什麼用的（設定 → 書籤，點 i）
+  const note = String(t.note ?? '').trim().slice(0, GPN_MAX_NOTE);
+  if (note) base.note = note;
 
   let folders = (Array.isArray(t.folders) ? t.folders : [])
     .filter((f) => f && typeof f === 'object')
@@ -286,10 +304,12 @@ function gpnNormalize(raw) {
   }
 
   // 最近使用、我的最愛、符號的 id 指向提示詞，本來就會和提示詞的 id 重複，所以不參加上面的「不可重複」檢查
+  const trash = gpnCleanTrash(raw.trash, itemIds);
   return {
     version: GPN_VERSION, activeId, tabs, recent: gpnCleanRecent(raw.recent), favs, marks, markTypes,
     look: gpnCleanLook(raw.look),
-    trash: gpnCleanTrash(raw.trash, itemIds),
+    trash,
+    uses: gpnCleanUses(raw.uses, new Set([...itemIds, ...trash.map((r) => r.id)])),
   };
 }
 

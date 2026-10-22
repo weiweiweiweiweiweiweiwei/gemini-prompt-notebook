@@ -390,6 +390,7 @@ function gpnCreateSync(o) {
     if (Object.keys(d.marks || {}).length || d.markTypes?.length) parts.push(d.marks || {}, d.markTypes || []);
     if (d.look && ((d.look.bg && d.look.bg !== 'default') || (d.look.theme && d.look.theme !== 'auto'))) parts.push(d.look);
     if (d.trash?.length) parts.push(d.trash);
+    if (Object.keys(d.uses || {}).length) parts.push(d.uses);
     const s = JSON.stringify(parts);
     let h = 0x811c9dc5;
     for (let i = 0; i < s.length; i++) {
@@ -1054,6 +1055,43 @@ function gpnCreateSync(o) {
     }
   }
 
+  /**
+   * 拷貝分身：內容一模一樣、名稱後面加「（副本）」、到期日一樣，頭像換一個隨機的（和原本的不同），代號是新的。
+   * 原本的已經停用的話，副本建好也馬上停用。avatar 是畫面挑好的頭像。
+   */
+  async function copyClone(c, avatar = '') {
+    await ready;
+    if (ownerOnly()) return { ok: false, error: ownerOnly() };
+    let doc;
+    try {
+      doc = (await readFile(c.fileId)) || gpnDefaultData();
+    } catch (e) {
+      return { ok: false, error: explain(e) };
+    }
+    const r = await createClone(`${c.label || '分身'}（副本）`, doc, avatar);
+    if (!r.ok) return r;
+    const at = Number(c.expiresAt) || 0;
+    const same = at > Date.now() ? await extendClone(r.clone, at) : await disableClone(r.clone);
+    if (same.ok) r.clone.expiresAt = same.expiresAt;
+    return r;
+  }
+
+  /** 改分身的名稱（直接改雲端硬碟上那個檔案；用分身登入的人下次連線就看到新名稱） */
+  async function renameClone(c, label) {
+    await ready;
+    if (ownerOnly()) return { ok: false, error: ownerOnly() };
+    label = gpnCloneLabel(label);
+    try {
+      await drive(`/drive/v3/files/${encodeURIComponent(c.fileId)}?fields=id`, {
+        method: 'PATCH', type: 'application/json',
+        body: JSON.stringify({ name: `罐頭P 分身 - ${label}.json`, appProperties: { label } }),
+      });
+      return { ok: true, label };
+    } catch (e) {
+      return { ok: false, error: explain(e) };
+    }
+  }
+
   /** 延長期限（或改成任何一天）：中繼和雲端硬碟上的檔案都記下新的到期日 */
   async function extendClone(c, expiresAt) {
     await ready;
@@ -1383,7 +1421,7 @@ function gpnCreateSync(o) {
 
   return {
     getState, syncNow, markDirty, flush, authUrl, finishAuth, signOut, putWallpaper, getWallpaper,
-    cloneSignIn, enterClone, leaveClone, listClones, createClone, extendClone, disableClone, rekeyClone, destroyClone, readClone, pushClone,
+    cloneSignIn, enterClone, leaveClone, listClones, createClone, copyClone, renameClone, extendClone, disableClone, rekeyClone, destroyClone, readClone, pushClone,
     setCloneAvatar, listPeers, sharePrompt, ackShares, keepShares, refreshInbox,
   };
 }
@@ -1401,7 +1439,7 @@ function gpnCreateSync(o) {
 function gpnFlatten(d) {
   const tabs = new Map(), folders = new Map(), items = new Map(), lists = new Map();
   for (const t of d.tabs) {
-    tabs.set(t.id, { label: t.label, color: t.color, folders: !!t.folders, order: t.folders ? t.folders.map((f) => f.id) : [] });
+    tabs.set(t.id, { label: t.label, color: t.color, note: t.note || '', folders: !!t.folders, order: t.folders ? t.folders.map((f) => f.id) : [] });
     for (const l of gpnListsOf(t)) {
       const fid = l === t ? '' : l.id;
       if (fid) folders.set(fid, { tab: t.id, label: l.label });
@@ -1415,6 +1453,7 @@ function gpnFlatten(d) {
   return {
     tabOrder: d.tabs.map((t) => t.id), tabs, folders, items, lists,
     favs: d.favs || [], marks: d.marks || {}, markTypes: d.markTypes || [], recent: d.recent || [], look: d.look, trash: d.trash || [],
+    uses: d.uses || {},
   };
 }
 
@@ -1465,7 +1504,7 @@ function gpnMerge3(base, local, cloud) {
   const C = gpnFlatten(gpnNormalize(cloud));
   const find = (kind, id) => L[kind].get(id) || C[kind].get(id) || B[kind].get(id);
 
-  const tabs = gpnMergeMap(B.tabs, L.tabs, C.tabs, ['label', 'color', 'folders']);
+  const tabs = gpnMergeMap(B.tabs, L.tabs, C.tabs, ['label', 'color', 'note', 'folders']);
   const folders = gpnMergeMap(B.folders, L.folders, C.folders, ['label', 'tab']);
   const items = gpnMergeMap(B.items, L.items, C.items, ['title', 'content', 'from', 'at'], ['title', 'content']);
   for (const it of items.values()) {
@@ -1478,7 +1517,7 @@ function gpnMerge3(base, local, cloud) {
   for (const it of items.values()) {
     if (!tabs.has(it.tab)) {
       const t = find('tabs', it.tab);
-      tabs.set(it.tab, { label: t.label, color: t.color, folders: t.folders });
+      tabs.set(it.tab, { label: t.label, color: t.color, note: t.note, folders: t.folders });
     }
   }
 
@@ -1589,12 +1628,16 @@ function gpnMerge3(base, local, cloud) {
     if (r && (!lR.has(b.id) || !cR.has(b.id)) && r.usedAt <= b.usedAt) recent.delete(b.id);
   }
 
+  // 使用次數：雲端的次數，加上這台從上次同步之後多用的（兩台各用了幾次都算進去，不會只取其中一邊）
+  const uses = { ...C.uses };
+  for (const [id, n] of Object.entries(L.uses)) uses[id] = (uses[id] || 0) + Math.max(0, n - (B.uses[id] || 0));
+
   return gpnNormalize({
     version: GPN_VERSION,
     activeId: local.activeId,
     tabs: tabOrder.map((tid) => {
       const t = tabs.get(tid);
-      const head = { id: tid, label: t.label, color: t.color };
+      const head = { id: tid, label: t.label, color: t.color, note: t.note };
       const order = folderOrder.get(tid);
       if (!order || !order.length) return { ...head, items: listItems(tid + '\u0000') };
       return { ...head, folders: order.map((fid) => ({ id: fid, label: folders.get(fid).label, items: listItems(tid + '\u0000' + fid) })) };
@@ -1605,5 +1648,6 @@ function gpnMerge3(base, local, cloud) {
     markTypes,
     look,
     trash,
+    uses,
   });
 }
