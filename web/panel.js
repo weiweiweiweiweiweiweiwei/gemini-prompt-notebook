@@ -2856,7 +2856,7 @@ function gpnCreatePanel(opts) {
         row('backup', ICON_SYNC, '備份', '下載成備份檔、從備份檔匯入'),
         row('stats', ICON_CHART, '使用次數', '最常使用的前十名提示詞'),
         row('guide', ICON_SCHOOL, '新手教學', '用一本範例筆記本，一頁一頁看每個按鈕在做什麼', { onclick: startTut }),
-        allPageUrl ? row('all', ICON_LIST, '全部提示詞', '所有內容顯示在同一頁，讓「問問 Gemini」看得到全部提示詞（在新分頁打開）', {
+        allPageUrl ? row('all', ICON_LIST, '全部提示詞', '讓「問問 Gemini」看得到全部提示詞', {
           href: allPageUrl, target: '_blank', rel: 'noopener',
           title: '所有書籤的提示詞，完整內容用純文字列在同一頁（方便「問問 Gemini」讀）；在新分頁打開',
         }) : null));
