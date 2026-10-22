@@ -81,6 +81,24 @@ button { cursor: pointer; }
   --c-rose-accent:   #e05c86;
   --c-purple-accent: #8b5cf6;
   --c-teal-accent:   #14a5a0;
+  --c-red-accent: #dc3d3d;
+  --c-coral-accent: #e8704a;
+  --c-orange-accent: #e8851a;
+  --c-gold-accent: #c9a20a;
+  --c-lime-accent: #7cab1e;
+  --c-olive-accent: #7d7d2d;
+  --c-forest-accent: #2d6a4f;
+  --c-mint-accent: #2fae86;
+  --c-cyan-accent: #0e9fc4;
+  --c-navy-accent: #33518f;
+  --c-indigo-accent: #5b5bd6;
+  --c-violet-accent: #a24bd6;
+  --c-magenta-accent: #cc3d9e;
+  --c-wine-accent: #9e2f4e;
+  --c-brown-accent: #9a6a3f;
+  --c-sand-accent: #b39567;
+  --c-slate-accent: #5f6f86;
+  --c-graphite-accent: #4b5563;
   --c-recent-accent: #64748b;
   --c-fav-accent:    #e2a300;          /* 我的最愛：星星的金黃色 */
 }
@@ -127,6 +145,24 @@ button { cursor: pointer; }
   --c-rose-accent:   #f386a6;
   --c-purple-accent: #b49bf7;
   --c-teal-accent:   #4fc9c2;
+  --c-red-accent: #f27272;
+  --c-coral-accent: #f59a7c;
+  --c-orange-accent: #f8a94e;
+  --c-gold-accent: #e8c84a;
+  --c-lime-accent: #a8d555;
+  --c-olive-accent: #b5b35e;
+  --c-forest-accent: #74b98f;
+  --c-mint-accent: #63d3ad;
+  --c-cyan-accent: #4fcbe8;
+  --c-navy-accent: #8aa3dc;
+  --c-indigo-accent: #9a9af5;
+  --c-violet-accent: #cd8cf2;
+  --c-magenta-accent: #ee80c8;
+  --c-wine-accent: #e07b97;
+  --c-brown-accent: #c99a6d;
+  --c-sand-accent: #d8bf94;
+  --c-slate-accent: #a3b1c6;
+  --c-graphite-accent: #9ca3af;
   --c-recent-accent: #94a3b8;
   --c-fav-accent:    #fcc934;
 }
@@ -141,6 +177,24 @@ button { cursor: pointer; }
 [data-color="rose"]   { --accent: var(--c-rose-accent); }
 [data-color="purple"] { --accent: var(--c-purple-accent); }
 [data-color="teal"]   { --accent: var(--c-teal-accent); }
+[data-color="red"] { --accent: var(--c-red-accent); }
+[data-color="coral"] { --accent: var(--c-coral-accent); }
+[data-color="orange"] { --accent: var(--c-orange-accent); }
+[data-color="gold"] { --accent: var(--c-gold-accent); }
+[data-color="lime"] { --accent: var(--c-lime-accent); }
+[data-color="olive"] { --accent: var(--c-olive-accent); }
+[data-color="forest"] { --accent: var(--c-forest-accent); }
+[data-color="mint"] { --accent: var(--c-mint-accent); }
+[data-color="cyan"] { --accent: var(--c-cyan-accent); }
+[data-color="navy"] { --accent: var(--c-navy-accent); }
+[data-color="indigo"] { --accent: var(--c-indigo-accent); }
+[data-color="violet"] { --accent: var(--c-violet-accent); }
+[data-color="magenta"] { --accent: var(--c-magenta-accent); }
+[data-color="wine"] { --accent: var(--c-wine-accent); }
+[data-color="brown"] { --accent: var(--c-brown-accent); }
+[data-color="sand"] { --accent: var(--c-sand-accent); }
+[data-color="slate"] { --accent: var(--c-slate-accent); }
+[data-color="graphite"] { --accent: var(--c-graphite-accent); }
 [data-color="recent"] { --accent: var(--c-recent-accent); }
 [data-color="fav"]    { --accent: var(--c-fav-accent); }
 /* 符號書籤（設定 → 星號）：顏色是那個符號自己的顏色，由 panel.js 設 --mark-accent */
@@ -1275,11 +1329,29 @@ button { cursor: pointer; }
 .gpn-swatch[data-color="rose"]   { background: var(--c-rose-accent); }
 .gpn-swatch[data-color="purple"] { background: var(--c-purple-accent); }
 .gpn-swatch[data-color="teal"]   { background: var(--c-teal-accent); }
+.gpn-swatch[data-color="red"] { background: var(--c-red-accent); }
+.gpn-swatch[data-color="coral"] { background: var(--c-coral-accent); }
+.gpn-swatch[data-color="orange"] { background: var(--c-orange-accent); }
+.gpn-swatch[data-color="gold"] { background: var(--c-gold-accent); }
+.gpn-swatch[data-color="lime"] { background: var(--c-lime-accent); }
+.gpn-swatch[data-color="olive"] { background: var(--c-olive-accent); }
+.gpn-swatch[data-color="forest"] { background: var(--c-forest-accent); }
+.gpn-swatch[data-color="mint"] { background: var(--c-mint-accent); }
+.gpn-swatch[data-color="cyan"] { background: var(--c-cyan-accent); }
+.gpn-swatch[data-color="navy"] { background: var(--c-navy-accent); }
+.gpn-swatch[data-color="indigo"] { background: var(--c-indigo-accent); }
+.gpn-swatch[data-color="violet"] { background: var(--c-violet-accent); }
+.gpn-swatch[data-color="magenta"] { background: var(--c-magenta-accent); }
+.gpn-swatch[data-color="wine"] { background: var(--c-wine-accent); }
+.gpn-swatch[data-color="brown"] { background: var(--c-brown-accent); }
+.gpn-swatch[data-color="sand"] { background: var(--c-sand-accent); }
+.gpn-swatch[data-color="slate"] { background: var(--c-slate-accent); }
+.gpn-swatch[data-color="graphite"] { background: var(--c-graphite-accent); }
 
 .gpn-actions {
   flex: none;
   display: flex; align-items: center; gap: 10px;
-  padding: 16px 26px 22px;
+  padding: 5px 26px 12px;
 }
 .gpn-btn {
   height: 48px;
@@ -2365,7 +2437,18 @@ section[data-section="markTab"] .gpn-note--roomy { margin: 4px 0 16px; }
 .gpn-bm-pair > .gpn-bm-field { align-items: flex-start; }
 .gpn-bm-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .gpn-bm-field .gpn-label { margin: 0; }
-.gpn-bm-note { min-height: 70px; resize: vertical; }
+.gpn-bm-note { min-height: 84px; resize: vertical; }
+/* 顏色展開的色票：整排的寬度都可以用（不擠在顏色那一欄） */
+.gpn-bm-swatches:not([hidden]) { margin-top: -4px; }
+.gpn-bm-swatches.gpn-swatches { gap: 10px; }
+/* 刪除這個書籤：和 ⋯ 選單的刪除一樣，只有垃圾桶，按第一下蓋子掀開，再按一次才刪 */
+.gpn-bm-editor .gpn-bm-del {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 64px; height: 44px; padding: 0;
+  border: 1px solid color-mix(in srgb, var(--error) 60%, transparent);
+  border-radius: 12px;
+}
+.gpn-bm-editor .gpn-bm-del svg { width: 24px; height: 24px; }
 /* 這一頁每個元件一樣高（44px）：名稱、顏色、資料夾、＋ 備註、刪除。
    .gpn-btn2 平常是排在一橫排裡平分寬度的（flex: 1 1 0），放在這裡的直排會被壓扁，所以改成不伸縮 */
 .gpn-bm-editor .gpn-input { height: 44px; padding: 0 14px; font-size: 15.5px; }

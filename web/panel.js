@@ -14,7 +14,7 @@
 /**
  * 版本號，顯示在設定視窗左下角。改了功能就調高，看這個數字就知道網頁有沒有更新到最新版。
  */
-const GPN_APP_VERSION = '4.38.1';
+const GPN_APP_VERSION = '4.39.0';
 
 /**
  * @param {object}   opts
@@ -2601,7 +2601,12 @@ function gpnCreatePanel(opts) {
     });
     ui.sNameHint = el('div', { class: 'gpn-hint', text: '名稱不能空白' });
     ui.sColor = buildColorPicker(onSettingsColor);
-    ui.sDel = el('button', { class: 'gpn-btn2 gpn-btn2--danger gpn-bm-del', type: 'button', onclick: onTabDelete }, '刪除這個書籤');
+    ui.sColorSwatches = ui.sColor.node.querySelector('.gpn-swatches');
+    ui.sColorSwatches.classList.add('gpn-bm-swatches');
+    ui.sDel = el('button', {
+      class: 'gpn-menu-tile--del gpn-bm-del', type: 'button', html: ICON_TILE_DELETE,
+      title: '刪除這個書籤', 'aria-label': '刪除這個書籤', onclick: onTabDelete,
+    });
     ui.sDanger = el('div', { class: 'gpn-bm-danger' }, ui.sDel);
 
     ui.sSwitchTitle = el('b');
@@ -2622,16 +2627,12 @@ function gpnCreatePanel(opts) {
         el('button', { class: 'gpn-btn2', type: 'button', onclick: hideFolderConfirm }, '先不要')));
     ui.sConfirm.hidden = true;
 
-    // 備註：平常只有一顆「＋ 備註」，按了（或已經寫了）才出現輸入框
+    // 備註：輸入框一直開著
     ui.sNote = el('textarea', {
       class: 'gpn-textarea gpn-bm-note', rows: '3', maxlength: String(GPN_MAX_NOTE),
       placeholder: '這個書籤裝的是做什麼用的', 'aria-label': '備註',
       oninput: onSettingsNote,
     });
-    ui.sNoteAdd = el('button', {
-      class: 'gpn-btn2 gpn-bm-note-add', type: 'button',
-      onclick: () => { ui.sNoteAdd.hidden = true; ui.sNoteBox.hidden = false; ui.sNote.focus(); },
-    }, '＋ 備註');
     ui.sNoteBox = el('div', { class: 'gpn-bm-field' }, el('div', { class: 'gpn-label', text: '備註' }), ui.sNote);
     ui.bmEditor = el('div', { class: 'gpn-bm-editor' },
       el('div', { class: 'gpn-bm-field' }, el('div', { class: 'gpn-label', text: '名稱' }), ui.sName, ui.sNameHint),
@@ -2639,8 +2640,10 @@ function gpnCreatePanel(opts) {
       el('div', { class: 'gpn-bm-pair' },
         el('div', { class: 'gpn-bm-field' }, el('div', { class: 'gpn-label', text: '顏色' }), ui.sColor.node),
         el('div', { class: 'gpn-bm-field' }, el('div', { class: 'gpn-label', text: '資料夾' }), ui.sSwitch)),
+      // 顏色展開的色票放在這一排下面，整排的寬度都用得到（資料夾底下不會空著）
+      ui.sColorSwatches,
       ui.sConfirm,
-      ui.sNoteAdd, ui.sNoteBox,
+      ui.sNoteBox,
       ui.sDanger);
     ui.bmList = el('div', { class: 'gpn-orows', role: 'list' });
     const secTab = el('section', { class: 'gpn-section', 'data-section': 'tab' },
@@ -2745,7 +2748,7 @@ function gpnCreatePanel(opts) {
       b.setAttribute('aria-selected', String(on));
     }
     for (const s of ui.sSections) s.hidden = s.getAttribute('data-section') !== key;
-    if (key === 'tab' && bmTabId) openBookmark(null, false);
+    if (key === 'tab') { openBookmark(null, false); renderBookmarks(); }
     paintCrumb(key, viaOther && key !== 'other');
     ui.sBody.scrollTop = 0;
     paintScrollFade();
@@ -2874,8 +2877,6 @@ function gpnCreatePanel(opts) {
     if (tab) {
       ui.sName.value = tab.label;
       ui.sNote.value = tab.note || '';
-      ui.sNoteAdd.hidden = !!tab.note;
-      ui.sNoteBox.hidden = !tab.note;
     }
     ui.sName.classList.remove('is-bad');
     ui.sNameHint.classList.remove('is-on');
@@ -2991,7 +2992,12 @@ function gpnCreatePanel(opts) {
     if (!tabDelArmed) {
       tabDelArmed = true;
       const n = gpnTabItemCount(tab);
-      armButton(ui.sDel, n ? `連同 ${n} 則提示詞一起刪除？再按一次` : '確定刪除？再按一次');
+      const ask = n ? `連同裡面的 ${n} 則提示詞一起刪除？再按一次垃圾桶` : '確定刪除這個書籤？再按一次垃圾桶';
+      ui.sDel.classList.add('is-confirm');           // 蓋子掀開
+      ui.sDel.title = ask;
+      ui.sDel.setAttribute('aria-label', ask);
+      sfx('pick');
+      toast(ask, false, 5000);
       clearTimeout(tabDelTimer);
       tabDelTimer = setTimeout(disarmTabDelete, 5000);
       return;
@@ -3013,7 +3019,10 @@ function gpnCreatePanel(opts) {
   function disarmTabDelete() {
     clearTimeout(tabDelTimer);
     tabDelArmed = false;
-    if (ui.sDel) disarmButton(ui.sDel, '刪除這個書籤');
+    if (!ui.sDel) return;
+    ui.sDel.classList.remove('is-confirm');
+    ui.sDel.title = '刪除這個書籤';
+    ui.sDel.setAttribute('aria-label', '刪除這個書籤');
   }
 
 

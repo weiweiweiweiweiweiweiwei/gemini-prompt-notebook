@@ -20,10 +20,13 @@ const GPN_TRASH_ID = 't_trash';          // 「資源回收桶」的 id（設定
 const GPN_TRASH_MAX = 1000;              // 回收桶的上限只是防呆，正常用不到
 const GPN_FAV_ID = 't_star';             // 「我的最愛」書籤的 id（固定、不能刪；注意不是預設書籤「常用」的 t_fav）
 const GPN_MAIL_ID = 't_mail';            // 「信箱」書籤：別人分享來的提示詞。點左下角的信封才建立，空了就自動拿掉；不算在書籤的上限裡
-const GPN_COLORS = ['amber', 'green', 'blue', 'rose', 'purple', 'teal'];
+// 書籤的顏色：前六個是最早就有的（舊資料、新書籤的預設輪流用），後面是 4.39.0 加的
+const GPN_COLORS = ['amber', 'green', 'blue', 'rose', 'purple', 'teal',
+  'red', 'coral', 'orange', 'gold', 'lime', 'olive', 'forest', 'mint', 'cyan', 'navy', 'indigo', 'violet', 'magenta', 'wine', 'brown', 'sand', 'slate', 'graphite'];
 const GPN_COLOR_LABELS = {
   amber: '牛皮黃', green: '森林綠', blue: '天空藍',
   rose: '玫瑰粉', purple: '薰衣草', teal: '湖水綠',
+  red: '番茄紅', coral: '珊瑚橘', orange: '橘子橙', gold: '芥末黃', lime: '萊姆綠', olive: '橄欖綠', forest: '墨綠', mint: '薄荷綠', cyan: '天青藍', navy: '海軍藍', indigo: '靛青', violet: '葡萄紫', magenta: '桃紅', wine: '酒紅', brown: '咖啡色', sand: '奶茶色', slate: '石板灰', graphite: '石墨灰',
 };
 
 /**
